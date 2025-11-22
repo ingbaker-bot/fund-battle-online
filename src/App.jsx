@@ -3289,7 +3289,7 @@ export default function App() {
                   <h2 className="text-2xl font-bold text-white mb-2">基金操盤手</h2>
                   <p className="text-slate-400 text-sm mb-6">本遊戲為私人邀請制，請輸入通關碼</p>
                   <form onSubmit={handleLogin} className="space-y-4">
-                      <div className="relative"><KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} /><input type="password" inputMode="numeric" value={accessCodeInput} onChange={(e) => setAccessCodeInput(e.target.value)} placeholder="輸入通關碼 (預設 8888)" className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" autoFocus /></div>
+                      <div className="relative"><KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} /><input type="password" inputMode="numeric" value={accessCodeInput} onChange={(e) => setAccessCodeInput(e.target.value)} placeholder="輸入通關碼" className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" autoFocus /></div>
                       <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-transform active:scale-[0.98]">解鎖進入</button>
                   </form>
                   {loginError && <p className="text-red-500 text-sm mt-4 animate-bounce">⛔ 通關碼錯誤，請重試</p>}

@@ -3321,7 +3321,7 @@ export default function App() {
                               inputMode="numeric"
                               value={accessCodeInput}
                               onChange={(e) => setAccessCodeInput(e.target.value)}
-                              placeholder="輸入通關碼 (預設 8888)"
+                              placeholder="輸入通關碼"
                               className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
                               autoFocus
                           />

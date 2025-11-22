@@ -3,12 +3,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, Responsive
 import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, FileText, Maximize, Minimize, LogOut, Power, Lock, KeyRound } from 'lucide-react';
 
 // ==========================================
-// 區域 A: 真實歷史數據區 (Real Data Area)
+// 區域 A: 真實歷史數據區 (已淨空)
 // ==========================================
-// 說明：如果您有真實基金淨值，請依照此格式貼入下方。
-// 格式：{ date: 'YYYY-MM-DD', nav: 淨值數字 }
-// 您可以使用 ChatGPT 幫您轉檔，指令：「請幫我把這些 Excel 日期與淨值轉成 JavaScript Object Array 格式，欄位為 date 和 nav」
+// ★ 請將您的 Excel 數據轉成 JSON 格式後，完整「覆蓋」下方的中括號內容
+// 格式範例：[ { date: '1995-01-03', nav: 10.5 }, { date: '1995-01-04', nav: 10.6 }, ... ]
 const REAL_HISTORY_DATA = [
+  // --- 請在此處貼上您的真實數據 (取代以下範例) ---
   { date: '2014-01-02', nav: 43.52 },
   { date: '2014-01-03', nav: 43.51 },
   { date: '2014-01-06', nav: 43.38 },
@@ -2949,19 +2949,11 @@ const REAL_HISTORY_DATA = [
   { date: '2025-11-18', nav: 105.6 },
   { date: '2025-11-19', nav: 106.21 },
   { date: '2025-11-20', nav: 107.6 },
-  // ... (此處省略，您可以在此貼上 30 年的數據) ...
-  // 為了示範，我先用程式產生一點假裝是真實的數據填充，實際使用時請把這段換掉
-  ...Array.from({ length: 500 }, (_, i) => ({
-      date: new Date(1995, 0, i + 10).toISOString().split('T')[0], 
-      nav: 10 + Math.sin(i/20) * 2 + i/100 
-  }))
-];
-
-// ==========================================
-// 區域 B: 系統核心邏輯 (System Logic)
+  // ... 貼上直到最後一天
+]; 
 // ==========================================
 
-// 1. 隨機數據生成器 (原本的邏輯)
+// 1. 隨機數據生成器 (備用)
 const generateRandomData = (years = 30) => {
   const data = [];
   let price = 100.0; 
@@ -2989,7 +2981,7 @@ const generateRandomData = (years = 30) => {
   return data;
 };
 
-// 2. 真實數據轉換器 (處理用戶貼上的數據)
+// 2. 真實數據轉換器
 const processRealData = (rawData) => {
     return rawData.map((item, index) => ({
         id: index,
@@ -3009,12 +3001,10 @@ const calculateMA = (data, days, currentIndex) => {
 };
 
 export default function App() {
-  // --- 門禁系統 State ---
-  const [isLocked, setIsLocked] = useState(true); // 預設鎖住
+  // --- 門禁系統 ---
+  const [isLocked, setIsLocked] = useState(true); 
   const [accessCodeInput, setAccessCodeInput] = useState('');
   const [loginError, setLoginError] = useState(false);
-  
-  // 設定您的通關密碼 (在此修改)
   const SECRET_CODE = "8888"; 
 
   // --- Game State ---
@@ -3036,7 +3026,7 @@ export default function App() {
   const [showRiver, setShowRiver] = useState(false);
   const [customStopLossInput, setCustomStopLossInput] = useState(10);
   const [chartPeriod, setChartPeriod] = useState(250);
-  const [dataSource, setDataSource] = useState('random'); // 'random' | 'real'
+  const [dataSource, setDataSource] = useState('random'); 
 
   // UI & Logic
   const [tradeMode, setTradeMode] = useState(null); 
@@ -3050,25 +3040,36 @@ export default function App() {
 
   const autoPlayRef = useRef(null);
 
-  // --- Unlock Function ---
+  // --- Unlock ---
   const handleLogin = (e) => {
       e.preventDefault();
-      if (accessCodeInput === SECRET_CODE) {
-          setIsLocked(false);
-      } else {
-          setLoginError(true);
-          setTimeout(() => setLoginError(false), 1000);
-      }
+      if (accessCodeInput === SECRET_CODE) setIsLocked(false);
+      else { setLoginError(true); setTimeout(() => setLoginError(false), 1000); }
   };
 
   // --- Initialization ---
   useEffect(() => {
-    // 預設先載入隨機數據
     const data = generateRandomData(30);
     setFullData(data);
     setCurrentDay(260);
     setIsReady(true);
   }, []);
+
+  // --- 關鍵修正：自動監聽是否到達終點 (Auto End Game) ---
+  useEffect(() => {
+      if (gameStatus === 'playing' && fullData.length > 0) {
+          // 如果當前天數已經是最後一天 (或超過)
+          if (currentDay >= fullData.length - 1) {
+              // 停止自動播放
+              if (isAutoPlaying) {
+                  clearInterval(autoPlayRef.current);
+                  setIsAutoPlaying(false);
+              }
+              // 強制結算
+              setGameStatus('ended');
+          }
+      }
+  }, [currentDay, fullData, gameStatus, isAutoPlaying]);
 
   // --- Chart Logic ---
   const currentNav = fullData[currentDay]?.nav || 10;
@@ -3090,12 +3091,7 @@ export default function App() {
     let min = Infinity, max = -Infinity;
     slice.forEach(d => {
         const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null];
-        values.forEach(v => {
-            if (v !== null && !isNaN(v)) {
-                if (v < min) min = v;
-                if (v > max) max = v;
-            }
-        });
+        values.forEach(v => { if (v !== null && !isNaN(v)) { if (v < min) min = v; if (v > max) max = v; } });
     });
     if (min === Infinity) min = 0;
 
@@ -3133,23 +3129,23 @@ export default function App() {
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
 
   const startGame = () => {
-    // 根據選擇載入數據
     let data;
     if (dataSource === 'real') {
-        if (REAL_HISTORY_DATA.length < 100) {
-            alert("真實數據不足，請檢查程式碼中的 REAL_HISTORY_DATA 設定。系統將自動切換為隨機數據。");
-            data = generateRandomData(30);
+        // 這裡不做過多檢查，直接信任用戶貼的數據
+        if (REAL_HISTORY_DATA.length < 5) {
+             // 防呆：萬一真的沒貼數據
+             alert("尚未偵測到足夠的真實數據，將切換為隨機模式。請確認程式碼中的 REAL_HISTORY_DATA 是否已填入。");
+             data = generateRandomData(30);
         } else {
-            data = processRealData(REAL_HISTORY_DATA);
+             data = processRealData(REAL_HISTORY_DATA);
         }
     } else {
         data = generateRandomData(30);
     }
-    
     setFullData(data);
     setCash(initialCapital);
-    // 如果是真實數據，且數據量較少，調整起始天數避免出錯
-    const startDay = dataSource === 'real' && data.length < 300 ? 20 : 260;
+    // 如果是真實數據，從第 60 天開始 (讓均線跑出來)，否則從 260 天
+    const startDay = (dataSource === 'real' && data.length > 60) ? 60 : 0;
     setCurrentDay(startDay);
     setGameStatus('playing');
   };
@@ -3164,7 +3160,6 @@ export default function App() {
     setAvgCost(0);
     setTransactions([]);
     setHighestNavSinceBuy(0);
-    // 重置不重抓數據，回到設定頁讓使用者自己選
     setGameStatus('setup');
   };
 
@@ -3180,7 +3175,8 @@ export default function App() {
 
   const executeEndGame = () => {
     setConfirmModal({ show: false, type: null });
-    endGame();
+    // 直接設定狀態，useEffect 會處理後續
+    setGameStatus('ended');
   };
 
   const triggerExit = () => {
@@ -3194,7 +3190,11 @@ export default function App() {
   };
 
   const advanceDay = () => {
-    if (currentDay >= fullData.length - 1) { endGame(); return; }
+    // 手動點擊觀望時，如果已經是最後一天，直接結束
+    if (currentDay >= fullData.length - 1) { 
+        setGameStatus('ended'); 
+        return; 
+    }
     setCurrentDay(prev => prev + 1);
   };
 
@@ -3226,22 +3226,14 @@ export default function App() {
   const executeSell = () => {
     let unitsToSell = parseFloat(inputAmount);
     if (!unitsToSell || unitsToSell <= 0) return;
-    if (unitsToSell > units) {
-        if (unitsToSell - units < 0.1) unitsToSell = units;
-        else return; 
-    }
+    if (unitsToSell > units) { if (unitsToSell - units < 0.1) unitsToSell = units; else return; }
     const sellAmount = unitsToSell * currentNav;
     const costOfSoldUnits = unitsToSell * avgCost;
     const pnl = sellAmount - costOfSoldUnits;
     setCash(prev => prev + sellAmount);
     setUnits(prev => { const remaining = prev - unitsToSell; return remaining < 0.0001 ? 0 : remaining; });
     setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'SELL', price: currentNav, units: unitsToSell, amount: sellAmount, balance: cash + sellAmount, pnl }, ...prev]);
-    if (Math.abs(units - unitsToSell) < 0.0001) {
-        setHighestNavSinceBuy(0);
-        setWarningActive(false);
-        setAvgCost(0);
-        setUnits(0); 
-    }
+    if (Math.abs(units - unitsToSell) < 0.0001) { setHighestNavSinceBuy(0); setWarningActive(false); setAvgCost(0); setUnits(0); }
     closeTrade();
     advanceDay();
   };
@@ -3255,24 +3247,17 @@ export default function App() {
       setIsAutoPlaying(true);
       autoPlayRef.current = setInterval(() => {
         setCurrentDay(prev => {
-            if (prev >= fullData.length - 1) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); return prev; }
+            // 自動播放時的檢查交給 useEffect 處理，這裡只負責加天數
             return prev + 1;
         });
       }, 100); 
     }
   };
 
-  const endGame = () => {
-    setGameStatus('ended');
-    clearInterval(autoPlayRef.current);
-    setIsAutoPlaying(false);
-    setTradeMode(null);
-  };
-
   const generateCSV = () => {
     let csvContent = "\uFEFFDay,Date,Type,NAV,Amount/Units,Balance,PnL\n"; 
     transactions.forEach(t => {
-        const dateStr = fullData[t.day]?.date || `Day ${t.day}`;
+        const dateStr = dataSource === 'real' ? fullData[t.day]?.date : `Day ${t.day}`;
         const typeStr = t.type === 'BUY' ? '買入' : '賣出';
         const amountOrUnits = t.type === 'BUY' ? `$${t.amount}` : `${t.units.toFixed(2)} U`;
         const pnlStr = t.pnl ? Math.round(t.pnl) : 0;
@@ -3289,46 +3274,23 @@ export default function App() {
 
   const copyToClipboard = () => {
     let text = `📊 基金模擬戰報\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n`;
-    navigator.clipboard.writeText(text).then(() => {
-        setShowCopyToast(true);
-        setTimeout(() => setShowCopyToast(false), 2000);
-    });
+    navigator.clipboard.writeText(text).then(() => { setShowCopyToast(true); setTimeout(() => setShowCopyToast(false), 2000); });
   };
 
   const setBuyPercent = (pct) => setInputAmount(Math.floor(cash * pct).toString());
   const setSellPercent = (pct) => { if (pct === 1) setInputAmount(units.toString()); else setInputAmount((units * pct).toFixed(2)); };
-
   const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
 
-  // --- Render ---
-
-  // 0. 門禁畫面
   if (isLocked) {
       return (
           <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center font-sans p-4">
               <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl w-full max-w-sm text-center">
-                  <div className="flex justify-center mb-6 text-emerald-500">
-                      <Lock size={48} />
-                  </div>
+                  <div className="flex justify-center mb-6 text-emerald-500"><Lock size={48} /></div>
                   <h2 className="text-2xl font-bold text-white mb-2">基金操盤手</h2>
                   <p className="text-slate-400 text-sm mb-6">本遊戲為私人邀請制，請輸入通關碼</p>
-                  
                   <form onSubmit={handleLogin} className="space-y-4">
-                      <div className="relative">
-                          <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                          <input 
-                              type="password" // 改成 password 隱藏輸入
-                              inputMode="numeric"
-                              value={accessCodeInput}
-                              onChange={(e) => setAccessCodeInput(e.target.value)}
-                              placeholder="輸入通關碼"
-                              className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
-                              autoFocus
-                          />
-                      </div>
-                      <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-transform active:scale-[0.98]">
-                          解鎖進入
-                      </button>
+                      <div className="relative"><KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} /><input type="password" inputMode="numeric" value={accessCodeInput} onChange={(e) => setAccessCodeInput(e.target.value)} placeholder="輸入通關碼 (預設 8888)" className="w-full bg-slate-950 border border-slate-700 rounded-lg py-3 pl-10 pr-4 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all" autoFocus /></div>
+                      <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-transform active:scale-[0.98]">解鎖進入</button>
                   </form>
                   {loginError && <p className="text-red-500 text-sm mt-4 animate-bounce">⛔ 通關碼錯誤，請重試</p>}
               </div>
@@ -3338,11 +3300,7 @@ export default function App() {
 
   if (gameStatus === 'shutdown') {
       return (
-          <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-slate-600 font-sans">
-              <Power size={48} className="mb-4 opacity-50" />
-              <p className="text-lg">系統已關閉</p>
-              <button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-800 rounded hover:bg-slate-900 hover:text-slate-400 transition-colors">重啟電源</button>
-          </div>
+          <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-slate-600 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-800 rounded hover:bg-slate-900 hover:text-slate-400 transition-colors">重啟電源</button></div>
       );
   }
 
@@ -3352,24 +3310,19 @@ export default function App() {
         <div className="w-full max-w-sm bg-slate-900 rounded-xl p-6 shadow-2xl border border-slate-800 relative">
             <div className="flex justify-center mb-4 text-emerald-400"><Activity size={56} strokeWidth={1.5} /></div>
             <h1 className="text-3xl font-bold text-center mb-2 tracking-tight">基金操盤手</h1>
-            <p className="text-slate-400 text-center text-sm mb-6 font-light">v16.0 私密實戰版</p>
-            
+            <p className="text-slate-400 text-center text-sm mb-6 font-light">v17.0 精準結算版</p>
             <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label>
             <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-4 mb-4 text-2xl font-mono text-white focus:border-emerald-500 outline-none transition-colors" />
-            
-            {/* 數據源選擇 */}
             <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">市場數據來源</label>
             <div className="grid grid-cols-2 gap-4 mb-4">
                 <button onClick={() => setDataSource('random')} className={`p-3 rounded-lg border transition-all font-bold text-sm ${dataSource === 'random' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>🎲 隨機 30 年</button>
                 <button onClick={() => setDataSource('real')} className={`p-3 rounded-lg border transition-all font-bold text-sm ${dataSource === 'real' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>📉 真實歷史</button>
             </div>
-
             <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">停損設定 (%)</label>
             <div className="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-2 mb-8">
                 <input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-white focus:outline-none"/>
                 <span className="text-slate-500 font-bold px-4">%</span>
             </div>
-            
             <button onClick={startGame} className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-4 rounded-xl text-xl shadow-xl active:scale-[0.98] transition-all">開始挑戰</button>
         </div>
       </div>
@@ -3463,7 +3416,9 @@ export default function App() {
             <div className="absolute inset-0 bg-slate-950/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300">
                 <Activity size={48} className="text-emerald-500 mb-4" /><h2 className="text-3xl font-bold text-white mb-8 tracking-tight">結算成績單</h2>
                 <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8"><div className="bg-slate-900 p-5 rounded-xl border border-slate-800"><div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">最終資產</div><div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-400' : 'text-green-400'}`}>${Math.round(totalAssets).toLocaleString()}</div></div><div className="bg-slate-900 p-5 rounded-xl border border-slate-800"><div className="text-xs text-slate-500 mb-1 uppercase tracking-wider">總報酬率</div><div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-400' : 'text-green-400'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</div></div></div>
-                <div className="flex flex-col w-full max-w-xs gap-3"><button onClick={generateCSV} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3.5 rounded-xl font-bold border border-slate-700 transition-colors text-sm"><Download size={16} /> 下載 Excel 明細</button><button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3.5 rounded-xl font-bold border border-slate-700 transition-colors text-sm">{showCopyToast ? <Check size={16} className="text-green-400"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}</button><div className="h-6"></div><button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-900/20 active:scale-[0.98] transition-all"><RotateCcw size={18} /> 重新開始挑戰</button></div>
+                <div className="flex flex-col w-full max-w-xs gap-3"><button onClick={generateCSV} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3.5 rounded-xl font-bold border border-slate-700 transition-colors text-sm"><Download size={16} /> 下載 Excel 明細</button><button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 py-3.5 rounded-xl font-bold border border-slate-700 transition-colors text-sm">{showCopyToast ? <Check size={16} className="text-green-400"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}</button><div className="h-6"></div>
+                {/* 關鍵修正：直接呼叫 executeReset，不跳確認視窗 */}
+                <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-900/20 active:scale-[0.98] transition-all"><RotateCcw size={18} /> 重新開始挑戰</button></div>
             </div>
         )}
     </div>

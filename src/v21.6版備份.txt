@@ -334,7 +334,7 @@ export default function App() {
       <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center font-sans p-6">
           <div className="w-full max-w-sm bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl">
               <div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div>
-              <h2 className="text-2xl font-bold text-white text-center mb-2">Fund 桌遊</h2>
+              <h2 className="text-2xl font-bold text-white text-center mb-2">FCF基金模擬投資遊戲 V21.6</h2>
               <p className="text-slate-400 text-center text-sm mb-6">會員專屬登入</p>
               <form onSubmit={handleLogin} className="space-y-4">
                   <div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-emerald-500 outline-none" placeholder="請輸入管理員發放之帳號"/></div>
@@ -342,12 +342,7 @@ export default function App() {
                   <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button>
               </form>
               {authError && <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded text-red-400 text-xs text-center">{authError}</div>}
-              <div className="mt-6 text-center text-xs text-slate-600">
- 		 本系統採邀請制，如無帳號請洽ingbaker@gmail.com
-  			<br />
-			<br />
- 		 Fund 桌遊  V21.6 版權所有 永名財務科技(股)
-		</div>
+              <div className="mt-6 text-center text-xs text-slate-600">本系統採邀請制，如無帳號請洽ingbaker@gmail.com  FCF基金模擬投資遊戲 2025 版權所有 永名財務科技(股) </div>
           </div>
       </div>
   );
@@ -360,7 +355,7 @@ export default function App() {
         <div className="w-full max-w-sm bg-slate-900 rounded-xl p-6 shadow-2xl border border-slate-800 relative">
             <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-600 hover:text-red-400 transition-colors" title="登出"><LogOut size={20} /></button>
             <div className="flex justify-center mb-4 text-emerald-400"><Activity size={56} strokeWidth={1.5} /></div>
-            <h1 className="text-3xl font-bold text-center mb-2 tracking-tight">Fund 桌遊</h1>
+            <h1 className="text-3xl font-bold text-center mb-2 tracking-tight">FCF基金模擬投資遊戲</h1>
             <div className="flex items-center justify-center gap-2 mb-4"><UserCheck size={14} className="text-emerald-500"/><span className="text-slate-400 text-xs">{user.email}</span></div>
             
             <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">初始資金</label>

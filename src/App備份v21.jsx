@@ -2,22 +2,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, FileText, Maximize, Minimize, LogOut, Power, Lock, KeyRound, Database, User, UserCheck, Loader2 } from 'lucide-react';
 
-// Firebase imports
-import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-
 // ==========================================
 // 區域 A: Firebase 設定區
 // ==========================================
-
-// Import the functions you need from the SDKs you need
+// Firebase imports
 import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyC_qeSkCDUmO9sUZyEZzmYcJMsbXxNdTdE",
   authDomain: "fund-game-auth.firebaseapp.com",
@@ -29,91 +22,46 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// 這裡統一初始化一次即可
+let app;
+let auth;
+let analytics;
 
-
-// 初始化 Firebase
-// (為了避免沒填寫導致報錯，這裡加個防呆，實際使用請確保上方已填寫)
-let auth = null;
 try {
-    const app = initializeApp(firebaseConfig);
+    app = initializeApp(firebaseConfig);
     auth = getAuth(app);
+    analytics = getAnalytics(app);
 } catch (e) {
-    console.error("Firebase 初始化失敗，請檢查 firebaseConfig");
+    console.error("Firebase 初始化失敗，可能重複宣告或 Config 有誤", e);
 }
-
 
 // ==========================================
 // 區域 B: 基金圖書館 (已更新您的設定)
 // ==========================================
 const FUNDS_LIBRARY = [
-  { 
-    id: 'fund_1', name: '貝萊德環球前瞻股票', file: '/funds/fund_01.json'  
-  },
-  { 
-    id: 'fund_2', name: '安聯收益成長', file: '/funds/fund_02.json' // 建議：如果您有第二個檔，請命名為 fund_02.json
-  },
-  { 
-    id: 'fund_3', name: '貝萊德歐洲靈活股票基金', file: '/funds/fund_03.json'  
-  },
-  { 
-    id: 'fund_4', name: '貝萊德日本特別時機基金', file: '/funds/fund_04.json'
-  },
-  { 
-    id: 'fund_5', name: '貝萊德新興市場基金', file: '/funds/fund_05.json'  
-  },
-  { 
-    id: 'fund_6', name: '貝萊德拉丁美洲基金', file: '/funds/fund_06.json'
-  },
-  { 
-    id: 'fund_7', name: '安本亞太股票基金', file: '/funds/fund_07.json'  
-  },
-  { 
-    id: 'fund_8', name: '貝萊德印度基金', file: '/funds/fund_08.json'
-  },
-  { 
-    id: 'fund_9', name: '摩根中國基金', file: '/funds/fund_09.json'  
-  },
-  { 
-    id: 'fund_10', name: '富邦台灣心基金', file: '/funds/fund_10.json'
-  },
-  { 
-    id: 'fund_11', name: '霸菱大東協基金', file: '/funds/fund_11.json'  
-  },
-  { 
-    id: 'fund_12', name: '瀚亞投資印尼股票基金', file: '/funds/fund_12.json'
-  },
-  { 
-    id: 'fund_13', name: '摩根泰國基金', file: '/funds/fund_13.json'  
-  },
-  { 
-    id: 'fund_14', name: '利安資金越南基金',   file: '/funds/fund_14.json'
-  },
-  { 
-    id: 'fund_15', name: '富坦生技領航基金',   file: '/funds/fund_15.json'  
-  },
-  { 
-    id: 'fund_16', name: '貝萊德世界科技基金', file: '/funds/fund_16.json'
-  },
-  { 
-    id: 'fund_17', name: '貝萊德世界礦業基金', file: '/funds/fund_17.json'  
-  },
-  { 
-    id: 'fund_18', name: '貝萊德世界黃金基金', file: '/funds/fund_18.json'
-  },
-  { 
-    id: 'fund_19', name: '貝萊德世界能源基金', file: '/funds/fund_19.json'  
-  },
-  { 
-    id: 'fund_20', name: '貝萊德永續能源基金', file: '/funds/fund_20.json'
-  },
-
-  // 未來若有更多，可繼續往下加...
-  // { id: 'fund_3', name: '...', file: '/funds/fund_03.json' },
+  { id: 'fund_1', name: '貝萊德環球前瞻股票', file: '/funds/fund_01.json'  },
+  { id: 'fund_2', name: '安聯收益成長', file: '/funds/fund_02.json'  },
+  { id: 'fund_3', name: '貝萊德歐洲靈活股票基金', file: '/funds/fund_03.json'    },
+  { id: 'fund_4', name: '貝萊德日本特別時機基金', file: '/funds/fund_04.json'  },
+  { id: 'fund_5', name: '貝萊德新興市場基金', file: '/funds/fund_05.json'    },
+  { id: 'fund_6', name: '貝萊德拉丁美洲基金', file: '/funds/fund_06.json'  },
+  { id: 'fund_7', name: '安本亞太股票基金', file: '/funds/fund_07.json'    },
+  { id: 'fund_8', name: '貝萊德印度基金', file: '/funds/fund_08.json'  },
+  { id: 'fund_9', name: '摩根中國基金', file: '/funds/fund_09.json'    },
+  { id: 'fund_10', name: '富邦台灣心基金', file: '/funds/fund_10.json'  },
+  { id: 'fund_11', name: '霸菱大東協基金', file: '/funds/fund_11.json'  },
+  { id: 'fund_12', name: '瀚亞投資印尼股票基金', file: '/funds/fund_12.json'  },
+  { id: 'fund_13', name: '摩根泰國基金', file: '/funds/fund_13.json'  },
+  { id: 'fund_14', name: '利安資金越南基金',   file: '/funds/fund_14.json'  },
+  { id: 'fund_15', name: '富坦生技領航基金',   file: '/funds/fund_15.json'  },
+  { id: 'fund_16', name: '貝萊德世界科技基金', file: '/funds/fund_16.json'  },
+  { id: 'fund_17', name: '貝萊德世界礦業基金', file: '/funds/fund_17.json'  },
+  { id: 'fund_18', name: '貝萊德世界黃金基金', file: '/funds/fund_18.json'  },
+  { id: 'fund_19', name: '貝萊德世界能源基金', file: '/funds/fund_19.json'  },
+  { id: 'fund_20', name: '貝萊德永續能源基金', file: '/funds/fund_20.json'  },
 ];
 
-// 1. 隨機數據生成器 (備用)
+// 1. 隨機數據生成器
 const generateRandomData = (years = 30) => {
   const data = [];
   let price = 100.0; 
@@ -147,7 +95,6 @@ const calculateMA = (data, days, currentIndex) => {
 export default function App() {
   // Auth State
   const [user, setUser] = useState(null); 
-  const [authMode, setAuthMode] = useState('login'); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
@@ -194,8 +141,16 @@ export default function App() {
   }, []);
 
   // Auth Handlers
-  const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
-  const handleRegister = async (e) => { e.preventDefault(); setAuthError(''); try { await createUserWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError(err.message); } };
+  const handleLogin = async (e) => { 
+      e.preventDefault(); 
+      setAuthError(''); 
+      try { 
+          await signInWithEmailAndPassword(auth, email, password); 
+      } catch (err) { 
+          setAuthError('登入失敗：帳號或密碼錯誤'); 
+      } 
+  };
+
   const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
 
   // Init
@@ -338,22 +293,29 @@ export default function App() {
 
   // --- Render ---
   if (authLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center text-white">系統啟動中...</div>;
+  
   if (!user) return ( 
       <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center font-sans p-6">
           <div className="w-full max-w-sm bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl">
               <div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div>
-              <h2 className="text-2xl font-bold text-white text-center mb-2">基金操盤手 V20</h2>
-              <p className="text-slate-400 text-center text-sm mb-6">會員專屬訓練系統</p>
-              <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-4">
-                  <div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-emerald-500 outline-none" placeholder="name@example.com"/></div>
+              <h2 className="text-2xl font-bold text-white text-center mb-2">基金操盤手 V21</h2>
+              <p className="text-slate-400 text-center text-sm mb-6">會員專屬登入</p>
+              <form onSubmit={handleLogin} className="space-y-4">
+                  <div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-emerald-500 outline-none" placeholder="請輸入管理員發放之帳號"/></div>
                   <div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-white focus:border-emerald-500 outline-none" placeholder="******"/></div>
-                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">{authMode === 'login' ? '登入系統' : '註冊新帳號'}</button>
+                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button>
               </form>
               {authError && <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded text-red-400 text-xs text-center">{authError}</div>}
-              <div className="mt-6 text-center"><button onClick={() => {setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError('');}} className="text-slate-500 text-xs hover:text-white underline">{authMode === 'login' ? '沒有帳號？點此註冊' : '已有帳號？點此登入'}</button></div>
+              <div className="mt-6 text-center text-xs text-slate-600">
+                  本系統採嚴格邀請制，如無帳號請洽管理員
+	      	 <div className="mt-6 text-center text-xs text-slate-600">
+		  基金操盤手 V21 版權所有 永名財務科技股份有限公司 
+ 		 </div>
+              </div>
           </div>
       </div>
   );
+
   if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-slate-600 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-800 rounded hover:bg-slate-900 hover:text-slate-400 transition-colors">重啟電源</button></div> );
   
   if (gameStatus === 'setup') {
@@ -394,6 +356,15 @@ export default function App() {
         </div>
       </div>
     );
+  }
+
+  if (gameStatus === 'loading_data') {
+      return (
+          <div className="h-screen bg-slate-950 flex flex-col items-center justify-center text-white gap-4">
+              <Loader2 size={48} className="animate-spin text-emerald-500" />
+              <p className="text-slate-400">正在從雲端下載 {FUNDS_LIBRARY.find(f => f.id === selectedFundId)?.name} 數據...</p>
+          </div>
+      );
   }
 
   return (

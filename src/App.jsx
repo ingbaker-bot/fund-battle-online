@@ -6,6 +6,9 @@ import AppFull from './pages/AppFull.jsx';
 import AppRanked from './pages/AppRanked.jsx';
 import AppCompetition from './pages/AppCompetition.jsx';
 import AppTrial from './pages/AppTrial.jsx';
+// --- 新增的多人連線模式 ---
+import SpectatorView from './SpectatorView';
+import AppBattle from '../AppBattle';     // ★ 注意：請確認檔案是否在 src 根目錄
 
 // 引用新功能
 import SpectatorView from './SpectatorView';

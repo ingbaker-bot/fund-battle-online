@@ -1,37 +1,36 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-// 引用頁面
+// 引用頁面 (原本的單機功能) - 位於 src/pages/
 import AppFull from './pages/AppFull.jsx';
 import AppRanked from './pages/AppRanked.jsx';
 import AppCompetition from './pages/AppCompetition.jsx';
 import AppTrial from './pages/AppTrial.jsx';
-// --- 新增的多人連線模式 ---
-import SpectatorView from './SpectatorView';
-import AppBattle from './pages/AppBattle';     // ★ 注意：請確認檔案是否在 src 根目錄
 
-// 引用新功能
+// 引用新功能 (多人連線) 
+// SpectatorView 位於 src/ (同層)
 import SpectatorView from './SpectatorView';
-import AppBattle from './pages/AppBattle'; // ★★★ 這裡必須是亮的 (沒有 //)
+// AppBattle 位於 src/pages/
+import AppBattle from './pages/AppBattle';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* 首頁 */}
+        {/* 首頁：預設進入單機排名版 */}
         <Route path="/" element={<AppRanked />} />
         
-        {/* 舊頁面 */}
+        {/* 舊有單機頁面路由 */}
         <Route path="/full" element={<AppFull />} />
         <Route path="/ranked" element={<AppRanked />} />
         <Route path="/competition" element={<AppCompetition />} />
         <Route path="/trial" element={<AppTrial />} />
 
-        {/* 新功能 */}
+        {/* 新增：多人連線路由 */}
         <Route path="/spectator" element={<SpectatorView />} />
-        <Route path="/battle" element={<AppBattle />} /> {/* ★★★ 這裡也必須是亮的 */}
+        <Route path="/battle" element={<AppBattle />} />
 
-        {/* 萬用路由 (找不到路徑時回首頁) */}
+        {/* 防呆：找不到網址時回首頁 */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

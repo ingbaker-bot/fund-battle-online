@@ -1,4 +1,4 @@
-// 2025v6.5 - 主持人端 (強制顯示左上角標題)
+// 2025v6.6 - 主持人端 (標題改為上下兩行排版，解決截斷問題)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -331,6 +331,7 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
+          {/* 登入畫面 Logo */}
           <div className="flex justify-center mb-6">
               <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
           </div>
@@ -351,20 +352,25 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.5 Brand Edition | NBS Team
+            v6.6 Brand Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
+  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
               <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
+                  {/* ★★★ 1. 修改處：儀表板標題排版 ★★★ */}
                   <div className="flex items-center gap-3">
                       <img src="/logo.jpg" alt="Logo" className="h-10 object-contain" />
-                      <span className="font-bold text-lg text-slate-700 hidden sm:block">Fund手遊 基金競技場--賽事主控台</span>
+                      <div className="flex flex-col">
+                          <span className="font-black text-base text-slate-800 leading-tight">Fund手遊</span>
+                          <span className="text-[10px] text-slate-500 font-bold tracking-wide">基金競技場 - 賽事主控台</span>
+                      </div>
                   </div>
                   <div className="flex items-center gap-4">
                       <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
@@ -392,34 +398,34 @@ export default function SpectatorView() {
       );
   }
 
-  // ★★★ 修改處：Header 標題區塊 ★★★
+  // ★★★ 遊戲模式 (Game Mode) ★★★
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
-        <div className="flex items-center gap-3 w-1/4">
+        {/* ★★★ 2. 修改處：遊戲中標題排版 (強制顯示，不隱藏) ★★★ */}
+        <div className="flex items-center gap-3 shrink-0">
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
-            
-            {/* ★ 這裡修改了：移除 'hidden xl:block'，改為 'block' (或 'hidden md:block' 如果想在手機隱藏) */}
-            {/* 現在這個標題會強制顯示在所有尺寸的螢幕上 */}
-            <span className="font-bold text-lg text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis">
-                Fund手遊 基金競技場--賽事主控台
-            </span>
+            <div className="flex flex-col justify-center">
+                <span className="font-black text-base text-slate-800 leading-none mb-0.5">Fund手遊</span>
+                <span className="text-[10px] text-slate-500 font-bold tracking-wide leading-none">基金競技場 - 賽事主控台</span>
+            </div>
         </div>
-        <div className="flex-1 flex justify-center items-center">
+        
+        <div className="flex-1 flex justify-center items-center px-4">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner">
-                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm">{fundName}</span></div>
-                    <div className="w-px h-6 bg-slate-200"></div>
+                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div>
+                    <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-amber-500 font-bold tracking-widest uppercase">{currentDisplayDate}</span>
+                        <span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span>
                         <span className="text-3xl font-mono font-black text-slate-800 tracking-tight">{currentNav.toFixed(2)}</span>
                     </div>
                 </div>
             )}
         </div>
-        <div className="flex items-center gap-4 w-1/4 justify-end">
+        <div className="flex items-center gap-4 justify-end shrink-0">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg hidden lg:flex">
+                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg hidden xl:flex">
                      <div className="text-right">
                         <div className="text-[10px] text-slate-400 font-bold uppercase">買入總資金</div>
                         <div className="flex items-baseline gap-2 justify-end">
@@ -587,7 +593,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
+                  {/* 基金名稱揭曉 */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">

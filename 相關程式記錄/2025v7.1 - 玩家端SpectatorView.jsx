@@ -1,4 +1,4 @@
-// 2025v8.0 - 主持人端 (新增手續費控制功能 + 版面調整)
+// 2025v7.1 - 主持人端 (新增：結算時寫入冠軍資訊 finalWinner)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -7,7 +7,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent // ★ 新增 Percent Icon
+  Copy, Check 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -59,9 +59,6 @@ export default function SpectatorView() {
   const [fullData, setFullData] = useState([]);
   const [fundName, setFundName] = useState('');
   
-  // ★★★ 新增：手續費率狀態 (預設 1%) ★★★
-  const [feeRate, setFeeRate] = useState(0.01);
-
   const [showQrModal, setShowQrModal] = useState(false);
   
   const [tradeRequests, setTradeRequests] = useState([]);
@@ -90,7 +87,6 @@ export default function SpectatorView() {
     const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
     roomIdRef.current = newRoomId;
     setRoomId(newRoomId);
-    setFeeRate(0.01); // 重置為 1%
     
     const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
     setTimeOffset(randomTimeOffset);
@@ -104,7 +100,6 @@ export default function SpectatorView() {
         fundId: selectedFundId,
         timeOffset: randomTimeOffset,
         indicators: { ma20: false, ma60: false, river: false },
-        feeRate: 0.01, // ★ 寫入初始費率
         createdAt: serverTimestamp()
       });
       setGameStatus('waiting');
@@ -219,15 +214,6 @@ export default function SpectatorView() {
       if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { indicators: newIndicators }); 
   };
 
-  // ★★★ 新增：變更手續費率 ★★★
-  const handleChangeFee = async (e) => {
-      const rate = parseFloat(e.target.value);
-      setFeeRate(rate);
-      if (roomId) {
-          await updateDoc(doc(db, "battle_rooms", roomId), { feeRate: rate });
-      }
-  };
-
   const toggleAutoPlay = (speed) => {
     if (tradeRequests.length > 0) return;
 
@@ -246,12 +232,15 @@ export default function SpectatorView() {
     }
   };
 
+  // ★★★ 核心修正：結算時寫入 finalWinner ★★★
   const handleEndGame = async () => {
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     
+    // 計算冠軍資訊
     let winnerInfo = null;
     if (players.length > 0) {
+        // players 已經是按 ROI 排序過的，取第一個即可
         const champion = players[0];
         winnerInfo = {
             nickname: champion.nickname,
@@ -260,6 +249,7 @@ export default function SpectatorView() {
     }
 
     if (roomId) {
+        // 將狀態改為 ended，並寫入 finalWinner
         await updateDoc(doc(db, "battle_rooms", roomId), { 
             status: 'ended',
             finalWinner: winnerInfo 
@@ -274,18 +264,17 @@ export default function SpectatorView() {
     setCurrentDay(400); 
     setStartDay(400);
     setIndicators({ ma20: false, ma60: false, river: false });
-    setFeeRate(0.01); // 重置費率
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setTradeRequests([]); 
     setCountdown(15); 
 
+    // 重置時清除 finalWinner
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
         currentDay: 400, 
         startDay: 400,
         indicators: { ma20: false, ma60: false, river: false },
-        feeRate: 0.01,
         finalWinner: null 
     });
     
@@ -383,7 +372,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v8.0 Fee Edition | NBS Team
+            v7.1 Brand Edition | NBS Team
           </div>
         </div>
       </div>
@@ -567,27 +556,9 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('ma20')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma20 ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-300 text-slate-400'}`}>月線</button>
                   <button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button>
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
-                  
-                  {/* ★★★ 新增：手續費調整選單 (位於左側按鈕群右邊) ★★★ */}
-                  <div className="flex items-center ml-2 pl-2 border-l border-slate-200">
-                      <div className="relative">
-                          <Percent size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/>
-                          <select 
-                              value={feeRate} 
-                              onChange={handleChangeFee} 
-                              className="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-md text-[10px] font-bold text-slate-700 outline-none hover:border-slate-400 cursor-pointer appearance-none w-[90px]"
-                          >
-                              <option value={0}>手續費 0%</option>
-                              <option value={0.01}>手續費 1%</option>
-                              <option value={0.02}>手續費 2%</option>
-                              <option value={0.03}>手續費 3%</option>
-                          </select>
-                      </div>
-                  </div>
               </div>
               
-              {/* ★★★ 修改處：黃色區塊縮短並右移，避免擋住手續費選單 ★★★ */}
-              <div className="absolute left-[360px] z-50 w-[480px]">
+              <div className="absolute left-[240px] z-50 w-[600px]">
                  {hasRequests ? (
                      <div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100">
                          <div className="flex items-center gap-3 overflow-hidden">
@@ -625,9 +596,11 @@ export default function SpectatorView() {
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
                   <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
                   
+                  {/* 皇冠與標題 */}
                   <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
                   <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
                   
+                  {/* 第一名玩家資訊 */}
                   {players.length > 0 && (
                       <div className="py-6 relative z-10 border-b border-amber-100 mb-6">
                           <div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div>
@@ -637,6 +610,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
+                  {/* 基金名稱揭曉 */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
@@ -644,6 +618,7 @@ export default function SpectatorView() {
                       </div>
                   </div>
 
+                  {/* 真實歷史區間 */}
                   {fullData.length > 0 && (
                       <div className="relative z-10 mb-8">
                           <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">

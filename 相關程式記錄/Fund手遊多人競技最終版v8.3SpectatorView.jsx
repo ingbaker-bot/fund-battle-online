@@ -1,13 +1,13 @@
-// 2025v9.1 - 主持人端 (新增「趨勢」按鈕：整合趨勢儀表板 + 扣抵價標示)
+// 2025v8.3 - 主持人端 (使用 Mirror 屬性，真正滿版線圖)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
 import { 
   Trophy, Users, Play, Pause, FastForward, RotateCcw, 
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon 
+  Copy, Check, Percent 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -55,10 +55,7 @@ export default function SpectatorView() {
 
   const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
-  
-  // ★★★ 修改點 1：新增 trend 狀態 ★★★
-  const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
-  
+  const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false });
   const [fullData, setFullData] = useState([]);
   const [fundName, setFundName] = useState('');
   
@@ -105,7 +102,7 @@ export default function SpectatorView() {
         startDay: 400,
         fundId: selectedFundId,
         timeOffset: randomTimeOffset,
-        indicators: { ma20: false, ma60: false, river: false, trend: false }, // 初始化
+        indicators: { ma20: false, ma60: false, river: false },
         feeRate: 0.01,
         createdAt: serverTimestamp()
       });
@@ -274,7 +271,7 @@ export default function SpectatorView() {
     setGameStatus('waiting');
     setCurrentDay(400); 
     setStartDay(400);
-    setIndicators({ ma20: false, ma60: false, river: false, trend: false });
+    setIndicators({ ma20: false, ma60: false, river: false });
     setFeeRate(0.01);
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
@@ -285,7 +282,7 @@ export default function SpectatorView() {
         status: 'waiting', 
         currentDay: 400, 
         startDay: 400,
-        indicators: { ma20: false, ma60: false, river: false, trend: false },
+        indicators: { ma20: false, ma60: false, river: false },
         feeRate: 0.01,
         finalWinner: null 
     });
@@ -320,34 +317,6 @@ export default function SpectatorView() {
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
   };
-
-  // ★★★ 2. 計算扣抵價 (20MA, 60MA) ★★★
-  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
-  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
-
-  // ★★★ 3. 趨勢判斷邏輯 (多頭/空頭/盤整) ★★★
-  const currentTrendInfo = useMemo(() => {
-      if (!fullData[currentDay] || !indicators.trend) return null;
-      
-      const realIdx = currentDay;
-      const curNav = fullData[realIdx].nav;
-      const ind20 = calculateIndicators(fullData, 20, realIdx);
-      const ind60 = calculateIndicators(fullData, 60, realIdx);
-      
-      const ma20 = ind20.ma;
-      const ma60 = ind60.ma;
-      
-      if (!ma20 || !ma60) return null;
-
-      // 判斷邏輯
-      if (curNav > ma20 && ma20 > ma60) {
-          return { text: '多頭排列 🔥', color: 'text-red-500', bg: 'bg-red-50' };
-      } else if (curNav < ma20 && ma20 < ma60) {
-          return { text: '空頭排列 🧊', color: 'text-green-600', bg: 'bg-green-50' };
-      } else {
-          return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
-      }
-  }, [fullData, currentDay, indicators.trend]);
 
   const chartData = useMemo(() => {
       const start = Math.max(0, currentDay - 330);
@@ -412,7 +381,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v9.1 Trend Edition | NBS Team
+            v8.3 Brand Edition | NBS Team
           </div>
         </div>
       </div>
@@ -469,15 +438,7 @@ export default function SpectatorView() {
         
         <div className="flex-1 flex justify-center items-center px-4">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
-                    
-                    {/* ★★★ 修改點 2：顯示趨勢儀表板 (如果 Trend 開啟) ★★★ */}
-                    {currentTrendInfo && (
-                         <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}>
-                             <span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span>
-                         </div>
-                    )}
-
+                <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner">
                     <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div>
                     <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
                     <div className="flex items-baseline gap-2">
@@ -549,41 +510,17 @@ export default function SpectatorView() {
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
+                            {/* ★★★ 修改重點：使用 mirror={true} 將 Y 軸數字拉進圖表內，消除右邊距 ★★★ */}
                             <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
                                 <XAxis dataKey="date" hide />
                                 <YAxis 
                                   domain={['auto', 'auto']} 
                                   orientation="right" 
-                                  mirror={true}
-                                  tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}}
-                                  width={0}
+                                  mirror={true}  // 關鍵屬性
+                                  tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} // 微調文字位置，避免遮擋
+                                  width={0} // 設為0，因為已經 mirror 了
                                 />
-                                {/* ★★★ 修改點 3：顯示扣抵點 (只在 trend=true 時) ★★★ */}
-                                {indicators.trend && indicators.ma20 && deduction20 && (
-                                    <ReferenceDot
-                                        x={deduction20.date}
-                                        y={deduction20.nav}
-                                        r={6}
-                                        fill="#38bdf8"
-                                        stroke="white"
-                                        strokeWidth={2}
-                                        label={{ position: 'top', value: '月扣抵', fill: '#38bdf8', fontSize: 12, fontWeight: 'bold', dy: -5 }}
-                                    />
-                                )}
-
-                                {indicators.trend && indicators.ma60 && deduction60 && (
-                                    <ReferenceDot
-                                        x={deduction60.date}
-                                        y={deduction60.nav}
-                                        r={6}
-                                        fill="#1d4ed8"
-                                        stroke="white"
-                                        strokeWidth={2}
-                                        label={{ position: 'top', value: '季扣抵', fill: '#1d4ed8', fontSize: 12, fontWeight: 'bold', dy: -5 }}
-                                    />
-                                )}
-
                                 {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
                                 {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
                                 {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
@@ -635,8 +572,6 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('ma20')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma20 ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-300 text-slate-400'}`}>月線</button>
                   <button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button>
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
-                  {/* ★★★ 修改點 4：新增「趨勢」按鈕 ★★★ */}
-                  <button onClick={() => toggleIndicator('trend')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.trend ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-slate-300 text-slate-400'}`}>趨勢</button>
                   
                   <div className="flex items-center ml-2 pl-2 border-l border-slate-200">
                       <div className="relative">
@@ -705,43 +640,4 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  <div className="relative z-10 mb-4">
-                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
-                      <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
-                          {fundName}
-                      </div>
-                  </div>
-
-                  {fullData.length > 0 && (
-                      <div className="relative z-10 mb-8">
-                          <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">
-                              <Calendar size={14}/> 真實歷史區間
-                          </div>
-                          <div className="text-lg font-mono font-bold text-slate-600">
-                              {fullData[startDay]?.date} <span className="text-slate-400">~</span> {fullData[currentDay]?.date}
-                          </div>
-                      </div>
-                  )}
-                  
-                  <button onClick={handleResetRoom} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg transition-all active:scale-95"><RotateCcw size={20}/> 開啟新局</button>
-              </div>
-          </div>
-      )}
-
-      {showQrModal && (
-          <div className="absolute inset-0 bg-slate-900/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-3xl border-2 border-slate-200 text-center shadow-2xl relative">
-                  <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24}/></button>
-                  <h2 className="text-2xl font-bold text-slate-800 mb-4">掃描加入戰局</h2>
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block">
-                      <QRCodeSVG value={joinUrl} size={300} />
-                  </div>
-                  <div className="mt-6 text-xl font-mono font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">
-                      Room ID: {roomId}
-                  </div>
-              </div>
-          </div>
-      )}
-    </div>
-  );
-}
+                  <div className="relative

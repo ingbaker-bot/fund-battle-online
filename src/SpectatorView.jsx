@@ -1,4 +1,4 @@
-// 2025v6.1 - 新增「一鍵複製網址」功能
+// 2025v6.2 - 修正資產回報時間差
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -304,16 +304,29 @@ export default function SpectatorView() {
 
   const { totalInvestedAmount, positionRatio } = useMemo(() => {
       let totalAssets = 0;
-      let invested = 0;
+      let totalInvested = 0;
+      
       players.forEach(p => {
+          // 1. 取得玩家總資產 (來自 Firestore 回報)
           const pAssets = p.assets || 1000000;
           totalAssets += pAssets;
+          
+          // 2. 計算即時市值
           const pUnits = p.units || 0;
           const currentNav = fullData[currentDay]?.nav || 0;
-          invested += (pUnits * currentNav);
+          let marketValue = pUnits * currentNav;
+
+          // ★★★ 校正核心：市值不可能超過總資產 (除非融資) ★★★
+          // 這能消除因為價格波動或延遲導致的 >100% 水位異常
+          if (marketValue > pAssets) {
+              marketValue = pAssets;
+          }
+          
+          totalInvested += marketValue;
       });
-      const ratio = totalAssets > 0 ? (invested / totalAssets) * 100 : 0;
-      return { totalInvestedAmount: invested, positionRatio: ratio };
+
+      const ratio = totalAssets > 0 ? (totalInvested / totalAssets) * 100 : 0;
+      return { totalInvestedAmount: totalInvested, positionRatio: ratio };
   }, [players, fullData, currentDay]);
 
   const topPlayers = players.slice(0, 10);

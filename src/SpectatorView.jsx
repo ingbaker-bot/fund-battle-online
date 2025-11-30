@@ -367,7 +367,7 @@ export default function SpectatorView() {
                   <div className="flex items-center gap-3">
                       {/* Logo 顯示處 */}
                       <img src="/logo.jpg" alt="Logo" className="h-10 object-contain" />
-                      <span className="font-bold text-lg text-slate-700 hidden sm:block">賽事主控台</span>
+                      <span className="font-bold text-lg text-slate-700 hidden sm:block">Fund手遊 基金競技場--賽事主控台</span>
                   </div>
                   <div className="flex items-center gap-4">
                       <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>

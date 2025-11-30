@@ -1,4 +1,4 @@
-// 2025v6.5 - 玩家端 (優化冠軍顯示介面)
+// 2025v6.6 - 玩家端 (修復冠軍名字被遮擋問題)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -27,6 +27,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 
 export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   
   const urlRoomId = searchParams.get('room');
 
@@ -452,28 +453,25 @@ export default function AppBattle() {
             </div>
         </div>
 
-        {/* ★★★ 冠軍卡片 (2025v6.5 優化版) ★★★ */}
+        {/* ★★★ 冠軍資訊 (2025v6.6 優化版) ★★★ */}
         {champion && (
-            <div className="w-full max-w-xs mb-6 relative">
-                {/* 上方漂浮標籤 (Badge) */}
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-amber-400 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md z-20 flex items-center gap-1 border border-amber-300">
-                    <Crown size={12} fill="currentColor"/> 本場冠軍
+            <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md flex flex-col items-center relative overflow-hidden">
+                <Crown size={64} className="absolute -right-2 -bottom-6 text-amber-200/50 rotate-12 pointer-events-none"/>
+                
+                {/* 1. 標題 (Label) */}
+                <div className="flex items-center gap-2 mb-2 z-10">
+                    <Crown size={16} className="text-amber-600" fill="currentColor"/>
+                    <span className="text-sm font-bold text-amber-700 tracking-wider">本場冠軍</span>
                 </div>
                 
-                {/* 卡片本體 */}
-                <div className="bg-gradient-to-b from-amber-50 to-white p-6 rounded-2xl border border-amber-200 shadow-lg relative overflow-hidden">
-                    {/* 背景裝飾大皇冠 */}
-                    <Crown size={100} className="absolute -right-6 -bottom-6 text-amber-100/50 transform rotate-12 pointer-events-none" />
-                    
-                    {/* 內容置中 */}
-                    <div className="relative z-10 flex flex-col items-center justify-center pt-2">
-                        <div className="text-2xl font-black text-slate-800 mb-2 drop-shadow-sm tracking-tight">
-                            {champion.nickname}
-                        </div>
-                        <div className={`font-mono font-bold text-3xl ${champion.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                            {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
-                        </div>
-                    </div>
+                {/* 2. 名字 (Name) - 確保單行顯示 */}
+                <div className="text-3xl font-black text-slate-800 z-10 mb-1 drop-shadow-sm tracking-tight">
+                    {champion.nickname}
+                </div>
+                
+                {/* 3. 報酬率 (ROI) */}
+                <div className={`text-xl font-mono font-bold z-10 ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
                 </div>
             </div>
         )}

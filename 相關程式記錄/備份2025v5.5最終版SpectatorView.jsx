@@ -1,17 +1,13 @@
-// 2025v6.0 - 正規權限整合版 (Host Auth + Owner Binding)
+// 2025v5.5
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
 import { 
   Trophy, Users, Play, Pause, FastForward, RotateCcw, 
-  Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
-  DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
-  Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck 
+  Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, Lock, AlertTriangle, Radio
 } from 'lucide-react';
 
-// ★★★ 1. 引入 Auth 模組
-import { db, auth } from './config/firebase'; 
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { db } from './config/firebase'; 
 import { 
   doc, setDoc, onSnapshot, updateDoc, collection, 
   serverTimestamp, increment, deleteDoc, getDocs 
@@ -37,18 +33,8 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 export default function SpectatorView() {
-  // --- 狀態管理 ---
-  
-  // ★★★ 2. Auth 相關狀態
-  const [hostUser, setHostUser] = useState(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-
-  // 遊戲相關狀態
   const [roomId, setRoomId] = useState(null);
-  const [gameStatus, setGameStatus] = useState('waiting'); // 預設 waiting (等待建立/開始)
+  const [gameStatus, setGameStatus] = useState('initializing'); 
   const [players, setPlayers] = useState([]);
   
   const [currentDay, setCurrentDay] = useState(400);
@@ -70,52 +56,33 @@ export default function SpectatorView() {
   const roomIdRef = useRef(null);
   const autoPlayRef = useRef(null);
 
-  // ★★★ 3. 監聽登入狀態
+  // 初始化
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setHostUser(user);
-      setIsAuthChecking(false);
-      if (!user) {
-        setRoomId(null); // 登出時清除房間狀態
-        roomIdRef.current = null;
-      }
-    });
-    return () => unsubscribe();
+    const initRoom = async () => {
+      const newRoomId = Math.floor(1000 + Math.random() * 9000).toString();
+      roomIdRef.current = newRoomId;
+      setRoomId(newRoomId);
+      const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
+      setTimeOffset(randomTimeOffset);
+      
+      try {
+        await setDoc(doc(db, "battle_rooms", newRoomId), {
+          status: 'waiting',
+          currentDay: 400,
+          startDay: 400,
+          fundId: selectedFundId,
+          timeOffset: randomTimeOffset,
+          indicators: { ma20: false, ma60: false, river: false },
+          createdAt: serverTimestamp()
+        });
+        setGameStatus('waiting');
+      } catch (error) { console.error("開房失敗:", error); }
+    };
+    initRoom();
+    return () => clearInterval(autoPlayRef.current);
   }, []);
 
-  // ★★★ 4. 建立房間 (改為手動觸發，並綁定 ownerId)
-  const handleCreateRoom = async () => {
-    if (!hostUser) return;
-
-    // ★ 修改後 (6位數，徹底避開舊資料與快取)
-    const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
-    roomIdRef.current = newRoomId;
-    setRoomId(newRoomId);
-    
-    const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
-    setTimeOffset(randomTimeOffset);
-    
-    try {
-      // 寫入資料庫，特別注意 ownerId
-      await setDoc(doc(db, "battle_rooms", newRoomId), {
-        ownerId: hostUser.uid, // ★ 關鍵：綁定房主
-        status: 'waiting',
-        currentDay: 400,
-        startDay: 400,
-        fundId: selectedFundId,
-        timeOffset: randomTimeOffset,
-        indicators: { ma20: false, ma60: false, river: false },
-        createdAt: serverTimestamp()
-      });
-      setGameStatus('waiting');
-    } catch (error) { 
-      console.error("開房失敗 (請檢查 Firebase 規則):", error); 
-      alert("開房失敗，請確認您有權限建立房間。");
-      setRoomId(null);
-    }
-  };
-
-  // 監聽玩家 (只有在 roomId 存在時才執行)
+  // 監聽玩家
   useEffect(() => {
     if (!roomId) return;
     const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
@@ -127,14 +94,17 @@ export default function SpectatorView() {
     return () => unsubscribe();
   }, [roomId]);
 
-  // 監聽交易請求 (只有在 roomId 存在時才執行)
+  // 監聽交易請求
   useEffect(() => {
       if (!roomId) return;
       const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
           const reqs = [];
           snapshot.forEach(doc => reqs.push(doc.data()));
           
-          if (reqs.length > 0) console.log("🔥 收到交易請求:", reqs);
+          if (reqs.length > 0) {
+              console.log("🔥 收到交易請求:", reqs);
+          } 
+
           setTradeRequests(reqs);
 
           if (reqs.length > 0) {
@@ -144,6 +114,8 @@ export default function SpectatorView() {
               }
               setAutoPlaySpeed(null); 
           }
+      }, (error) => {
+          console.error("❌ 監聽請求失敗:", error);
       });
       return () => unsubscribe();
   }, [roomId]);
@@ -175,23 +147,6 @@ export default function SpectatorView() {
       loadData();
   }, [selectedFundId]);
 
-  // --- 登入控制函式 ---
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      setLoginError("登入失敗：帳號或密碼錯誤");
-    }
-  };
-
-  const handleLogout = () => {
-    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    signOut(auth);
-  };
-
-  // --- 遊戲控制函式 (保持不變，但加上權限檢查概念) ---
   const handleStartGame = async () => {
     if (!roomId || fullData.length === 0) return;
     const minBuffer = 100;
@@ -262,14 +217,7 @@ export default function SpectatorView() {
     setTradeRequests([]); 
     setCountdown(30);
 
-    // 重置房間狀態
-    await updateDoc(doc(db, "battle_rooms", roomId), { 
-        status: 'waiting', 
-        currentDay: 400, 
-        indicators: { ma20: false, ma60: false, river: false } 
-    });
-    
-    // 清除玩家與請求
+    await updateDoc(doc(db, "battle_rooms", roomId), { status: 'waiting', currentDay: 400, indicators: { ma20: false, ma60: false, river: false } });
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
     snapshot.forEach(async (d) => await deleteDoc(doc(db, "battle_rooms", roomId, "players", d.id)));
     const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
@@ -284,7 +232,6 @@ export default function SpectatorView() {
       setCountdown(30);
   };
 
-  // --- Helpers ---
   const getDisplayDate = (dateStr) => {
       if (!dateStr) return 'Loading...';
       const dateObj = new Date(dateStr);
@@ -296,6 +243,7 @@ export default function SpectatorView() {
   };
 
   const chartData = useMemo(() => {
+      // ★★★ 修正確認：這裡嚴格設定為 330 天，與玩家端一致 ★★★
       const start = Math.max(0, currentDay - 330);
       const end = currentDay + 1;
       const slice = fullData.slice(start, end);
@@ -326,92 +274,21 @@ export default function SpectatorView() {
   const topPlayers = players.slice(0, 10);
   const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
   const remainingCount = Math.max(0, players.length - 10 - bottomPlayers.length);
-  const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
+  const joinUrl = `${window.location.origin}/battle?room=${roomId}`;
   const currentNav = fullData[currentDay]?.nav || 0;
   const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
   const hasRequests = tradeRequests && tradeRequests.length > 0;
 
-  // --- ★★★ 渲染邏輯 (v6.0 新增) ★★★ ---
-
-  // 1. 載入中
-  if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
-
-  // 2. 未登入：顯示登入畫面
-  if (!hostUser) {
-    return (
-      <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          <div className="flex justify-center mb-4 text-emerald-600"><ShieldCheck size={56} strokeWidth={1.5} /></div>
-          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">Fund Battle Host</h2>
-          <p className="text-center text-slate-400 text-xs mb-6">主持人控制台登入</p>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">管理員信箱</label>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="name@example.com"/>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">密碼</label>
-              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="••••••••"/>
-            </div>
-            {loginError && <div className="p-3 bg-red-50 text-red-500 text-xs rounded-lg text-center font-bold border border-red-100">{loginError}</div>}
-            <button type="submit" className="w-full py-3.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg flex items-center justify-center gap-2">
-                <LogIn size={18}/> 登入系統
-            </button>
-          </form>
-          <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.0 Secure Edition | NBS Team
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 3. 已登入但未開房：顯示儀表板 (Dashboard)
-  if (!roomId) {
-      return (
-          <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
-              <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
-                  <div className="flex items-center gap-2">
-                      <ShieldCheck className="text-emerald-600"/>
-                      <span className="font-bold text-lg">主持人控制台</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                      <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
-                      <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-600 font-bold flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-lg transition-colors"><LogOut size={16}/> 登出</button>
-                  </div>
-              </header>
-              <main className="flex-1 flex flex-col items-center justify-center p-6">
-                  <div className="text-center mb-8">
-                      <h1 className="text-4xl font-bold text-slate-800 mb-2">準備好開始一場對決了嗎？</h1>
-                      <p className="text-slate-500">點擊下方按鈕建立一個全新的戰局房間</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 w-full max-w-md">
-                      <div className="mb-6">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">預設基金</label>
-                          <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 font-bold">
-                               {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
-                          </select>
-                      </div>
-                      <button onClick={handleCreateRoom} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 group">
-                          <Zap size={24} className="group-hover:scale-110 transition-transform"/> 建立新戰局
-                      </button>
-                  </div>
-              </main>
-          </div>
-      );
-  }
-
-  // 4. 已開房：顯示原本的遊戲畫面 (v5.5 UI)
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       
-      {/* Header */}
+      {/* Header (保持不變) */}
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
             <div className="hidden xl:block">
                 <h1 className="text-lg font-bold tracking-wider text-slate-800">FUND BATTLE <span className="text-emerald-500 text-xs">LIVE</span></h1>
-                <p className="text-[10px] text-slate-400">Spectator View (v6.0)</p>
+                <p className="text-[10px] text-slate-400">Spectator View (v5.5)</p>
             </div>
         </div>
         <div className="flex-1 flex justify-center items-center">
@@ -428,7 +305,7 @@ export default function SpectatorView() {
         </div>
         <div className="flex items-center gap-4 w-1/4 justify-end">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg hidden lg:flex">
+                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
                      <div className="text-right">
                         <div className="text-[10px] text-slate-400 font-bold uppercase">買入總資金</div>
                         <div className="flex items-baseline gap-2 justify-end">
@@ -442,10 +319,6 @@ export default function SpectatorView() {
                 <div className="text-right"><span className="block text-[10px] text-slate-400 uppercase leading-none">Room ID</span><span className="text-xl font-mono font-bold text-slate-800 tracking-widest leading-none">{roomId || '...'}</span></div>
                 <button onClick={() => setShowQrModal(true)} className="bg-white p-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"><QrCode size={18}/></button>
             </div>
-            {/* 登出按鈕 */}
-            <button onClick={handleLogout} className="p-2 bg-white border border-slate-200 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors ml-2" title="結束控制並登出">
-                <LogOut size={18} />
-            </button>
         </div>
       </header>
 
@@ -475,8 +348,10 @@ export default function SpectatorView() {
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
+                            {/* ★★★ 修正重點：調整 Margin 與 XAxis 設定，解決圖表壓縮問題 ★★★ */}
                             <ComposedChart data={chartData} margin={{ top: 10, right: 50, bottom: 0, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
+                                {/* 雖然隱藏 X 軸，但保留 dataKey 確保映射正確 */}
                                 <XAxis dataKey="date" hide />
                                 <YAxis domain={['auto', 'auto']} orientation="right" tick={{fill:'#64748b', fontWeight:'bold'}} width={50} />
                                 {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
@@ -489,6 +364,7 @@ export default function SpectatorView() {
                     </div>
                 </div>
 
+                {/* 右側玩家列表 (保持不變) */}
                 <div className="w-1/3 h-full bg-slate-50 flex flex-col border-l border-slate-200">
                     <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0">
                         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2>
@@ -504,6 +380,7 @@ export default function SpectatorView() {
                                     <div className={`font-mono font-bold text-lg ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div>
                                 </div>
                             ))}
+                            {remainingCount > 0 && <div className="text-center py-2 text-slate-400 text-xs border-t border-slate-200 mt-1 border-dashed">... 中間還有 {remainingCount} 位 ...</div>}
                         </div>
                         {bottomPlayers.length > 0 && (
                             <div className="bg-slate-100 border-t border-slate-300 p-3 shrink-0">
@@ -524,6 +401,7 @@ export default function SpectatorView() {
         )}
       </main>
 
+      {/* Footer (保持不變) */}
       {gameStatus === 'playing' && (
           <footer className="bg-white border-t border-slate-200 h-[72px] shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] relative flex items-center justify-center">
               <div className="absolute left-4 flex gap-1">
@@ -564,6 +442,7 @@ export default function SpectatorView() {
           </footer>
       )}
 
+      {/* 結算畫面與 QR Code Modal (略 - 保持不變) */}
       {gameStatus === 'ended' && (
           <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden">

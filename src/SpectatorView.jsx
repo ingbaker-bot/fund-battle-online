@@ -1,4 +1,4 @@
-// 2025v6.3 - 主持人端 (新增品牌 Logo)
+// 2025v6.4 - 主持人端 (UI 標題統一修正版)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -352,7 +352,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.3 Brand Edition | NBS Team
+            v6.4 Brand Edition | NBS Team
           </div>
         </div>
       </div>
@@ -400,12 +400,9 @@ export default function SpectatorView() {
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
-            {/* 遊戲中 Logo 顯示處 */}
+            {/* ★★★ 修改處：與儀表板統一標題 ★★★ */}
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
-            <div className="hidden xl:block">
-                <h1 className="text-lg font-bold tracking-wider text-slate-800">FUND BATTLE <span className="text-emerald-500 text-xs">LIVE</span></h1>
-                <p className="text-[10px] text-slate-400">賽事主控台 (v6.3)</p>
-            </div>
+            <span className="font-bold text-lg text-slate-700 hidden xl:block">Fund手遊 基金競技場--賽事主控台</span>
         </div>
         <div className="flex-1 flex justify-center items-center">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
@@ -589,7 +586,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  {/* 基金名稱揭曉 */}
+                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">

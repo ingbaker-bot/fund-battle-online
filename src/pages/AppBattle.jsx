@@ -1,4 +1,4 @@
-// 2025v6.6 - 玩家端 (修復冠軍名字被遮擋問題)
+// 2025v6.7 - 玩家端 (新增 20% 買賣快速鍵)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -419,10 +419,15 @@ export default function AppBattle() {
                           <input type="number" value={inputAmount} onChange={(e) => setInputAmount(e.target.value)} placeholder="輸入金額" className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-2 text-xl font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"/>
                           <button onClick={() => handleQuickAmount('sell', 1.0)} className="col-span-1 bg-emerald-500 active:bg-emerald-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>賣出</span><span>All In</span></button>
                       </div>
-                      <div className="px-2 flex gap-2 mb-2">
-                          <button onClick={() => handleQuickAmount('buy', 0.5)} className="flex-1 py-2 bg-rose-100 text-rose-700 rounded-md font-black text-lg hover:bg-rose-200 active:bg-rose-300 transition-colors">買入 50%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.5)} className="flex-1 py-2 bg-emerald-100 text-emerald-700 rounded-md font-black text-lg hover:bg-emerald-200 active:bg-emerald-300 transition-colors">賣出 50%</button>
+                      
+                      {/* ★★★ 修改處：四顆按鈕 (20% + 50%) ★★★ */}
+                      <div className="px-2 grid grid-cols-4 gap-1 mb-2">
+                          <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-sm py-3 active:bg-rose-200">買入 20%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-sm py-3 active:bg-rose-300">買入 50%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.2)} className="bg-emerald-100 text-emerald-700 rounded-md font-bold text-sm py-3 active:bg-emerald-200">賣出 20%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.5)} className="bg-emerald-200 text-emerald-800 rounded-md font-bold text-sm py-3 active:bg-emerald-300">賣出 50%</button>
                       </div>
+
                       <div className="px-2 grid grid-cols-2 gap-2">
                           <button onClick={() => executeTrade('buy')} className="bg-rose-500 active:bg-rose-600 text-white py-3 rounded-lg font-bold text-2xl shadow-md active:scale-95 flex items-center justify-center gap-2"><TrendingUp size={24}/> 買入</button>
                           <button onClick={() => executeTrade('sell')} className="bg-emerald-500 active:bg-emerald-600 text-white py-3 rounded-lg font-bold text-2xl shadow-md active:scale-95 flex items-center justify-center gap-2"><TrendingDown size={24}/> 賣出</button>
@@ -453,23 +458,19 @@ export default function AppBattle() {
             </div>
         </div>
 
-        {/* ★★★ 冠軍資訊 (2025v6.6 優化版) ★★★ */}
         {champion && (
             <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md flex flex-col items-center relative overflow-hidden">
                 <Crown size={64} className="absolute -right-2 -bottom-6 text-amber-200/50 rotate-12 pointer-events-none"/>
                 
-                {/* 1. 標題 (Label) */}
                 <div className="flex items-center gap-2 mb-2 z-10">
                     <Crown size={16} className="text-amber-600" fill="currentColor"/>
                     <span className="text-sm font-bold text-amber-700 tracking-wider">本場冠軍</span>
                 </div>
                 
-                {/* 2. 名字 (Name) - 確保單行顯示 */}
                 <div className="text-3xl font-black text-slate-800 z-10 mb-1 drop-shadow-sm tracking-tight">
                     {champion.nickname}
                 </div>
                 
-                {/* 3. 報酬率 (ROI) */}
                 <div className={`text-xl font-mono font-bold z-10 ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                     ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
                 </div>

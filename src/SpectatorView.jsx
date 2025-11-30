@@ -420,7 +420,7 @@ export default function SpectatorView() {
                     <div className="w-px h-6 bg-slate-200"></div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-xs text-amber-500 font-bold tracking-widest uppercase">{currentDisplayDate}</span>
-                        <span className="text-3xl font-mono font-black text-slate-800 tracking-tight">${currentNav.toFixed(2)}</span>
+                        <span className="text-3xl font-mono font-black text-slate-800 tracking-tight">{currentNav.toFixed(2)}</span>
                     </div>
                 </div>
             )}

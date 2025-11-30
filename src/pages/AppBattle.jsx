@@ -1,4 +1,4 @@
-// 2025v5.7
+// 2025v6.0 - 玩家端 (修正雙擊賣出漏洞/防連點機制)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -78,6 +78,9 @@ export default function AppBattle() {
   const [isTrading, setIsTrading] = useState(false);
   
   const lastReportTime = useRef(0);
+  
+  // ★★★ 1. 新增交易防連點鎖 ★★★
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     if (urlRoomId) { 
@@ -104,7 +107,6 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // ★★★ 核心修正：移除 currentDay 依賴，並修正同步邏輯 ★★★
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -121,7 +123,6 @@ export default function AppBattle() {
       else if (roomData.status === 'ended') setStatus('ended');
       else if (roomData.status === 'waiting' && status !== 'login') setStatus('waiting');
 
-      // ★★★ 修正點 1：無條件同步天數，解決卡頓與重置不同步問題 ★★★
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
       
       if (roomData.startDay) setStartDay(roomData.startDay);
@@ -138,7 +139,7 @@ export default function AppBattle() {
       }
     });
     return () => unsubscribe();
-  }, [roomId, status, fullData.length]); // ★★★ 修正點 2：移除 currentDay，避免重複訂閱導致效能問題 ★★★
+  }, [roomId, status, fullData.length]);
 
   const currentNav = fullData[currentDay]?.nav || 10;
   const totalAssets = cash + (units * currentNav);
@@ -224,12 +225,25 @@ export default function AppBattle() {
       }
   };
 
+  // ★★★ 2. 修正後的交易函式 (加入鎖定機制) ★★★
   const executeTrade = async (type) => {
+      // 檢查鎖
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true; // 上鎖
+
       const amount = parseFloat(inputAmount);
-      if (!amount || amount <= 0) return;
+      if (!amount || amount <= 0) {
+          isProcessingRef.current = false; // 解鎖
+          return;
+      }
 
       if (type === 'buy') {
-          if (amount > Math.round(cash)) { alert('現金不足'); return; }
+          // 使用 Math.floor 確保整數運算安全
+          if (amount > Math.floor(cash)) { 
+              alert('現金不足'); 
+              isProcessingRef.current = false; // 解鎖
+              return; 
+          }
           const buyUnits = amount / currentNav;
           const newUnits = units + buyUnits;
           setAvgCost((units * avgCost + amount) / newUnits);
@@ -240,23 +254,39 @@ export default function AppBattle() {
           });
       } else {
           const currentAssetValue = units * currentNav;
-          if (amount >= Math.round(currentAssetValue)) { 
-              setCash(prev => prev + amount); 
+          // 賣出邏輯
+          if (amount >= Math.floor(currentAssetValue)) { 
+              // All In 賣出
+              if (units <= 0) { // 雙重防呆：如果已經沒單位了，就不給賣
+                  isProcessingRef.current = false; 
+                  return; 
+              }
+              // 使用計算後的價值加回現金，確保數據一致
+              setCash(prev => prev + currentAssetValue); 
               setUnits(0);
               setAvgCost(0);
           } else {
+              // 部分賣出
               const sellUnits = amount / currentNav;
-              if (sellUnits > units * 1.0001) { alert('單位不足'); return; }
+              if (sellUnits > units * 1.0001) { 
+                  alert('單位不足'); 
+                  isProcessingRef.current = false; // 解鎖
+                  return; 
+              }
               setUnits(prev => Math.max(0, prev - sellUnits));
               setCash(prev => prev + amount);
           }
       }
+      
       setInputAmount(''); 
       if (navigator.vibrate) navigator.vibrate(50);
       handleCancelTrade();
-  };
 
-  const setAmountByPercent = (percent) => {};
+      // ★ 延遲解鎖 (防止極速連點)
+      setTimeout(() => {
+          isProcessingRef.current = false;
+      }, 500); 
+  };
 
   const getDisplayDate = (dateStr) => {
       if (!dateStr) return '---';

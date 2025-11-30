@@ -1,4 +1,4 @@
-// 2025v7.0 - 主持人端 (營運優化版：顯示修復 + 版面瘦身 + 15秒倒數)
+// 2025v7.1 - 主持人端 (修正交易請求擋住按鈕問題)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -62,7 +62,6 @@ export default function SpectatorView() {
   const [showQrModal, setShowQrModal] = useState(false);
   
   const [tradeRequests, setTradeRequests] = useState([]);
-  // ★★★ 修改點 4：預設倒數改為 15 秒 ★★★
   const [countdown, setCountdown] = useState(15); 
 
   const [copied, setCopied] = useState(false);
@@ -140,7 +139,6 @@ export default function SpectatorView() {
       return () => unsubscribe();
   }, [roomId]);
 
-  // ★★★ 修改點 4：重置倒數時也設為 15 秒 ★★★
   useEffect(() => {
       let timer;
       if (tradeRequests.length > 0 && countdown > 0) {
@@ -250,7 +248,7 @@ export default function SpectatorView() {
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setTradeRequests([]); 
-    setCountdown(15); // 重置也改為 15
+    setCountdown(15); 
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
@@ -270,7 +268,7 @@ export default function SpectatorView() {
       const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
       reqSnap.forEach(async (d) => await deleteDoc(d.ref));
       setTradeRequests([]);
-      setCountdown(15); // 重置也改為 15
+      setCountdown(15);
   };
 
   const handleCopyUrl = () => {
@@ -333,6 +331,7 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
+          {/* 登入畫面 Logo */}
           <div className="flex justify-center mb-6">
               <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
           </div>
@@ -353,13 +352,14 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v7.0 Brand Edition | NBS Team
+            v7.1 Brand Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
+  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
@@ -422,7 +422,6 @@ export default function SpectatorView() {
         </div>
         <div className="flex items-center gap-4 justify-end shrink-0">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                // ★★★ 修改點 1：移除 'hidden' 屬性，強制顯示水位資訊 ★★★
                 <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
                      <div className="text-right">
                         <div className="text-[10px] text-slate-400 font-bold uppercase">買入總資金</div>
@@ -502,7 +501,6 @@ export default function SpectatorView() {
                         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2>
                     </div>
                     <div className="flex-1 overflow-hidden relative flex flex-col">
-                        {/* ★★★ 修改點 5：版面瘦身，縮小 Padding 與間距 ★★★ */}
                         <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                             {topPlayers.map((p, idx) => (
                                 <div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}>
@@ -541,22 +539,21 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
               </div>
               
-              {/* ★★★ 修改點 3：擴大請求交易顯示區塊 ★★★ */}
-              <div className="absolute left-1/2 transform -translate-x-1/2 z-50 w-[600px] flex justify-center">
+              {/* ★★★ 修改處：位置改為 left-[240px] (靠左固定) ★★★ */}
+              <div className="absolute left-[240px] z-50 w-[600px]">
                  {hasRequests ? (
                      <div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100">
                          <div className="flex items-center gap-3 overflow-hidden">
                              <div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div>
                              <div className="flex flex-col leading-none overflow-hidden">
                                  <div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div>
-                                 {/* 這裡移除 max-w，讓它可以顯示更多名字 */}
                                  <div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div>
                              </div>
                          </div>
                          <button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button>
                      </div>
                  ) : (
-                     <div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner">
+                     <div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner w-fit">
                          <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>
                          市場監控中...
                      </div>
@@ -581,11 +578,9 @@ export default function SpectatorView() {
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
                   <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
                   
-                  {/* 皇冠與標題 */}
                   <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
                   <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
                   
-                  {/* 第一名玩家資訊 */}
                   {players.length > 0 && (
                       <div className="py-6 relative z-10 border-b border-amber-100 mb-6">
                           <div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div>
@@ -595,7 +590,6 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
@@ -603,7 +597,6 @@ export default function SpectatorView() {
                       </div>
                   </div>
 
-                  {/* 真實歷史區間 */}
                   {fullData.length > 0 && (
                       <div className="relative z-10 mb-8">
                           <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">

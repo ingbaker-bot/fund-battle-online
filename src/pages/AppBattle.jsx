@@ -1,4 +1,4 @@
-// 2025v7.0 - 玩家端 (核心修正：解決中途加入者無法註冊的問題 + v6.8功能全收錄)
+// 2025v7.1 - 玩家端 (核心修正：結算讀取 finalWinner + 交易餘額 Math.floor 容錯)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -45,13 +45,10 @@ export default function AppBattle() {
   const [roomId, setRoomId] = useState(urlRoomId || '');
   const [inputRoomId, setInputRoomId] = useState('');
   
-  // 初始化狀態邏輯
   const [status, setStatus] = useState(() => {
       const savedRoom = localStorage.getItem('battle_roomId');
       const savedNick = localStorage.getItem('battle_nickname');
-      // 如果網址有房號，且本地有該房號的暱稱存檔，視為已登入(waiting)
       if (urlRoomId && savedRoom === urlRoomId && savedNick) return 'waiting';
-      // 否則視為未登入(login)
       return urlRoomId ? 'login' : 'input_room';
   });
 
@@ -110,7 +107,6 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // ★★★ 核心修正：監聽房間狀態與自動跳轉邏輯 ★★★
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -123,20 +119,13 @@ export default function AppBattle() {
       }
       const roomData = docSnap.data();
       
-      // 1. 如果房間已結束，所有人強制跳轉結束畫面
       if (roomData.status === 'ended') {
           setStatus('ended');
-      } 
-      // 2. 如果房間正在進行中 (playing)
-      else if (roomData.status === 'playing') {
-          // ★ 關鍵防護：只有「非登入狀態」的人才允許跳轉進去
-          // 如果還在 'login'，絕對不能跳，必須等他自己按加入
+      } else if (roomData.status === 'playing') {
           if (status !== 'login' && status !== 'input_room') {
               setStatus('playing');
           }
-      } 
-      // 3. 如果房間在等待中 (waiting)
-      else if (roomData.status === 'waiting') {
+      } else if (roomData.status === 'waiting') {
           if (status !== 'login' && status !== 'input_room') {
               setStatus('waiting');
           }
@@ -155,21 +144,14 @@ export default function AppBattle() {
              setFullData(processRealData(await res.json()));
          }
       }
+
+      // ★★★ 核心修正：直接讀取主持人寫入的 finalWinner ★★★
+      if (roomData.finalWinner) {
+          setChampion(roomData.finalWinner);
+      }
     });
     return () => unsubscribe();
-  }, [roomId, status, fullData.length]); // ★ status 必須作為依賴，這樣當使用者從 login -> waiting 時，這個 Effect 會重跑並判斷是否要進 playing
-
-  useEffect(() => {
-      if (!roomId || status !== 'ended') return;
-      const q = query(collection(db, "battle_rooms", roomId, "players"), orderBy("roi", "desc"), limit(1));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          if (!snapshot.empty) {
-              const winnerData = snapshot.docs[0].data();
-              setChampion(winnerData);
-          }
-      });
-      return () => unsubscribe();
-  }, [roomId, status]);
+  }, [roomId, status, fullData.length]);
 
   const currentNav = fullData[currentDay]?.nav || 10;
   const totalAssets = cash + (units * currentNav);
@@ -217,9 +199,7 @@ export default function AppBattle() {
         await setDoc(doc(db, "battle_rooms", roomId, "players", userId), {
             nickname, phone: phoneNumber, roi: 0, assets: initialCapital, units: 0, isOut: false, joinedAt: serverTimestamp()
         });
-        // ★ 寫入成功後，狀態轉為 waiting。
-        // 這會觸發上方的 useEffect，如果房間已經是 playing，就會立刻再轉為 playing，達成無縫接軌。
-        setStatus('waiting'); 
+        setStatus('waiting');
       } catch (err) { alert("加入失敗: " + err.message); } finally { setIsJoining(false); }
   };
 
@@ -248,11 +228,11 @@ export default function AppBattle() {
 
   const handleQuickAmount = (type, percent) => {
       if (type === 'buy') {
-          const amount = Math.round(cash * percent);
+          const amount = Math.floor(cash * percent); // ★ 修改：使用 floor
           setInputAmount(amount.toString());
       } else if (type === 'sell') {
           const assetValue = units * currentNav;
-          const amount = Math.round(assetValue * percent);
+          const amount = Math.floor(assetValue * percent); // ★ 修改：使用 floor
           setInputAmount(amount.toString());
       }
   };
@@ -268,8 +248,9 @@ export default function AppBattle() {
       }
 
       if (type === 'buy') {
+          // ★ 修改：使用 floor 確保顯示餘額與邏輯一致
           if (amount > Math.floor(cash)) { 
-              alert('現金不足'); 
+              alert(`現金不足 (可用: $${Math.floor(cash)})`); 
               isProcessingRef.current = false; 
               return; 
           }
@@ -283,6 +264,7 @@ export default function AppBattle() {
           });
       } else {
           const currentAssetValue = units * currentNav;
+          // ★ 修改：使用 floor 並加上微量容錯
           if (amount >= Math.floor(currentAssetValue)) { 
               if (units <= 0) { 
                   isProcessingRef.current = false; 
@@ -425,8 +407,8 @@ export default function AppBattle() {
           </div>
           <div className="bg-white border-t border-slate-200 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-3 pt-1 safe-area-pb">
               <div className="flex justify-between px-4 py-2 border-b border-slate-100 mb-2">
-                  <div className="flex flex-col items-start"><span className="text-xs text-slate-400 font-bold mb-0.5">現金餘額</span><span className="font-mono text-emerald-600 font-black text-3xl leading-none tracking-tight">${Math.round(cash).toLocaleString()}</span></div>
-                  <div className="flex flex-col items-end"><span className="text-xs text-slate-400 font-bold mb-0.5">持有單位</span><span className="font-mono text-slate-800 font-black text-3xl leading-none tracking-tight">{Math.round(units).toLocaleString()}</span></div>
+                  <div className="flex flex-col items-start"><span className="text-xs text-slate-400 font-bold mb-0.5">現金餘額</span><span className="font-mono text-emerald-600 font-black text-3xl leading-none tracking-tight">${Math.floor(cash).toLocaleString()}</span></div>
+                  <div className="flex flex-col items-end"><span className="text-xs text-slate-400 font-bold mb-0.5">持有單位</span><span className="font-mono text-slate-800 font-black text-3xl leading-none tracking-tight">{Math.floor(units).toLocaleString()}</span></div>
               </div>
               {!isTrading ? (
                   <div className="px-4 pb-2">

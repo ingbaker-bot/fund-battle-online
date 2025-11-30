@@ -1,4 +1,4 @@
-// 2025v7.1 - 主持人端 (修正交易請求擋住按鈕問題)
+// 2025v7.1 - 主持人端 (新增：結算時寫入冠軍資訊 finalWinner)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -232,10 +232,29 @@ export default function SpectatorView() {
     }
   };
 
+  // ★★★ 核心修正：結算時寫入 finalWinner ★★★
   const handleEndGame = async () => {
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
-    if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { status: 'ended' });
+    
+    // 計算冠軍資訊
+    let winnerInfo = null;
+    if (players.length > 0) {
+        // players 已經是按 ROI 排序過的，取第一個即可
+        const champion = players[0];
+        winnerInfo = {
+            nickname: champion.nickname,
+            roi: champion.roi || 0
+        };
+    }
+
+    if (roomId) {
+        // 將狀態改為 ended，並寫入 finalWinner
+        await updateDoc(doc(db, "battle_rooms", roomId), { 
+            status: 'ended',
+            finalWinner: winnerInfo 
+        });
+    }
     setGameStatus('ended');
   };
 
@@ -250,11 +269,13 @@ export default function SpectatorView() {
     setTradeRequests([]); 
     setCountdown(15); 
 
+    // 重置時清除 finalWinner
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
         currentDay: 400, 
         startDay: 400,
-        indicators: { ma20: false, ma60: false, river: false } 
+        indicators: { ma20: false, ma60: false, river: false },
+        finalWinner: null 
     });
     
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
@@ -331,7 +352,6 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          {/* 登入畫面 Logo */}
           <div className="flex justify-center mb-6">
               <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
           </div>
@@ -359,7 +379,6 @@ export default function SpectatorView() {
     );
   }
 
-  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
@@ -539,7 +558,6 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
               </div>
               
-              {/* ★★★ 修改處：位置改為 left-[240px] (靠左固定) ★★★ */}
               <div className="absolute left-[240px] z-50 w-[600px]">
                  {hasRequests ? (
                      <div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100">
@@ -578,9 +596,11 @@ export default function SpectatorView() {
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
                   <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
                   
+                  {/* 皇冠與標題 */}
                   <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
                   <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
                   
+                  {/* 第一名玩家資訊 */}
                   {players.length > 0 && (
                       <div className="py-6 relative z-10 border-b border-amber-100 mb-6">
                           <div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div>
@@ -590,6 +610,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
+                  {/* 基金名稱揭曉 */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
@@ -597,6 +618,7 @@ export default function SpectatorView() {
                       </div>
                   </div>
 
+                  {/* 真實歷史區間 */}
                   {fullData.length > 0 && (
                       <div className="relative z-10 mb-8">
                           <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">

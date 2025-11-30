@@ -1,4 +1,4 @@
-// 2025v6.4 - 玩家端 (結算顯示冠軍資訊)
+// 2025v6.5 - 玩家端 (優化冠軍顯示介面)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -27,7 +27,6 @@ const calculateIndicators = (data, days, currentIndex) => {
 
 export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
   
   const urlRoomId = searchParams.get('room');
 
@@ -77,7 +76,6 @@ export default function AppBattle() {
   const [isJoining, setIsJoining] = useState(false);
   const [isTrading, setIsTrading] = useState(false);
   
-  // ★★★ 新增：冠軍資訊 ★★★
   const [champion, setChampion] = useState(null);
 
   const lastReportTime = useRef(0);
@@ -108,7 +106,6 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // 監聽房間狀態
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -142,10 +139,8 @@ export default function AppBattle() {
     return () => unsubscribe();
   }, [roomId, status, fullData.length]);
 
-  // ★★★ 新增：監聽冠軍 (只在遊戲結束時觸發，或一直監聽) ★★★
   useEffect(() => {
       if (!roomId || status !== 'ended') return;
-      // 查詢 ROI 最高的玩家 (只取第1名)
       const q = query(collection(db, "battle_rooms", roomId, "players"), orderBy("roi", "desc"), limit(1));
       const unsubscribe = onSnapshot(q, (snapshot) => {
           if (!snapshot.empty) {
@@ -457,18 +452,27 @@ export default function AppBattle() {
             </div>
         </div>
 
-        {/* ★★★ 新增：本場冠軍資訊 ★★★ */}
+        {/* ★★★ 冠軍卡片 (2025v6.5 優化版) ★★★ */}
         {champion && (
-            <div className="bg-amber-50 p-4 rounded-xl w-full max-w-xs border border-amber-200 mb-6 relative overflow-hidden">
-                <Crown size={80} className="absolute -right-4 -bottom-4 text-amber-200/50" />
-                <div className="flex items-center gap-2 mb-2">
-                    <Crown size={18} className="text-amber-500" fill="currentColor"/>
-                    <span className="text-sm font-bold text-amber-700">本場冠軍</span>
+            <div className="w-full max-w-xs mb-6 relative">
+                {/* 上方漂浮標籤 (Badge) */}
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-amber-400 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-md z-20 flex items-center gap-1 border border-amber-300">
+                    <Crown size={12} fill="currentColor"/> 本場冠軍
                 </div>
-                <div className="text-left relative z-10">
-                    <div className="text-2xl font-bold text-slate-800 mb-1">{champion.nickname}</div>
-                    <div className={`font-mono font-bold text-xl ${champion.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
+                
+                {/* 卡片本體 */}
+                <div className="bg-gradient-to-b from-amber-50 to-white p-6 rounded-2xl border border-amber-200 shadow-lg relative overflow-hidden">
+                    {/* 背景裝飾大皇冠 */}
+                    <Crown size={100} className="absolute -right-6 -bottom-6 text-amber-100/50 transform rotate-12 pointer-events-none" />
+                    
+                    {/* 內容置中 */}
+                    <div className="relative z-10 flex flex-col items-center justify-center pt-2">
+                        <div className="text-2xl font-black text-slate-800 mb-2 drop-shadow-sm tracking-tight">
+                            {champion.nickname}
+                        </div>
+                        <div className={`font-mono font-bold text-3xl ${champion.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                            {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
+                        </div>
                     </div>
                 </div>
             </div>

@@ -1,4 +1,4 @@
-// 2025v6.0 - 正規權限整合版 (Host Auth + Owner Binding)
+// 2025v6.1 - 新增「一鍵複製網址」功能
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -6,10 +6,10 @@ import {
   Trophy, Users, Play, Pause, FastForward, RotateCcw, 
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
-  Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck 
+  Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
+  Copy, Check // ★ 新增這兩個 Icon
 } from 'lucide-react';
 
-// ★★★ 1. 引入 Auth 模組
 import { db, auth } from './config/firebase'; 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { 
@@ -39,16 +39,14 @@ const calculateIndicators = (data, days, currentIndex) => {
 export default function SpectatorView() {
   // --- 狀態管理 ---
   
-  // ★★★ 2. Auth 相關狀態
   const [hostUser, setHostUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-  // 遊戲相關狀態
   const [roomId, setRoomId] = useState(null);
-  const [gameStatus, setGameStatus] = useState('waiting'); // 預設 waiting (等待建立/開始)
+  const [gameStatus, setGameStatus] = useState('waiting'); 
   const [players, setPlayers] = useState([]);
   
   const [currentDay, setCurrentDay] = useState(400);
@@ -63,31 +61,30 @@ export default function SpectatorView() {
   
   const [showQrModal, setShowQrModal] = useState(false);
   
-  // 交易請求相關狀態
   const [tradeRequests, setTradeRequests] = useState([]);
   const [countdown, setCountdown] = useState(30); 
+
+  // ★★★ 新增：複製狀態控制
+  const [copied, setCopied] = useState(false);
 
   const roomIdRef = useRef(null);
   const autoPlayRef = useRef(null);
 
-  // ★★★ 3. 監聽登入狀態
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setHostUser(user);
       setIsAuthChecking(false);
       if (!user) {
-        setRoomId(null); // 登出時清除房間狀態
+        setRoomId(null);
         roomIdRef.current = null;
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // ★★★ 4. 建立房間 (改為手動觸發，並綁定 ownerId)
   const handleCreateRoom = async () => {
     if (!hostUser) return;
 
-    // ★ 修改後 (6位數，徹底避開舊資料與快取)
     const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
     roomIdRef.current = newRoomId;
     setRoomId(newRoomId);
@@ -96,9 +93,8 @@ export default function SpectatorView() {
     setTimeOffset(randomTimeOffset);
     
     try {
-      // 寫入資料庫，特別注意 ownerId
       await setDoc(doc(db, "battle_rooms", newRoomId), {
-        ownerId: hostUser.uid, // ★ 關鍵：綁定房主
+        ownerId: hostUser.uid, 
         status: 'waiting',
         currentDay: 400,
         startDay: 400,
@@ -109,13 +105,12 @@ export default function SpectatorView() {
       });
       setGameStatus('waiting');
     } catch (error) { 
-      console.error("開房失敗 (請檢查 Firebase 規則):", error); 
+      console.error("開房失敗:", error); 
       alert("開房失敗，請確認您有權限建立房間。");
       setRoomId(null);
     }
   };
 
-  // 監聽玩家 (只有在 roomId 存在時才執行)
   useEffect(() => {
     if (!roomId) return;
     const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
@@ -127,14 +122,11 @@ export default function SpectatorView() {
     return () => unsubscribe();
   }, [roomId]);
 
-  // 監聽交易請求 (只有在 roomId 存在時才執行)
   useEffect(() => {
       if (!roomId) return;
       const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
           const reqs = [];
           snapshot.forEach(doc => reqs.push(doc.data()));
-          
-          if (reqs.length > 0) console.log("🔥 收到交易請求:", reqs);
           setTradeRequests(reqs);
 
           if (reqs.length > 0) {
@@ -148,7 +140,6 @@ export default function SpectatorView() {
       return () => unsubscribe();
   }, [roomId]);
 
-  // 交易倒數計時器
   useEffect(() => {
       let timer;
       if (tradeRequests.length > 0 && countdown > 0) {
@@ -161,7 +152,6 @@ export default function SpectatorView() {
       return () => clearInterval(timer);
   }, [tradeRequests.length, countdown]);
 
-  // 載入數據
   useEffect(() => {
       const loadData = async () => {
           const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
@@ -175,7 +165,6 @@ export default function SpectatorView() {
       loadData();
   }, [selectedFundId]);
 
-  // --- 登入控制函式 ---
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -191,7 +180,6 @@ export default function SpectatorView() {
     signOut(auth);
   };
 
-  // --- 遊戲控制函式 (保持不變，但加上權限檢查概念) ---
   const handleStartGame = async () => {
     if (!roomId || fullData.length === 0) return;
     const minBuffer = 100;
@@ -262,14 +250,12 @@ export default function SpectatorView() {
     setTradeRequests([]); 
     setCountdown(30);
 
-    // 重置房間狀態
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
         currentDay: 400, 
         indicators: { ma20: false, ma60: false, river: false } 
     });
     
-    // 清除玩家與請求
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
     snapshot.forEach(async (d) => await deleteDoc(doc(db, "battle_rooms", roomId, "players", d.id)));
     const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
@@ -284,7 +270,14 @@ export default function SpectatorView() {
       setCountdown(30);
   };
 
-  // --- Helpers ---
+  // ★★★ 新增：複製網址函式
+  const handleCopyUrl = () => {
+      if (!joinUrl) return;
+      navigator.clipboard.writeText(joinUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // 2秒後恢復圖示
+  };
+
   const getDisplayDate = (dateStr) => {
       if (!dateStr) return 'Loading...';
       const dateObj = new Date(dateStr);
@@ -331,12 +324,8 @@ export default function SpectatorView() {
   const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
   const hasRequests = tradeRequests && tradeRequests.length > 0;
 
-  // --- ★★★ 渲染邏輯 (v6.0 新增) ★★★ ---
-
-  // 1. 載入中
   if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
 
-  // 2. 未登入：顯示登入畫面
   if (!hostUser) {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
@@ -359,14 +348,13 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.0 Secure Edition | NBS Team
+            v6.1 Copy Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
-  // 3. 已登入但未開房：顯示儀表板 (Dashboard)
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
@@ -401,17 +389,15 @@ export default function SpectatorView() {
       );
   }
 
-  // 4. 已開房：顯示原本的遊戲畫面 (v5.5 UI)
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
             <div className="hidden xl:block">
                 <h1 className="text-lg font-bold tracking-wider text-slate-800">FUND BATTLE <span className="text-emerald-500 text-xs">LIVE</span></h1>
-                <p className="text-[10px] text-slate-400">Spectator View (v6.0)</p>
+                <p className="text-[10px] text-slate-400">Spectator View (v6.1)</p>
             </div>
         </div>
         <div className="flex-1 flex justify-center items-center">
@@ -442,7 +428,6 @@ export default function SpectatorView() {
                 <div className="text-right"><span className="block text-[10px] text-slate-400 uppercase leading-none">Room ID</span><span className="text-xl font-mono font-bold text-slate-800 tracking-widest leading-none">{roomId || '...'}</span></div>
                 <button onClick={() => setShowQrModal(true)} className="bg-white p-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"><QrCode size={18}/></button>
             </div>
-            {/* 登出按鈕 */}
             <button onClick={handleLogout} className="p-2 bg-white border border-slate-200 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors ml-2" title="結束控制並登出">
                 <LogOut size={18} />
             </button>
@@ -456,7 +441,23 @@ export default function SpectatorView() {
                      <div className="text-left">
                          <h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2>
                          <p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p>
-                         <div className="bg-white px-6 py-4 rounded-xl font-mono text-emerald-600 border border-slate-200 text-2xl inline-block mb-8 shadow-sm">{joinUrl}</div>
+                         
+                         {/* ★★★ 修改處：變成可點擊複製的按鈕 ★★★ */}
+                         <button 
+                            onClick={handleCopyUrl} 
+                            className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative"
+                            title="點擊複製連結"
+                         >
+                            <span className="font-mono text-emerald-600 font-bold">{joinUrl}</span>
+                            <span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>
+                                {copied ? <Check size={24} /> : <Copy size={24} />}
+                            </span>
+                            {/* 提示氣泡 */}
+                            <span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>
+                                已複製連結！
+                            </span>
+                         </button>
+
                          <div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg">
                              <label className="text-xs text-slate-400 block mb-2">本場戰役目標</label>
                              <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 mb-4 outline-none">

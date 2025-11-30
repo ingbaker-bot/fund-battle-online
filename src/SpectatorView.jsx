@@ -1,4 +1,4 @@
-// 2025v6.2 - 主持人端 (修正結算畫面：顯示基金名稱與歷史區間)
+// 2025v6.3 - 主持人端 (新增品牌 Logo)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -243,7 +243,7 @@ export default function SpectatorView() {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');
     setCurrentDay(400); 
-    setStartDay(400); // 重置 startDay
+    setStartDay(400);
     setIndicators({ ma20: false, ma60: false, river: false });
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
@@ -331,8 +331,11 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          <div className="flex justify-center mb-4 text-emerald-600"><ShieldCheck size={56} strokeWidth={1.5} /></div>
-          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">基金競技場：賽事主控台</h2>
+          {/* 登入畫面也加上 Logo */}
+          <div className="flex justify-center mb-6">
+              <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
+          </div>
+          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">基金競技場</h2>
           <p className="text-center text-slate-400 text-xs mb-6">主持人控制台登入</p>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -349,20 +352,22 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.2 Secure Edition | NBS Team
+            v6.3 Brand Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
+  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
               <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
-                  <div className="flex items-center gap-2">
-                      <ShieldCheck className="text-emerald-600"/>
-                      <span className="font-bold text-lg">基金競技場：賽事主控台</span>
+                  <div className="flex items-center gap-3">
+                      {/* Logo 顯示處 */}
+                      <img src="/logo.jpg" alt="Logo" className="h-10 object-contain" />
+                      <span className="font-bold text-lg text-slate-700 hidden sm:block">賽事主控台</span>
                   </div>
                   <div className="flex items-center gap-4">
                       <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
@@ -390,14 +395,16 @@ export default function SpectatorView() {
       );
   }
 
+  // ★★★ 遊戲模式 (Game Mode) ★★★
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
+            {/* 遊戲中 Logo 顯示處 */}
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
             <div className="hidden xl:block">
-                <h1 className="text-lg font-bold tracking-wider text-slate-800">基金競技場 <span className="text-emerald-500 text-xs">LIVE</span></h1>
-                <p className="text-[10px] text-slate-400">賽事主控台 (v6.2)</p>
+                <h1 className="text-lg font-bold tracking-wider text-slate-800">FUND BATTLE <span className="text-emerald-500 text-xs">LIVE</span></h1>
+                <p className="text-[10px] text-slate-400">賽事主控台 (v6.3)</p>
             </div>
         </div>
         <div className="flex-1 flex justify-center items-center">
@@ -563,7 +570,6 @@ export default function SpectatorView() {
           </footer>
       )}
 
-      {/* ★★★ 這裡就是修正後的結算畫面區塊 ★★★ */}
       {gameStatus === 'ended' && (
           <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
@@ -583,7 +589,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
+                  {/* 基金名稱揭曉 */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">

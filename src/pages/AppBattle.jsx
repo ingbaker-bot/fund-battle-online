@@ -1,4 +1,4 @@
-// 2025v6.8 - 玩家端 (整合版：20%快速鍵 + 冠軍橫向排版)
+// 2025v7.0 - 玩家端 (核心修正：解決中途加入者無法註冊的問題 + v6.8功能全收錄)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -45,10 +45,13 @@ export default function AppBattle() {
   const [roomId, setRoomId] = useState(urlRoomId || '');
   const [inputRoomId, setInputRoomId] = useState('');
   
+  // 初始化狀態邏輯
   const [status, setStatus] = useState(() => {
       const savedRoom = localStorage.getItem('battle_roomId');
       const savedNick = localStorage.getItem('battle_nickname');
+      // 如果網址有房號，且本地有該房號的暱稱存檔，視為已登入(waiting)
       if (urlRoomId && savedRoom === urlRoomId && savedNick) return 'waiting';
+      // 否則視為未登入(login)
       return urlRoomId ? 'login' : 'input_room';
   });
 
@@ -107,6 +110,7 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
+  // ★★★ 核心修正：監聽房間狀態與自動跳轉邏輯 ★★★
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -119,9 +123,24 @@ export default function AppBattle() {
       }
       const roomData = docSnap.data();
       
-      if (roomData.status === 'playing') setStatus('playing');
-      else if (roomData.status === 'ended') setStatus('ended');
-      else if (roomData.status === 'waiting' && status !== 'login') setStatus('waiting');
+      // 1. 如果房間已結束，所有人強制跳轉結束畫面
+      if (roomData.status === 'ended') {
+          setStatus('ended');
+      } 
+      // 2. 如果房間正在進行中 (playing)
+      else if (roomData.status === 'playing') {
+          // ★ 關鍵防護：只有「非登入狀態」的人才允許跳轉進去
+          // 如果還在 'login'，絕對不能跳，必須等他自己按加入
+          if (status !== 'login' && status !== 'input_room') {
+              setStatus('playing');
+          }
+      } 
+      // 3. 如果房間在等待中 (waiting)
+      else if (roomData.status === 'waiting') {
+          if (status !== 'login' && status !== 'input_room') {
+              setStatus('waiting');
+          }
+      }
 
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
       if (roomData.startDay) setStartDay(roomData.startDay);
@@ -138,7 +157,7 @@ export default function AppBattle() {
       }
     });
     return () => unsubscribe();
-  }, [roomId, status, fullData.length]);
+  }, [roomId, status, fullData.length]); // ★ status 必須作為依賴，這樣當使用者從 login -> waiting 時，這個 Effect 會重跑並判斷是否要進 playing
 
   useEffect(() => {
       if (!roomId || status !== 'ended') return;
@@ -198,7 +217,9 @@ export default function AppBattle() {
         await setDoc(doc(db, "battle_rooms", roomId, "players", userId), {
             nickname, phone: phoneNumber, roi: 0, assets: initialCapital, units: 0, isOut: false, joinedAt: serverTimestamp()
         });
-        setStatus('waiting');
+        // ★ 寫入成功後，狀態轉為 waiting。
+        // 這會觸發上方的 useEffect，如果房間已經是 playing，就會立刻再轉為 playing，達成無縫接軌。
+        setStatus('waiting'); 
       } catch (err) { alert("加入失敗: " + err.message); } finally { setIsJoining(false); }
   };
 
@@ -420,7 +441,6 @@ export default function AppBattle() {
                           <button onClick={() => handleQuickAmount('sell', 1.0)} className="col-span-1 bg-emerald-500 active:bg-emerald-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>賣出</span><span>All In</span></button>
                       </div>
                       
-                      {/* ★★★ 1. 保留 v6.7 的 20% 按鈕功能 ★★★ */}
                       <div className="px-2 grid grid-cols-4 gap-1 mb-2">
                           <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-sm py-3 active:bg-rose-200">買入 20%</button>
                           <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-sm py-3 active:bg-rose-300">買入 50%</button>
@@ -458,13 +478,11 @@ export default function AppBattle() {
             </div>
         </div>
 
-        {/* ★★★ 2. 修正冠軍排版：橫向排列 (本場冠軍 + 名字) ★★★ */}
         {champion && (
             <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md relative overflow-hidden">
                 <Crown size={64} className="absolute -right-2 -bottom-6 text-amber-200/50 rotate-12 pointer-events-none"/>
                 
                 <div className="flex flex-col items-center justify-center relative z-10">
-                    {/* 橫向排列：徽章 + 名字 */}
                     <div className="flex items-center gap-2 mb-2 w-full justify-center">
                         <span className="bg-amber-400 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1 shrink-0 shadow-sm">
                             <Crown size={10} fill="currentColor"/> 冠軍
@@ -473,7 +491,6 @@ export default function AppBattle() {
                             {champion.nickname}
                         </span>
                     </div>
-                    {/* ROI 獨立一行 */}
                     <div className={`text-3xl font-mono font-black ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
                     </div>

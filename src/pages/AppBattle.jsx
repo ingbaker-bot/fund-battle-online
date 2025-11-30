@@ -1,11 +1,11 @@
-// 2025v6.2 - 玩家端 (防連點 + 結算顯示基金名稱)
+// 2025v6.4 - 玩家端 (結算顯示冠軍資訊)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
-import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
 
 const processRealData = (rawData) => {
@@ -77,9 +77,10 @@ export default function AppBattle() {
   const [isJoining, setIsJoining] = useState(false);
   const [isTrading, setIsTrading] = useState(false);
   
+  // ★★★ 新增：冠軍資訊 ★★★
+  const [champion, setChampion] = useState(null);
+
   const lastReportTime = useRef(0);
-  
-  // 交易防連點鎖
   const isProcessingRef = useRef(false);
 
   useEffect(() => {
@@ -107,6 +108,7 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
+  // 監聽房間狀態
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -124,7 +126,6 @@ export default function AppBattle() {
       else if (roomData.status === 'waiting' && status !== 'login') setStatus('waiting');
 
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
-      
       if (roomData.startDay) setStartDay(roomData.startDay);
       if (roomData.indicators) setShowIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
@@ -140,6 +141,20 @@ export default function AppBattle() {
     });
     return () => unsubscribe();
   }, [roomId, status, fullData.length]);
+
+  // ★★★ 新增：監聽冠軍 (只在遊戲結束時觸發，或一直監聽) ★★★
+  useEffect(() => {
+      if (!roomId || status !== 'ended') return;
+      // 查詢 ROI 最高的玩家 (只取第1名)
+      const q = query(collection(db, "battle_rooms", roomId, "players"), orderBy("roi", "desc"), limit(1));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+          if (!snapshot.empty) {
+              const winnerData = snapshot.docs[0].data();
+              setChampion(winnerData);
+          }
+      });
+      return () => unsubscribe();
+  }, [roomId, status]);
 
   const currentNav = fullData[currentDay]?.nav || 10;
   const totalAssets = cash + (units * currentNav);
@@ -225,14 +240,13 @@ export default function AppBattle() {
       }
   };
 
-  // 交易執行 (防連點版)
   const executeTrade = async (type) => {
       if (isProcessingRef.current) return;
-      isProcessingRef.current = true; // 上鎖
+      isProcessingRef.current = true; 
 
       const amount = parseFloat(inputAmount);
       if (!amount || amount <= 0) {
-          isProcessingRef.current = false; // 解鎖
+          isProcessingRef.current = false; 
           return;
       }
 
@@ -426,25 +440,39 @@ export default function AppBattle() {
       </div>
   );
 
-  // ★★★ 3. 這裡就是原本「隱藏」的 ended 區塊，現在顯性化了 ★★★
-  // 如果不是上面任何狀態 (input_room/login/waiting/playing)，那就是 ended
   return (
-    <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center">
-        <Trophy size={80} className="text-amber-500 mb-6 animate-bounce"/>
-        <h2 className="text-3xl font-bold mb-2">比賽結束</h2>
+    <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
+        <Trophy size={64} className="text-amber-500 mb-4 animate-bounce"/>
+        <h2 className="text-3xl font-bold mb-4 text-slate-800">比賽結束</h2>
         
-        {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
-        <div className="mb-8 bg-white px-6 py-2 rounded-full shadow-sm border border-slate-200">
+        <div className="mb-6 bg-white px-6 py-2 rounded-full shadow-sm border border-slate-200 inline-block">
             <span className="text-xs text-slate-400 mr-2 font-bold">基金揭曉</span>
             <span className="text-lg font-bold text-emerald-600">{fundName}</span>
         </div>
 
         <div className="bg-white p-6 rounded-2xl w-full max-w-xs border border-slate-200 shadow-xl mb-6">
-            <div className="text-sm text-slate-400 mb-1">最終成績 (ROI)</div>
+            <div className="text-sm text-slate-400 mb-1">您的最終成績</div>
             <div className={`text-5xl font-mono font-bold ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                 {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
             </div>
         </div>
+
+        {/* ★★★ 新增：本場冠軍資訊 ★★★ */}
+        {champion && (
+            <div className="bg-amber-50 p-4 rounded-xl w-full max-w-xs border border-amber-200 mb-6 relative overflow-hidden">
+                <Crown size={80} className="absolute -right-4 -bottom-4 text-amber-200/50" />
+                <div className="flex items-center gap-2 mb-2">
+                    <Crown size={18} className="text-amber-500" fill="currentColor"/>
+                    <span className="text-sm font-bold text-amber-700">本場冠軍</span>
+                </div>
+                <div className="text-left relative z-10">
+                    <div className="text-2xl font-bold text-slate-800 mb-1">{champion.nickname}</div>
+                    <div className={`font-mono font-bold text-xl ${champion.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
+                    </div>
+                </div>
+            </div>
+        )}
 
         {fullData.length > 0 && (
             <div className="bg-slate-100 p-4 rounded-xl w-full max-w-xs border border-slate-200">
@@ -459,7 +487,7 @@ export default function AppBattle() {
             </div>
         )}
 
-        <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-8 text-slate-400 underline hover:text-slate-600">離開房間</button>
+        <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-8 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
     </div>
   );
 }

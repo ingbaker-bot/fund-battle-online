@@ -1,4 +1,4 @@
-// 2025v6.6 - 主持人端 (標題改為上下兩行排版，解決截斷問題)
+// 2025v7.0 - 主持人端 (營運優化版：顯示修復 + 版面瘦身 + 15秒倒數)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -62,7 +62,8 @@ export default function SpectatorView() {
   const [showQrModal, setShowQrModal] = useState(false);
   
   const [tradeRequests, setTradeRequests] = useState([]);
-  const [countdown, setCountdown] = useState(30); 
+  // ★★★ 修改點 4：預設倒數改為 15 秒 ★★★
+  const [countdown, setCountdown] = useState(15); 
 
   const [copied, setCopied] = useState(false);
 
@@ -139,6 +140,7 @@ export default function SpectatorView() {
       return () => unsubscribe();
   }, [roomId]);
 
+  // ★★★ 修改點 4：重置倒數時也設為 15 秒 ★★★
   useEffect(() => {
       let timer;
       if (tradeRequests.length > 0 && countdown > 0) {
@@ -146,7 +148,7 @@ export default function SpectatorView() {
               setCountdown((prev) => prev - 1);
           }, 1000);
       } else if (tradeRequests.length === 0) {
-          setCountdown(30); 
+          setCountdown(15); 
       }
       return () => clearInterval(timer);
   }, [tradeRequests.length, countdown]);
@@ -248,7 +250,7 @@ export default function SpectatorView() {
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setTradeRequests([]); 
-    setCountdown(30);
+    setCountdown(15); // 重置也改為 15
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
@@ -268,7 +270,7 @@ export default function SpectatorView() {
       const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
       reqSnap.forEach(async (d) => await deleteDoc(d.ref));
       setTradeRequests([]);
-      setCountdown(30);
+      setCountdown(15); // 重置也改為 15
   };
 
   const handleCopyUrl = () => {
@@ -331,7 +333,6 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          {/* 登入畫面 Logo */}
           <div className="flex justify-center mb-6">
               <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
           </div>
@@ -352,19 +353,17 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.6 Brand Edition | NBS Team
+            v7.0 Brand Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
-  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
               <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
-                  {/* ★★★ 1. 修改處：儀表板標題排版 ★★★ */}
                   <div className="flex items-center gap-3">
                       <img src="/logo.jpg" alt="Logo" className="h-10 object-contain" />
                       <div className="flex flex-col">
@@ -398,11 +397,9 @@ export default function SpectatorView() {
       );
   }
 
-  // ★★★ 遊戲模式 (Game Mode) ★★★
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
-        {/* ★★★ 2. 修改處：遊戲中標題排版 (強制顯示，不隱藏) ★★★ */}
         <div className="flex items-center gap-3 shrink-0">
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
             <div className="flex flex-col justify-center">
@@ -425,7 +422,8 @@ export default function SpectatorView() {
         </div>
         <div className="flex items-center gap-4 justify-end shrink-0">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg hidden xl:flex">
+                // ★★★ 修改點 1：移除 'hidden' 屬性，強制顯示水位資訊 ★★★
+                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
                      <div className="text-right">
                         <div className="text-[10px] text-slate-400 font-bold uppercase">買入總資金</div>
                         <div className="flex items-baseline gap-2 justify-end">
@@ -435,7 +433,7 @@ export default function SpectatorView() {
                      </div>
                 </div>
             )}
-            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 hidden md:flex">
                 <div className="text-right"><span className="block text-[10px] text-slate-400 uppercase leading-none">Room ID</span><span className="text-xl font-mono font-bold text-slate-800 tracking-widest leading-none">{roomId || '...'}</span></div>
                 <button onClick={() => setShowQrModal(true)} className="bg-white p-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"><QrCode size={18}/></button>
             </div>
@@ -504,24 +502,25 @@ export default function SpectatorView() {
                         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2>
                     </div>
                     <div className="flex-1 overflow-hidden relative flex flex-col">
-                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                        {/* ★★★ 修改點 5：版面瘦身，縮小 Padding 與間距 ★★★ */}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
                             {topPlayers.map((p, idx) => (
-                                <div key={p.id} className={`flex justify-between items-center p-3 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}>
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-sm ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div>
-                                        <div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[120px]">{p.nickname}</span>{idx===0 && <span className="text-[10px] text-amber-500 flex items-center gap-1"><Crown size={10}/> 目前領先</span>}</div>
+                                <div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold text-xs ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div>
+                                        <div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[100px]">{p.nickname}</span>{idx===0 && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Crown size={8}/> 領先</span>}</div>
                                     </div>
-                                    <div className={`font-mono font-bold text-lg ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div>
+                                    <div className={`font-mono font-bold text-base ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div>
                                 </div>
                             ))}
                         </div>
                         {bottomPlayers.length > 0 && (
-                            <div className="bg-slate-100 border-t border-slate-300 p-3 shrink-0">
-                                <div className="flex items-center gap-2 mb-2 text-slate-500 text-xs font-bold uppercase tracking-wider"><TrendingDown size={14}/> 逆風追趕中 (加油!)</div>
+                            <div className="bg-slate-100 border-t border-slate-300 p-2 shrink-0">
+                                <div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider"><TrendingDown size={12}/> 逆風追趕中</div>
                                 <div className="space-y-1">
                                     {bottomPlayers.map((p, idx) => (
-                                        <div key={p.id} className="flex justify-between items-center p-2 bg-white/50 rounded border border-slate-200 text-xs opacity-70">
-                                            <div className="flex items-center gap-2"><span className="text-slate-400 w-6 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div>
+                                        <div key={p.id} className="flex justify-between items-center p-1.5 bg-white/50 rounded border border-slate-200 text-xs opacity-70">
+                                            <div className="flex items-center gap-2"><span className="text-slate-400 w-5 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div>
                                             <span className="font-mono text-green-600 font-bold">{(p.roi || 0).toFixed(1)}%</span>
                                         </div>
                                     ))}
@@ -541,17 +540,20 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button>
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
               </div>
-              <div className="absolute left-1/2 transform -translate-x-1/2 z-50 w-[400px] flex justify-center">
+              
+              {/* ★★★ 修改點 3：擴大請求交易顯示區塊 ★★★ */}
+              <div className="absolute left-1/2 transform -translate-x-1/2 z-50 w-[600px] flex justify-center">
                  {hasRequests ? (
                      <div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100">
-                         <div className="flex items-center gap-3">
-                             <div className="bg-white/30 p-1.5 rounded-full"><Clock size={18} className="animate-spin-slow"/></div>
-                             <div className="flex flex-col leading-none">
+                         <div className="flex items-center gap-3 overflow-hidden">
+                             <div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div>
+                             <div className="flex flex-col leading-none overflow-hidden">
                                  <div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div>
-                                 <div className="text-[10px] font-bold opacity-80 truncate max-w-[180px]">{tradeRequests.map(r => r.nickname).join(', ')}</div>
+                                 {/* 這裡移除 max-w，讓它可以顯示更多名字 */}
+                                 <div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div>
                              </div>
                          </div>
-                         <button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1"><FastForward size={12} fill="currentColor"/> 繼續</button>
+                         <button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button>
                      </div>
                  ) : (
                      <div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner">
@@ -593,7 +595,7 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  {/* 基金名稱揭曉 */}
+                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
                   <div className="relative z-10 mb-4">
                       <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
                       <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">

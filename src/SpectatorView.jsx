@@ -1,4 +1,4 @@
-// 2025v6.4 - 修正結束畫面
+// 2025v6.2 - 主持人端 (修正結算畫面：顯示基金名稱與歷史區間)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -7,7 +7,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check // ★ 新增這兩個 Icon
+  Copy, Check 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -64,7 +64,6 @@ export default function SpectatorView() {
   const [tradeRequests, setTradeRequests] = useState([]);
   const [countdown, setCountdown] = useState(30); 
 
-  // ★★★ 新增：複製狀態控制
   const [copied, setCopied] = useState(false);
 
   const roomIdRef = useRef(null);
@@ -244,6 +243,7 @@ export default function SpectatorView() {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');
     setCurrentDay(400); 
+    setStartDay(400); // 重置 startDay
     setIndicators({ ma20: false, ma60: false, river: false });
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
@@ -253,6 +253,7 @@ export default function SpectatorView() {
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
         currentDay: 400, 
+        startDay: 400,
         indicators: { ma20: false, ma60: false, river: false } 
     });
     
@@ -270,12 +271,11 @@ export default function SpectatorView() {
       setCountdown(30);
   };
 
-  // ★★★ 新增：複製網址函式
   const handleCopyUrl = () => {
       if (!joinUrl) return;
       navigator.clipboard.writeText(joinUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // 2秒後恢復圖示
+      setTimeout(() => setCopied(false), 2000); 
   };
 
   const getDisplayDate = (dateStr) => {
@@ -305,33 +305,21 @@ export default function SpectatorView() {
   const { totalInvestedAmount, positionRatio } = useMemo(() => {
       let totalAssets = 0;
       let totalInvested = 0;
-      
       players.forEach(p => {
-          // 1. 取得玩家總資產 (來自 Firestore 回報)
           const pAssets = p.assets || 1000000;
           totalAssets += pAssets;
-          
-          // 2. 計算即時市值
           const pUnits = p.units || 0;
           const currentNav = fullData[currentDay]?.nav || 0;
           let marketValue = pUnits * currentNav;
-
-          // ★★★ 校正核心：市值不可能超過總資產 (除非融資) ★★★
-          // 這能消除因為價格波動或延遲導致的 >100% 水位異常
-          if (marketValue > pAssets) {
-              marketValue = pAssets;
-          }
-          
+          if (marketValue > pAssets) marketValue = pAssets;
           totalInvested += marketValue;
       });
-
       const ratio = totalAssets > 0 ? (totalInvested / totalAssets) * 100 : 0;
       return { totalInvestedAmount: totalInvested, positionRatio: ratio };
   }, [players, fullData, currentDay]);
 
   const topPlayers = players.slice(0, 10);
   const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
-  const remainingCount = Math.max(0, players.length - 10 - bottomPlayers.length);
   const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
   const currentNav = fullData[currentDay]?.nav || 0;
   const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
@@ -344,7 +332,7 @@ export default function SpectatorView() {
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
           <div className="flex justify-center mb-4 text-emerald-600"><ShieldCheck size={56} strokeWidth={1.5} /></div>
-          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">Fund Battle Host</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">基金競技場：賽事主控台</h2>
           <p className="text-center text-slate-400 text-xs mb-6">主持人控制台登入</p>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
@@ -361,7 +349,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.1 Copy Edition | NBS Team
+            v6.2 Secure Edition | NBS Team
           </div>
         </div>
       </div>
@@ -374,7 +362,7 @@ export default function SpectatorView() {
               <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
                   <div className="flex items-center gap-2">
                       <ShieldCheck className="text-emerald-600"/>
-                      <span className="font-bold text-lg">主持人控制台</span>
+                      <span className="font-bold text-lg">基金競技場：賽事主控台</span>
                   </div>
                   <div className="flex items-center gap-4">
                       <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
@@ -404,13 +392,12 @@ export default function SpectatorView() {
 
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
-      
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
             <div className="hidden xl:block">
-                <h1 className="text-lg font-bold tracking-wider text-slate-800">FUND BATTLE <span className="text-emerald-500 text-xs">LIVE</span></h1>
-                <p className="text-[10px] text-slate-400">Spectator View (v6.1)</p>
+                <h1 className="text-lg font-bold tracking-wider text-slate-800">基金競技場 <span className="text-emerald-500 text-xs">LIVE</span></h1>
+                <p className="text-[10px] text-slate-400">賽事主控台 (v6.2)</p>
             </div>
         </div>
         <div className="flex-1 flex justify-center items-center">
@@ -455,7 +442,6 @@ export default function SpectatorView() {
                          <h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2>
                          <p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p>
                          
-                         {/* ★★★ 修改處：變成可點擊複製的按鈕 ★★★ */}
                          <button 
                             onClick={handleCopyUrl} 
                             className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative"
@@ -465,7 +451,6 @@ export default function SpectatorView() {
                             <span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>
                                 {copied ? <Check size={24} /> : <Copy size={24} />}
                             </span>
-                            {/* 提示氣泡 */}
                             <span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>
                                 已複製連結！
                             </span>
@@ -578,7 +563,8 @@ export default function SpectatorView() {
           </footer>
       )}
 
-{gameStatus === 'ended' && (
+      {/* ★★★ 這裡就是修正後的結算畫面區塊 ★★★ */}
+      {gameStatus === 'ended' && (
           <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
               <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
                   <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>

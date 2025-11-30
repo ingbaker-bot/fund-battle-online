@@ -1,4 +1,4 @@
-// 2025v9.2 - 玩家端 (左右結算 + 大字體 + 交易防呆互斥鎖)
+// 2025v9.2 - 玩家端 (修正總資產字體)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';

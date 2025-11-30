@@ -1,4 +1,4 @@
-// 2025v8.0 - 主持人端 (新增手續費控制功能 + 版面調整)
+// 2025v8.2 - 主持人端 (圖表版面極大化：縮減右側邊距)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -7,7 +7,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent // ★ 新增 Percent Icon
+  Copy, Check, Percent 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -59,7 +59,6 @@ export default function SpectatorView() {
   const [fullData, setFullData] = useState([]);
   const [fundName, setFundName] = useState('');
   
-  // ★★★ 新增：手續費率狀態 (預設 1%) ★★★
   const [feeRate, setFeeRate] = useState(0.01);
 
   const [showQrModal, setShowQrModal] = useState(false);
@@ -90,7 +89,7 @@ export default function SpectatorView() {
     const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
     roomIdRef.current = newRoomId;
     setRoomId(newRoomId);
-    setFeeRate(0.01); // 重置為 1%
+    setFeeRate(0.01);
     
     const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
     setTimeOffset(randomTimeOffset);
@@ -104,7 +103,7 @@ export default function SpectatorView() {
         fundId: selectedFundId,
         timeOffset: randomTimeOffset,
         indicators: { ma20: false, ma60: false, river: false },
-        feeRate: 0.01, // ★ 寫入初始費率
+        feeRate: 0.01,
         createdAt: serverTimestamp()
       });
       setGameStatus('waiting');
@@ -219,7 +218,6 @@ export default function SpectatorView() {
       if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { indicators: newIndicators }); 
   };
 
-  // ★★★ 新增：變更手續費率 ★★★
   const handleChangeFee = async (e) => {
       const rate = parseFloat(e.target.value);
       setFeeRate(rate);
@@ -274,7 +272,7 @@ export default function SpectatorView() {
     setCurrentDay(400); 
     setStartDay(400);
     setIndicators({ ma20: false, ma60: false, river: false });
-    setFeeRate(0.01); // 重置費率
+    setFeeRate(0.01);
     clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setTradeRequests([]); 
@@ -383,7 +381,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v8.0 Fee Edition | NBS Team
+            v8.2 Brand Edition | NBS Team
           </div>
         </div>
       </div>
@@ -512,7 +510,8 @@ export default function SpectatorView() {
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart data={chartData} margin={{ top: 10, right: 50, bottom: 0, left: 0 }}>
+                            {/* ★★★ 修改重點：縮減右側 margin，極大化圖表空間 ★★★ */}
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 5, bottom: 0, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
                                 <XAxis dataKey="date" hide />
                                 <YAxis domain={['auto', 'auto']} orientation="right" tick={{fill:'#64748b', fontWeight:'bold'}} width={50} />
@@ -568,7 +567,6 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button>
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
                   
-                  {/* ★★★ 新增：手續費調整選單 (位於左側按鈕群右邊) ★★★ */}
                   <div className="flex items-center ml-2 pl-2 border-l border-slate-200">
                       <div className="relative">
                           <Percent size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/>
@@ -586,7 +584,6 @@ export default function SpectatorView() {
                   </div>
               </div>
               
-              {/* ★★★ 修改處：黃色區塊縮短並右移，避免擋住手續費選單 ★★★ */}
               <div className="absolute left-[360px] z-50 w-[480px]">
                  {hasRequests ? (
                      <div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100">

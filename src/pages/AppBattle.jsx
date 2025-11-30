@@ -1,4 +1,4 @@
-// 2025v6.0 - 玩家端 (修正雙擊賣出漏洞/防連點機制)
+// 2025v6.2 - 玩家端 (防連點 + 結算顯示基金名稱)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -79,7 +79,7 @@ export default function AppBattle() {
   
   const lastReportTime = useRef(0);
   
-  // ★★★ 1. 新增交易防連點鎖 ★★★
+  // 交易防連點鎖
   const isProcessingRef = useRef(false);
 
   useEffect(() => {
@@ -225,9 +225,8 @@ export default function AppBattle() {
       }
   };
 
-  // ★★★ 2. 修正後的交易函式 (加入鎖定機制) ★★★
+  // 交易執行 (防連點版)
   const executeTrade = async (type) => {
-      // 檢查鎖
       if (isProcessingRef.current) return;
       isProcessingRef.current = true; // 上鎖
 
@@ -238,10 +237,9 @@ export default function AppBattle() {
       }
 
       if (type === 'buy') {
-          // 使用 Math.floor 確保整數運算安全
           if (amount > Math.floor(cash)) { 
               alert('現金不足'); 
-              isProcessingRef.current = false; // 解鎖
+              isProcessingRef.current = false; 
               return; 
           }
           const buyUnits = amount / currentNav;
@@ -254,23 +252,19 @@ export default function AppBattle() {
           });
       } else {
           const currentAssetValue = units * currentNav;
-          // 賣出邏輯
           if (amount >= Math.floor(currentAssetValue)) { 
-              // All In 賣出
-              if (units <= 0) { // 雙重防呆：如果已經沒單位了，就不給賣
+              if (units <= 0) { 
                   isProcessingRef.current = false; 
                   return; 
               }
-              // 使用計算後的價值加回現金，確保數據一致
               setCash(prev => prev + currentAssetValue); 
               setUnits(0);
               setAvgCost(0);
           } else {
-              // 部分賣出
               const sellUnits = amount / currentNav;
               if (sellUnits > units * 1.0001) { 
                   alert('單位不足'); 
-                  isProcessingRef.current = false; // 解鎖
+                  isProcessingRef.current = false; 
                   return; 
               }
               setUnits(prev => Math.max(0, prev - sellUnits));
@@ -282,7 +276,6 @@ export default function AppBattle() {
       if (navigator.vibrate) navigator.vibrate(50);
       handleCancelTrade();
 
-      // ★ 延遲解鎖 (防止極速連點)
       setTimeout(() => {
           isProcessingRef.current = false;
       }, 500); 
@@ -433,11 +426,20 @@ export default function AppBattle() {
       </div>
   );
 
+  // ★★★ 3. 這裡就是原本「隱藏」的 ended 區塊，現在顯性化了 ★★★
+  // 如果不是上面任何狀態 (input_room/login/waiting/playing)，那就是 ended
   return (
     <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center">
         <Trophy size={80} className="text-amber-500 mb-6 animate-bounce"/>
         <h2 className="text-3xl font-bold mb-2">比賽結束</h2>
-        <div className="bg-white p-6 rounded-2xl w-full max-w-xs border border-slate-200 shadow-xl">
+        
+        {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
+        <div className="mb-8 bg-white px-6 py-2 rounded-full shadow-sm border border-slate-200">
+            <span className="text-xs text-slate-400 mr-2 font-bold">基金揭曉</span>
+            <span className="text-lg font-bold text-emerald-600">{fundName}</span>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl w-full max-w-xs border border-slate-200 shadow-xl mb-6">
             <div className="text-sm text-slate-400 mb-1">最終成績 (ROI)</div>
             <div className={`text-5xl font-mono font-bold ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                 {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
@@ -445,7 +447,7 @@ export default function AppBattle() {
         </div>
 
         {fullData.length > 0 && (
-            <div className="mt-6 bg-slate-100 p-4 rounded-xl w-full max-w-xs border border-slate-200">
+            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-xs border border-slate-200">
                 <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-2 text-xs">
                     <Calendar size={14}/> 真實歷史區間
                 </div>

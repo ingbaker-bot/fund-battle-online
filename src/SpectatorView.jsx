@@ -1,4 +1,4 @@
-// 2025v6.2 - 修正資產回報時間差
+// 2025v6.4 - 修正結束畫面
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -578,31 +578,46 @@ export default function SpectatorView() {
           </footer>
       )}
 
-      {gameStatus === 'ended' && (
+{gameStatus === 'ended' && (
           <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden">
+              <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
                   <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
-                  <Crown size={80} className="text-amber-400 mx-auto mb-6 drop-shadow-sm relative z-10"/>
+                  
+                  {/* 皇冠與標題 */}
+                  <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
                   <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
+                  
+                  {/* 第一名玩家資訊 */}
                   {players.length > 0 && (
-                      <div className="py-8 relative z-10">
+                      <div className="py-6 relative z-10 border-b border-amber-100 mb-6">
                           <div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div>
-                          <div className={`text-3xl font-mono font-bold ${players[0].roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                          <div className={`text-4xl font-mono font-bold ${players[0].roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                               ROI: {players[0].roi > 0 ? '+' : ''}{players[0].roi.toFixed(2)}%
                           </div>
                       </div>
                   )}
+
+                  {/* ★★★ 新增：基金名稱揭曉 ★★★ */}
+                  <div className="relative z-10 mb-4">
+                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
+                      <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
+                          {fundName}
+                      </div>
+                  </div>
+
+                  {/* 真實歷史區間 */}
                   {fullData.length > 0 && (
-                      <div className="bg-slate-100 p-4 rounded-xl mb-6 relative z-10 border border-slate-200">
-                          <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-2 text-xs">
+                      <div className="relative z-10 mb-8">
+                          <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">
                               <Calendar size={14}/> 真實歷史區間
                           </div>
-                          <div className="text-lg font-mono font-bold text-slate-700">
+                          <div className="text-lg font-mono font-bold text-slate-600">
                               {fullData[startDay]?.date} <span className="text-slate-400">~</span> {fullData[currentDay]?.date}
                           </div>
                       </div>
                   )}
-                  <button onClick={handleResetRoom} className="mt-2 px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg"><RotateCcw size={20}/> 開啟新局</button>
+                  
+                  <button onClick={handleResetRoom} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg transition-all active:scale-95"><RotateCcw size={20}/> 開啟新局</button>
               </div>
           </div>
       )}

@@ -1,4 +1,4 @@
-// 2025v6.7 - 玩家端 (新增 20% 買賣快速鍵)
+// 2025v6.8 - 玩家端 (整合版：20%快速鍵 + 冠軍橫向排版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -420,7 +420,7 @@ export default function AppBattle() {
                           <button onClick={() => handleQuickAmount('sell', 1.0)} className="col-span-1 bg-emerald-500 active:bg-emerald-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>賣出</span><span>All In</span></button>
                       </div>
                       
-                      {/* ★★★ 修改處：四顆按鈕 (20% + 50%) ★★★ */}
+                      {/* ★★★ 1. 保留 v6.7 的 20% 按鈕功能 ★★★ */}
                       <div className="px-2 grid grid-cols-4 gap-1 mb-2">
                           <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-sm py-3 active:bg-rose-200">買入 20%</button>
                           <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-sm py-3 active:bg-rose-300">買入 50%</button>
@@ -458,21 +458,25 @@ export default function AppBattle() {
             </div>
         </div>
 
+        {/* ★★★ 2. 修正冠軍排版：橫向排列 (本場冠軍 + 名字) ★★★ */}
         {champion && (
-            <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md flex flex-col items-center relative overflow-hidden">
+            <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md relative overflow-hidden">
                 <Crown size={64} className="absolute -right-2 -bottom-6 text-amber-200/50 rotate-12 pointer-events-none"/>
                 
-                <div className="flex items-center gap-2 mb-2 z-10">
-                    <Crown size={16} className="text-amber-600" fill="currentColor"/>
-                    <span className="text-sm font-bold text-amber-700 tracking-wider">本場冠軍</span>
-                </div>
-                
-                <div className="text-3xl font-black text-slate-800 z-10 mb-1 drop-shadow-sm tracking-tight">
-                    {champion.nickname}
-                </div>
-                
-                <div className={`text-xl font-mono font-bold z-10 ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
+                <div className="flex flex-col items-center justify-center relative z-10">
+                    {/* 橫向排列：徽章 + 名字 */}
+                    <div className="flex items-center gap-2 mb-2 w-full justify-center">
+                        <span className="bg-amber-400 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1 shrink-0 shadow-sm">
+                            <Crown size={10} fill="currentColor"/> 冠軍
+                        </span>
+                        <span className="text-xl font-black text-slate-800 truncate max-w-[150px]">
+                            {champion.nickname}
+                        </span>
+                    </div>
+                    {/* ROI 獨立一行 */}
+                    <div className={`text-3xl font-mono font-black ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
+                    </div>
                 </div>
             </div>
         )}

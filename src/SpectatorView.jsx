@@ -1,4 +1,4 @@
-// 2025v8.2 - 主持人端 (圖表版面極大化：縮減右側邊距)
+// 2025v8.3 - 主持人端 (使用 Mirror 屬性，真正滿版線圖)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -381,7 +381,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v8.2 Brand Edition | NBS Team
+            v8.3 Brand Edition | NBS Team
           </div>
         </div>
       </div>
@@ -510,11 +510,17 @@ export default function SpectatorView() {
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
-                            {/* ★★★ 修改重點：縮減右側 margin，極大化圖表空間 ★★★ */}
-                            <ComposedChart data={chartData} margin={{ top: 10, right: 5, bottom: 0, left: 0 }}>
+                            {/* ★★★ 修改重點：使用 mirror={true} 將 Y 軸數字拉進圖表內，消除右邊距 ★★★ */}
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
                                 <XAxis dataKey="date" hide />
-                                <YAxis domain={['auto', 'auto']} orientation="right" tick={{fill:'#64748b', fontWeight:'bold'}} width={50} />
+                                <YAxis 
+                                  domain={['auto', 'auto']} 
+                                  orientation="right" 
+                                  mirror={true}  // 關鍵屬性
+                                  tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} // 微調文字位置，避免遮擋
+                                  width={0} // 設為0，因為已經 mirror 了
+                                />
                                 {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
                                 {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
                                 {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
@@ -634,43 +640,4 @@ export default function SpectatorView() {
                       </div>
                   )}
 
-                  <div className="relative z-10 mb-4">
-                      <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div>
-                      <div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">
-                          {fundName}
-                      </div>
-                  </div>
-
-                  {fullData.length > 0 && (
-                      <div className="relative z-10 mb-8">
-                          <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs">
-                              <Calendar size={14}/> 真實歷史區間
-                          </div>
-                          <div className="text-lg font-mono font-bold text-slate-600">
-                              {fullData[startDay]?.date} <span className="text-slate-400">~</span> {fullData[currentDay]?.date}
-                          </div>
-                      </div>
-                  )}
-                  
-                  <button onClick={handleResetRoom} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg transition-all active:scale-95"><RotateCcw size={20}/> 開啟新局</button>
-              </div>
-          </div>
-      )}
-
-      {showQrModal && (
-          <div className="absolute inset-0 bg-slate-900/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-3xl border-2 border-slate-200 text-center shadow-2xl relative">
-                  <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24}/></button>
-                  <h2 className="text-2xl font-bold text-slate-800 mb-4">掃描加入戰局</h2>
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block">
-                      <QRCodeSVG value={joinUrl} size={300} />
-                  </div>
-                  <div className="mt-6 text-xl font-mono font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">
-                      Room ID: {roomId}
-                  </div>
-              </div>
-          </div>
-      )}
-    </div>
-  );
-}
+                  <div className="relative

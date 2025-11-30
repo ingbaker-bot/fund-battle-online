@@ -1,4 +1,4 @@
-// 2025v9.1 - 玩家端 (UI 優化：儀表板字體比例調整 + 版面壓縮)
+// 2025v9.2 - 玩家端 (左右結算 + 大字體 + 交易防呆互斥鎖)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -79,6 +79,9 @@ export default function AppBattle() {
   
   const [feeRate, setFeeRate] = useState(0.01);
   const [champion, setChampion] = useState(null);
+
+  // ★★★ 新增：交易方向鎖定 (buy / sell / null) ★★★
+  const [tradeType, setTradeType] = useState(null);
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
@@ -238,6 +241,7 @@ export default function AppBattle() {
 
   const handleRequestTrade = async () => {
       setIsTrading(true);
+      setTradeType(null); // 重置交易方向
       try {
           await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), {
               nickname: nickname,
@@ -248,19 +252,39 @@ export default function AppBattle() {
 
   const handleCancelTrade = async () => {
       setIsTrading(false);
+      setTradeType(null); // 重置交易方向
+      setInputAmount(''); // 清空輸入
       try {
           await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId));
       } catch (e) { console.error(e); }
   };
 
+  // ★★★ 修改處：輸入格式化 (千分位) 與解除鎖定 ★★★
+  const handleInputChange = (e) => {
+      const rawValue = e.target.value.replace(/,/g, ''); // 移除逗號
+      if (!rawValue) {
+          setInputAmount('');
+          setTradeType(null); // 清空時解除鎖定
+          return;
+      }
+      if (!isNaN(rawValue)) {
+          // 轉為千分位字串儲存
+          setInputAmount(Number(rawValue).toLocaleString());
+          setTradeType(null); // 手動輸入時解除鎖定，讓玩家自己選
+      }
+  };
+
+  // ★★★ 修改處：快速鍵連動鎖定 ★★★
   const handleQuickAmount = (type, percent) => {
+      setTradeType(type); // 鎖定方向
+
       if (type === 'buy') {
           const amount = Math.floor(cash * percent);
-          setInputAmount(amount.toString());
+          setInputAmount(amount.toLocaleString()); // 顯示千分位
       } else if (type === 'sell') {
           const assetValue = units * currentNav;
           const amount = Math.floor(assetValue * percent);
-          setInputAmount(amount.toString());
+          setInputAmount(amount.toLocaleString()); // 顯示千分位
       }
   };
 
@@ -268,7 +292,9 @@ export default function AppBattle() {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true; 
 
-      const amount = parseFloat(inputAmount);
+      // ★★★ 修正：移除逗號再運算 ★★★
+      const amount = parseFloat(inputAmount.replace(/,/g, ''));
+      
       if (!amount || amount <= 0) {
           isProcessingRef.current = false; 
           return;
@@ -276,7 +302,7 @@ export default function AppBattle() {
 
       if (type === 'buy') {
           if (amount > Math.floor(cash)) { 
-              alert(`現金不足 (可用: $${Math.floor(cash)})`); 
+              alert(`現金不足 (可用: $${Math.floor(cash).toLocaleString()})`); 
               isProcessingRef.current = false; 
               return; 
           }
@@ -317,7 +343,15 @@ export default function AppBattle() {
       
       setInputAmount(''); 
       if (navigator.vibrate) navigator.vibrate(50);
-      handleCancelTrade();
+      
+      // ★★★ 修正：交易成功後直接返回看盤 ★★★
+      // 不用再呼叫 handleCancelTrade，因為那是給"取消"按鈕用的
+      // 我們直接在裡面做狀態切換，效果更順暢
+      setIsTrading(false);
+      setTradeType(null);
+      try {
+          await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId));
+      } catch (e) { console.error(e); }
 
       setTimeout(() => {
           isProcessingRef.current = false;
@@ -413,26 +447,26 @@ export default function AppBattle() {
               </div>
           )}
           
-          {/* ★★★ 2025v9.1 雙層 Header 優化 ★★★ */}
+          {/* ★★★ 雙層 Header (資訊大字體優化) ★★★ */}
           <div className="sticky top-0 z-20 shadow-sm">
-              {/* 第一層：資訊條 (Info Bar) */}
-              <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-[10px] text-slate-500 font-bold">
+              {/* 第一層：資訊條 (字體放大) */}
+              <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-lg font-black text-slate-700">
                  <span className="truncate max-w-[200px]">{fundName}</span>
                  <span className="font-mono tracking-wider">{currentDisplayDate}</span>
               </div>
               
-              {/* 第二層：戰鬥數據儀表板 (Dashboard) */}
+              {/* 第二層：戰鬥數據儀表板 */}
               <div className="bg-white px-2 py-1.5 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
                  
-                 {/* 左：趨勢燈號 (Trend) */}
+                 {/* 左：趨勢燈號 */}
                  <div className="flex flex-col items-center border-r border-slate-100">
-                    <div className="text-xs text-slate-400 font-bold mb-0.5">趨勢</div> {/* 放大標題 */}
-                    <div className={`text-xl font-black leading-none h-6 flex items-center ${trendSignal.color}`}> {/* 縮小數值 */}
+                    <div className="text-xs text-slate-400 font-bold mb-0.5">趨勢</div>
+                    <div className={`text-xl font-black leading-none h-6 flex items-center ${trendSignal.color}`}>
                         {trendSignal.char}
                     </div>
                  </div>
 
-                 {/* 中：報酬率 (ROI) */}
+                 {/* 中：報酬率 */}
                  <div className="flex flex-col items-center border-r border-slate-100">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">報酬率</div>
                     <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -440,7 +474,7 @@ export default function AppBattle() {
                     </div>
                  </div>
 
-                 {/* 右：總資產 (Assets) */}
+                 {/* 右：總資產 */}
                  <div className="flex flex-col items-center">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
                     <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -484,28 +518,56 @@ export default function AppBattle() {
               ) : (
                   <>
                       <div className="px-2 grid grid-cols-5 gap-1 mb-1">
-                          <button onClick={() => handleQuickAmount('buy', 1.0)} className="col-span-1 bg-rose-500 active:bg-rose-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>買入</span><span className="text-[10px] opacity-80">(含費)</span></button>
-                          <input type="number" value={inputAmount} onChange={(e) => setInputAmount(e.target.value)} placeholder="輸入金額" className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-2 text-xl font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"/>
-                          <button onClick={() => handleQuickAmount('sell', 1.0)} className="col-span-1 bg-emerald-500 active:bg-emerald-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>賣出</span><span>All In</span></button>
+                          <button 
+                            onClick={() => handleQuickAmount('buy', 1.0)} 
+                            disabled={tradeType === 'sell'} // ★ 互斥鎖
+                            className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-700 text-white active:scale-95'}`}
+                          >
+                             <span>買入</span><span className="text-[10px] opacity-80">All In</span>
+                          </button>
+                          
+                          {/* ★★★ 輸入框：支援千分位顯示 ★★★ */}
+                          <input 
+                             type="text" // 改為 text 以支援逗號 
+                             value={inputAmount} 
+                             onChange={handleInputChange} 
+                             placeholder="輸入金額" 
+                             className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-2 text-xl font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"
+                          />
+                          
+                          <button 
+                             onClick={() => handleQuickAmount('sell', 1.0)} 
+                             disabled={tradeType === 'buy'} // ★ 互斥鎖
+                             className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-700 text-white active:scale-95'}`}
+                          >
+                             <span>賣出</span><span className="text-[10px] opacity-80">All In</span>
+                          </button>
                       </div>
                       
                       <div className="px-2 grid grid-cols-4 gap-1 mb-1">
-                          <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-xs py-2 active:bg-rose-200">買入 20%</button>
-                          <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-xs py-2 active:bg-rose-300">買入 50%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.2)} className="bg-emerald-100 text-emerald-700 rounded-md font-bold text-xs py-2 active:bg-emerald-200">賣出 20%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.5)} className="bg-emerald-200 text-emerald-800 rounded-md font-bold text-xs py-2 active:bg-emerald-300">賣出 50%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.2)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-100 text-rose-700 active:bg-rose-200'}`}>買入 20%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.5)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-200 text-rose-800 active:bg-rose-300'}`}>買入 50%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.2)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-100 text-emerald-700 active:bg-emerald-200'}`}>賣出 20%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.5)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-200 text-emerald-800 active:bg-emerald-300'}`}>賣出 50%</button>
                       </div>
 
                       <div className="px-2 grid grid-cols-2 gap-2">
-                          <button onClick={() => executeTrade('buy')} className="bg-rose-500 active:bg-rose-600 text-white py-3 rounded-lg font-bold text-xl shadow-md active:scale-95 flex items-center justify-center gap-2">
-                              <TrendingUp size={20}/>
-                              <span>買入</span>
-                              <span className="text-xs opacity-80 font-normal self-end mb-0.5">(費{Math.round(feeRate*100)}%)</span>
+                          <button 
+                             onClick={() => executeTrade('buy')} 
+                             disabled={tradeType === 'sell'} 
+                             className={`py-3 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
+                          >
+                              <div className="flex items-center gap-2"><TrendingUp size={20}/> 買入 All In</div>
+                              <div className="text-[10px] opacity-80 font-normal">手續費 {Math.round(feeRate*100)}%</div>
                           </button>
-                          <button onClick={() => executeTrade('sell')} className="bg-emerald-500 active:bg-emerald-600 text-white py-3 rounded-lg font-bold text-xl shadow-md active:scale-95 flex items-center justify-center gap-2">
-                              <TrendingDown size={20}/>
-                              <span>賣出</span>
-                              <span className="text-xs opacity-80 font-normal self-end mb-0.5">(免手續費)</span>
+                          
+                          <button 
+                             onClick={() => executeTrade('sell')} 
+                             disabled={tradeType === 'buy'} 
+                             className={`py-3 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
+                          >
+                              <div className="flex items-center gap-2"><TrendingDown size={20}/> 賣出 All In</div>
+                              <div className="text-[10px] opacity-80 font-normal">免手續費</div>
                           </button>
                       </div>
                       <div className="px-2 mt-1">
@@ -517,6 +579,7 @@ export default function AppBattle() {
       </div>
   );
 
+  // ★★★ 結算畫面 (v9.2：左右分割佈局) ★★★
   return (
     <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
         <Trophy size={64} className="text-amber-500 mb-4 animate-bounce"/>
@@ -527,35 +590,33 @@ export default function AppBattle() {
             <span className="text-lg font-bold text-emerald-600">{fundName}</span>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl w-full max-w-xs border border-slate-200 shadow-xl mb-6">
-            <div className="text-sm text-slate-400 mb-1">您的最終成績</div>
-            <div className={`text-5xl font-mono font-bold ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
-            </div>
-        </div>
-
-        {champion && (
-            <div className="w-full max-w-xs mb-6 bg-gradient-to-r from-amber-100 to-orange-50 p-4 rounded-2xl border border-amber-200 shadow-md relative overflow-hidden">
-                <Crown size={64} className="absolute -right-2 -bottom-6 text-amber-200/50 rotate-12 pointer-events-none"/>
-                
-                <div className="flex flex-col items-center justify-center relative z-10">
-                    <div className="flex items-center gap-2 mb-2 w-full justify-center">
-                        <span className="bg-amber-400 text-white text-xs font-bold px-2 py-1 rounded flex items-center gap-1 shrink-0 shadow-sm">
-                            <Crown size={10} fill="currentColor"/> 冠軍
-                        </span>
-                        <span className="text-xl font-black text-slate-800 truncate max-w-[150px]">
-                            {champion.nickname}
-                        </span>
-                    </div>
-                    <div className={`text-3xl font-mono font-black ${champion.roi >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ROI: {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(2)}%
-                    </div>
+        {/* ★ 左右分割佈局 ★ */}
+        <div className="w-full max-w-sm flex gap-2 mb-6">
+            
+            {/* 左：玩家成績 (2/3) */}
+            <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-md flex flex-col justify-center items-center">
+                <div className="text-xs text-slate-400 mb-1 font-bold">您的最終成績</div>
+                <div className={`text-4xl font-black ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
                 </div>
             </div>
-        )}
+
+            {/* 右：冠軍資訊 (1/3) */}
+            {champion && (
+                <div className="w-1/3 bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-md flex flex-col justify-center items-center relative overflow-hidden text-white">
+                    <Crown size={40} className="absolute -right-2 -top-2 text-slate-600/30"/>
+                    <Crown size={16} className="text-yellow-400 mb-1" fill="currentColor"/>
+                    <div className="text-xs text-slate-300 font-bold mb-1">TOP 1</div>
+                    <div className="text-sm font-bold truncate w-full text-center mb-1">{champion.nickname}</div>
+                    <div className="text-xs font-mono text-yellow-400">
+                        {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(0)}%
+                    </div>
+                </div>
+            )}
+        </div>
 
         {fullData.length > 0 && (
-            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-xs border border-slate-200">
+            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-sm border border-slate-200">
                 <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-2 text-xs">
                     <Calendar size={14}/> 真實歷史區間
                 </div>

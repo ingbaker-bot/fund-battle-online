@@ -1,4 +1,4 @@
-// 2025v6.4 - 主持人端 (UI 標題統一修正版)
+// 2025v6.5 - 主持人端 (強制顯示左上角標題)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart } from 'recharts';
@@ -331,7 +331,6 @@ export default function SpectatorView() {
     return (
       <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
         <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          {/* 登入畫面也加上 Logo */}
           <div className="flex justify-center mb-6">
               <img src="/logo.jpg" alt="Logo" className="h-16 object-contain" />
           </div>
@@ -352,20 +351,18 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v6.4 Brand Edition | NBS Team
+            v6.5 Brand Edition | NBS Team
           </div>
         </div>
       </div>
     );
   }
 
-  // ★★★ 儀表板模式 (Dashboard) ★★★
   if (!roomId) {
       return (
           <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
               <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
                   <div className="flex items-center gap-3">
-                      {/* Logo 顯示處 */}
                       <img src="/logo.jpg" alt="Logo" className="h-10 object-contain" />
                       <span className="font-bold text-lg text-slate-700 hidden sm:block">Fund手遊 基金競技場--賽事主控台</span>
                   </div>
@@ -395,14 +392,18 @@ export default function SpectatorView() {
       );
   }
 
-  // ★★★ 遊戲模式 (Game Mode) ★★★
+  // ★★★ 修改處：Header 標題區塊 ★★★
   return (
     <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 w-1/4">
-            {/* ★★★ 修改處：與儀表板統一標題 ★★★ */}
             <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" />
-            <span className="font-bold text-lg text-slate-700 hidden xl:block">Fund手遊 基金競技場--賽事主控台</span>
+            
+            {/* ★ 這裡修改了：移除 'hidden xl:block'，改為 'block' (或 'hidden md:block' 如果想在手機隱藏) */}
+            {/* 現在這個標題會強制顯示在所有尺寸的螢幕上 */}
+            <span className="font-bold text-lg text-slate-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                Fund手遊 基金競技場--賽事主控台
+            </span>
         </div>
         <div className="flex-1 flex justify-center items-center">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (

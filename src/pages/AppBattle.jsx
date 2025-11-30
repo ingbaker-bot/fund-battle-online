@@ -1,4 +1,4 @@
-// 2025v8.0 - 玩家端 (支援浮動手續費 + 內扣法計算)
+// 2025v8.1 - 玩家端 (UI 優化：按鈕瘦身，釋放線圖空間)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
@@ -77,7 +77,6 @@ export default function AppBattle() {
   const [isJoining, setIsJoining] = useState(false);
   const [isTrading, setIsTrading] = useState(false);
   
-  // ★★★ 新增：手續費率 (預設 1%) ★★★
   const [feeRate, setFeeRate] = useState(0.01);
   const [champion, setChampion] = useState(null);
 
@@ -138,7 +137,6 @@ export default function AppBattle() {
       if (roomData.indicators) setShowIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
       
-      // ★★★ 同步手續費率 ★★★
       if (roomData.feeRate !== undefined) {
           setFeeRate(roomData.feeRate);
       }
@@ -243,7 +241,6 @@ export default function AppBattle() {
       }
   };
 
-  // ★★★ 交易執行核心 (v8.0 內扣手續費版) ★★★
   const executeTrade = async (type) => {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true; 
@@ -261,14 +258,11 @@ export default function AppBattle() {
               return; 
           }
           
-          // ★ 修改點：計算內扣手續費
-          const fee = Math.floor(amount * feeRate); // 手續費
-          const netInvestment = amount - fee;       // 實際買入金額
+          const fee = Math.floor(amount * feeRate); 
+          const netInvestment = amount - fee;       
           const buyUnits = netInvestment / currentNav;
           
           const newUnits = units + buyUnits;
-          // 平均成本計算：(舊成本 + 新投入總額) / 總單位
-          // 注意：手續費算是成本的一部分，所以這裡加的是 amount (含費)，而非 netInvestment
           setAvgCost((units * avgCost + amount) / newUnits);
           
           setUnits(newUnits);
@@ -277,7 +271,6 @@ export default function AppBattle() {
               return Math.abs(remains) < 1 ? 0 : remains; 
           });
       } else {
-          // 賣出邏輯 (不收手續費)
           const currentAssetValue = units * currentNav;
           if (amount >= Math.floor(currentAssetValue)) { 
               if (units <= 0) { 
@@ -396,6 +389,8 @@ export default function AppBattle() {
                   <button onClick={handleBankruptcyReset} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-2"><RefreshCw size={24}/> 申請紓困重整</button>
               </div>
           )}
+          
+          {/* Header 保持不變 */}
           <div className="px-3 py-1 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
               <div className="flex flex-col">
                   <div className="flex items-center gap-1 text-slate-800 text-base font-black tracking-tight">{fundName} <span className="text-slate-300">|</span> {currentDisplayDate}</div>
@@ -419,10 +414,12 @@ export default function AppBattle() {
                 </ComposedChart>
              </ResponsiveContainer>
           </div>
+          
+          {/* ★★★ 底部控制區 (高度縮減與排版優化) ★★★ */}
           <div className="bg-white border-t border-slate-200 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-3 pt-1 safe-area-pb">
-              <div className="flex justify-between px-4 py-2 border-b border-slate-100 mb-2">
-                  <div className="flex flex-col items-start"><span className="text-xs text-slate-400 font-bold mb-0.5">現金餘額</span><span className="font-mono text-emerald-600 font-black text-3xl leading-none tracking-tight">${Math.round(cash).toLocaleString()}</span></div>
-                  <div className="flex flex-col items-end"><span className="text-xs text-slate-400 font-bold mb-0.5">持有單位</span><span className="font-mono text-slate-800 font-black text-3xl leading-none tracking-tight">{Math.round(units).toLocaleString()}</span></div>
+              <div className="flex justify-between px-4 py-2 border-b border-slate-100 mb-1">
+                  <div className="flex flex-col items-start"><span className="text-xs text-slate-400 font-bold mb-0.5">現金餘額</span><span className="font-mono text-emerald-600 font-black text-3xl leading-none tracking-tight">${Math.floor(cash).toLocaleString()}</span></div>
+                  <div className="flex flex-col items-end"><span className="text-xs text-slate-400 font-bold mb-0.5">持有單位</span><span className="font-mono text-slate-800 font-black text-3xl leading-none tracking-tight">{Math.floor(units).toLocaleString()}</span></div>
               </div>
               {!isTrading ? (
                   <div className="px-4 pb-2">
@@ -437,25 +434,28 @@ export default function AppBattle() {
                           <button onClick={() => handleQuickAmount('sell', 1.0)} className="col-span-1 bg-emerald-500 active:bg-emerald-700 text-white rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 active:scale-95 shadow-sm leading-tight"><span>賣出</span><span>All In</span></button>
                       </div>
                       
-                      <div className="px-2 grid grid-cols-4 gap-1 mb-2">
-                          <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-sm py-3 active:bg-rose-200">買入 20%</button>
-                          <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-sm py-3 active:bg-rose-300">買入 50%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.2)} className="bg-emerald-100 text-emerald-700 rounded-md font-bold text-sm py-3 active:bg-emerald-200">賣出 20%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.5)} className="bg-emerald-200 text-emerald-800 rounded-md font-bold text-sm py-3 active:bg-emerald-300">賣出 50%</button>
+                      {/* 上方按鈕群 (20% / 50%) */}
+                      <div className="px-2 grid grid-cols-4 gap-1 mb-1">
+                          <button onClick={() => handleQuickAmount('buy', 0.2)} className="bg-rose-100 text-rose-700 rounded-md font-bold text-xs py-2 active:bg-rose-200">買入 20%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.5)} className="bg-rose-200 text-rose-800 rounded-md font-bold text-xs py-2 active:bg-rose-300">買入 50%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.2)} className="bg-emerald-100 text-emerald-700 rounded-md font-bold text-xs py-2 active:bg-emerald-200">賣出 20%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.5)} className="bg-emerald-200 text-emerald-800 rounded-md font-bold text-xs py-2 active:bg-emerald-300">賣出 50%</button>
                       </div>
 
+                      {/* ★★★ 瘦身版：買賣按鈕 (合併文字與費率到同一行) ★★★ */}
                       <div className="px-2 grid grid-cols-2 gap-2">
-                          <button onClick={() => executeTrade('buy')} className="bg-rose-500 active:bg-rose-600 text-white py-3 rounded-lg font-bold text-2xl shadow-md active:scale-95 flex items-center justify-center gap-2 flex-col">
-                              <div className="flex items-center gap-2"><TrendingUp size={24}/> 買入</div>
-                              {/* ★ 顯示手續費率 ★ */}
-                              <div className="text-[10px] opacity-80 font-normal">手續費 {Math.round(feeRate*100)}%</div>
+                          <button onClick={() => executeTrade('buy')} className="bg-rose-500 active:bg-rose-600 text-white py-3 rounded-lg font-bold text-xl shadow-md active:scale-95 flex items-center justify-center gap-2">
+                              <TrendingUp size={20}/>
+                              <span>買入</span>
+                              <span className="text-xs opacity-80 font-normal self-end mb-0.5">(費{Math.round(feeRate*100)}%)</span>
                           </button>
-                          <button onClick={() => executeTrade('sell')} className="bg-emerald-500 active:bg-emerald-600 text-white py-3 rounded-lg font-bold text-2xl shadow-md active:scale-95 flex items-center justify-center gap-2 flex-col">
-                              <div className="flex items-center gap-2"><TrendingDown size={24}/> 賣出</div>
-                              <div className="text-[10px] opacity-80 font-normal">免手續費</div>
+                          <button onClick={() => executeTrade('sell')} className="bg-emerald-500 active:bg-emerald-600 text-white py-3 rounded-lg font-bold text-xl shadow-md active:scale-95 flex items-center justify-center gap-2">
+                              <TrendingDown size={20}/>
+                              <span>賣出</span>
+                              <span className="text-xs opacity-80 font-normal self-end mb-0.5">(免手續費)</span>
                           </button>
                       </div>
-                      <div className="px-2 mt-2">
+                      <div className="px-2 mt-1">
                           <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-sm flex items-center justify-center gap-1"><X size={16}/> 取消交易 (恢復行情)</button>
                       </div>
                   </>

@@ -554,22 +554,31 @@ export default function AppBattle() {
                       </div>
 
                       <div className="px-2 grid grid-cols-2 gap-2">
-                          <button 
-                             onClick={() => executeTrade('buy')} 
-                             disabled={tradeType === 'sell'} 
-                             className={`py-1 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
-                          >
-                              <div className="flex items-center gap-2"><TrendingUp size={20}/> 買入確認 <"text-[10px] opacity-80 font-normal">手續費 {Math.round(feeRate*100)}%</div>
-                          </button>
-                          
-                          <button 
-                             onClick={() => executeTrade('sell')} 
-                             disabled={tradeType === 'buy'} 
-                             className={`py-1 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
-                          >
-                              <div className="flex items-center gap-2"><TrendingDown size={20}/> 賣出確認"text-[10px] opacity-80 font-normal">免手續費</div>
-                          </button>
-                      </div>
+                          <div className="px-2 grid grid-cols-2 gap-2">
+    {/* 左邊：買入按鈕 (單行模式) */}
+    <button 
+        onClick={() => executeTrade('buy')} 
+        disabled={tradeType === 'sell'} 
+        /* 修改重點：移除 flex-col，保留 flex 讓內容左右排列，py-2 控制高度 */
+        className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
+    >
+        <TrendingUp size={18} />
+        <span>買入確認</span>
+        {/* 手續費縮小並緊跟在後 */}
+        <span className="text-[10px] opacity-80 font-normal pt-1">(費{Math.round(feeRate*100)}%)</span>
+    </button>
+    
+    {/* 右邊：賣出按鈕 (單行模式) */}
+    <button 
+        onClick={() => executeTrade('sell')} 
+        disabled={tradeType === 'buy'} 
+        className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
+    >
+        <TrendingDown size={18} />
+        <span>賣出確認</span>
+        <span className="text-[10px] opacity-80 font-normal pt-1">(免手續費)</span>
+    </button>
+</div>
                       <div className="px-2 mt-1">
                           <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-sm flex items-center justify-center gap-1"><X size={16}/> 取消交易 (恢復行情)</button>
                       </div>

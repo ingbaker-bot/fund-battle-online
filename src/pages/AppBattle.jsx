@@ -478,7 +478,7 @@ export default function AppBattle() {
                  <div className="flex flex-col items-center">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
                     <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {Math.round(totalAssets/1000)}<span className="text-xs ml-0.5">k</span>
+                        {Math.round(totalAssets)}<span className="text-xs ml-0.5"></span>
                     </div>
                  </div>
               </div>

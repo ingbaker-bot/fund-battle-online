@@ -603,13 +603,22 @@ export default function AppBattle() {
 
             {/* 右：冠軍資訊 (1/3) */}
             {champion && (
-                <div className="w-1/3 bg-slate-800 p-3 rounded-xl border border-slate-700 shadow-md flex flex-col justify-center items-center relative overflow-hidden text-white">
-                    <Crown size={40} className="absolute -right-2 -top-2 text-slate-600/30"/>
-                    <Crown size={16} className="text-yellow-400 mb-1" fill="currentColor"/>
-                    <div className="text-xs text-slate-300 font-bold mb-1">TOP 1</div>
-                    <div className="text-sm font-bold truncate w-full text-center mb-1">{champion.nickname}</div>
-                    <div className="text-xs font-mono text-yellow-400">
-                        {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(0)}%
+               <div className="w-1/3 bg-gradient-to-br from-yellow-400 to-orange-500 p-3 rounded-xl border border-amber-300 shadow-md flex flex-col justify-center items-center relative overflow-hidden text-white">
+       		 {/* 背景裝飾皇冠：改成淡淡的白色透明 */}
+        	<Crown size={40} className="absolute -right-2 -top-2 text-white/30"/>
+        
+        	{/* 小皇冠圖示：改成白色 */}
+        	<Crown size={20} className="text-white mb-1" fill="currentColor"/>
+        
+        	{/* 標題：改中文、放大、加粗 */}
+        	<div className="text-lg text-white font-black mb-0 shadow-sm">本場冠軍</div>
+        
+       		 {/* 玩家暱稱 */}
+        	<div className="text-sm font-bold truncate w-full text-center mb-1 drop-shadow-md">{champion.nickname}</div>
+        
+        	{/* 報酬率：改成白色大字 */}
+        	<div className="text-lg font-mono font-black text-white drop-shadow-md">
+            	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(0)}%
                     </div>
                 </div>
             )}

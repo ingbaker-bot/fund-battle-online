@@ -559,8 +559,7 @@ export default function AppBattle() {
                              disabled={tradeType === 'sell'} 
                              className={`py-1 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
                           >
-                              <div className="flex items-center gap-2"><TrendingUp size={20}/> 買入確認</div>
-                              <div className="text-[10px] opacity-80 font-normal">手續費 {Math.round(feeRate*100)}%</div>
+                              <div className="flex items-center gap-2"><TrendingUp size={20}/> 買入確認 <"text-[10px] opacity-80 font-normal">手續費 {Math.round(feeRate*100)}%</div>
                           </button>
                           
                           <button 
@@ -568,8 +567,7 @@ export default function AppBattle() {
                              disabled={tradeType === 'buy'} 
                              className={`py-1 rounded-lg font-bold text-xl shadow-md flex items-center justify-center gap-2 flex-col ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
                           >
-                              <div className="flex items-center gap-2"><TrendingDown size={20}/> 賣出確認</div>
-                              <div className="text-[10px] opacity-80 font-normal">免手續費</div>
+                              <div className="flex items-center gap-2"><TrendingDown size={20}/> 賣出確認"text-[10px] opacity-80 font-normal">免手續費</div>
                           </button>
                       </div>
                       <div className="px-2 mt-1">

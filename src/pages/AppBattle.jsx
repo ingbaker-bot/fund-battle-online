@@ -626,7 +626,7 @@ export default function AppBattle() {
         
         	{/* 報酬率：改成白色大字 */}
         	<div className="text-lg font-mono font-black text-white drop-shadow-md">
-            	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(0)}%
+            	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(1)}%
                     </div>
                 </div>
             )}

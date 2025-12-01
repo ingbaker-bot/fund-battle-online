@@ -474,13 +474,15 @@ export default function AppBattle() {
                     </div>
                  </div>
 
-                 {/* 右：總資產 */}
-                 <div className="flex flex-col items-center">
-                    <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
-                    <div className={`text-lg font-mono font-black leading-none flex items-center h-6 {displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {Math.round(totalAssets/1000)}<span className="text-xs ml-0.5">k</span>
-                    </div>
-                 </div>
+                 {/* 右：總資產 (修正版：無 $，字體縮小，顯示完整數字) */}
+			<div className="flex flex-col items-center">
+    			<div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
+  			  {/* 1. 字體改為 text-lg (比原本的 xl 小一點) */}
+   			  {/* 2. 內容改為 toLocaleString() (完整數字，無 $ 無 k) */}
+   			 <div className={`text-lg font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+     			   {Math.floor(totalAssets).toLocaleString()}	
+		        </div>
+                   </div>
               </div>
           </div>
 

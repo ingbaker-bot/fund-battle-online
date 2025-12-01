@@ -1,7 +1,7 @@
-// 2025v9.3 - 玩家端 (1141201A終版)
+// 2025v9.4 - 玩家端 (修正扣抵)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid } from 'recharts';
+import { LineChart, Line, YAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
 import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
@@ -161,6 +161,8 @@ export default function AppBattle() {
   }, [roomId, status, fullData.length]);
 
   const currentNav = fullData[currentDay]?.nav || 10;
+  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
+  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
   const totalAssets = cash + (units * currentNav);
   const rawRoi = ((totalAssets - initialCapital) / initialCapital) * 100;
   const displayRoi = rawRoi - (resetCount * 50); 
@@ -493,6 +495,31 @@ export default function AppBattle() {
                     {showIndicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showIndicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
+
+{/* ★★★ 新增：扣抵價標示 (跟隨主持人趨勢開關) ★★★ */}
+                        {showIndicators.trend && showIndicators.ma20 && deduction20 && (
+                            <ReferenceDot
+                                x={getDisplayDate(deduction20.date)}
+                                y={deduction20.nav}
+                                r={4}
+                                fill="#38bdf8"
+                                stroke="white"
+                                strokeWidth={2}
+                                isFront={true}
+                            />
+                        )}
+                        {showIndicators.trend && showIndicators.ma60 && deduction60 && (
+                            <ReferenceDot
+                                x={getDisplayDate(deduction60.date)}
+                                y={deduction60.nav}
+                                r={4}
+                                fill="#1d4ed8"
+                                stroke="white"
+                                strokeWidth={2}
+                                isFront={true}
+                            />
+                        )}
+
                     <YAxis domain={['auto', 'auto']} hide />
                 </ComposedChart>
              </ResponsiveContainer>

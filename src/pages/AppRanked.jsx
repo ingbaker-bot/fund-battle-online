@@ -13,7 +13,6 @@ import { FUNDS_LIBRARY } from '../config/funds';
 import { useNavigate } from 'react-router-dom'; // ★ 新增這行
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; // 假設路徑
-import { useRef } from 'react'; // 記得從 react 引入 useRef
 
 import { 
   checkUserNickname, 
@@ -23,32 +22,6 @@ import {
   getTickerData 
 } from '../services/firestoreService';
 
-const resultCardRef = useRef(null);
-
-const handleDownloadReport = async () => {
-    if (!resultCardRef.current) return;
-
-    try {
-        // 開始截圖
-        const canvas = await html2canvas(resultCardRef.current, {
-            backgroundColor: '#0f172a', // 背景色 (對應 bg-slate-900)
-            scale: 2, // 提高解析度，讓圖片更清晰
-        });
-
-        // 轉成圖片連結
-        const image = canvas.toDataURL("image/png");
-
-        // 觸發下載
-        const link = document.createElement("a");
-        link.href = image;
-        link.download = `fund_battle_report_${currentFundName}.png`;
-        link.click();
-
-    } catch (err) {
-        console.error("戰報生成失敗:", err);
-        alert("圖片生成失敗，請稍後再試");
-    }
-};
 
 
 
@@ -129,13 +102,39 @@ export default function AppRanked() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate(); // ★ 新增這行
+
+
+
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
   const [tickerData, setTickerData] = useState([]); 
   const [showRankModal, setShowRankModal] = useState(false); 
   const [rankUploadStatus, setRankUploadStatus] = useState('idle'); 
   const [inputNickname, setInputNickname] = useState(''); 
+  const resultCardRef = useRef(null);
 
+  const handleDownloadReport = async () => {
+      // 這裡才能讀取到 currentFundName 這個 state
+      if (!resultCardRef.current) return;
+
+      try {
+          const canvas = await html2canvas(resultCardRef.current, {
+              backgroundColor: '#0f172a', 
+              scale: 2, 
+          });
+
+          const image = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = image;
+          link.download = `fund_battle_report_${currentFundName}.png`; // 這裡讀取 state
+          link.click();
+
+      } catch (err) {
+          console.error("戰報生成失敗:", err);
+          alert("圖片生成失敗，請稍後再試");
+      }
+  };
+  // ★★★ 修正結束 ★★★
   const [fullData, setFullData] = useState([]);
   const [currentDay, setCurrentDay] = useState(0);
   const [gameStatus, setGameStatus] = useState('setup'); 
@@ -147,6 +146,8 @@ export default function AppRanked() {
   const [units, setUnits] = useState(0);
   const [avgCost, setAvgCost] = useState(0);
   const [transactions, setTransactions] = useState([]);
+
+
   
   // 2025v1.3: 新增狀態 (Benchmark, TimeOffset, RSP)
   const [benchmarkStartNav, setBenchmarkStartNav] = useState(null);
@@ -1071,27 +1072,6 @@ export default function AppRanked() {
                         {showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}
                     </button>
                     
-{/* 1. 放入隱藏的戰報卡片元件，將當前數據傳入 */}
-<ResultCard 
-    ref={resultCardRef} 
-    data={{
-        fundName: currentFundName,
-        roi: roi,
-        assets: Math.round(totalAssets),
-        duration: getDurationString(),
-        nickname: myNickname || user.email.split('@')[0],
-        gameType: '個人挑戰賽 S1',
-        dateRange: `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}`
-    }}
-/>
-
-{/* 2. 修改原本的分享按鈕，或新增一個按鈕 */}
-<button 
-    onClick={handleDownloadReport} 
-    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]"
->
-    <Share2 size={18} /> 下載戰績圖卡
-</button>
 
                     <div className="h-6"></div>
                     

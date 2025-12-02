@@ -1,6 +1,6 @@
 // src/components/ResultCard.jsx
 // 2025v9.9 - 視覺優化版 (天空藍/大字體/QR修正)
-import React, { forwardRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Trophy, Calendar, ArrowUpRight, ArrowDownRight, User, TrendingUp } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 

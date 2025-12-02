@@ -1,8 +1,8 @@
-// 2025v9.12 - 多人對戰版 (戰報預覽功能同步更新)
+// 2025v10.0 - 玩家端 (階段三：倒數計時與強制結算)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2, Timer, LogOut, Lock } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit } from 'firebase/firestore';
@@ -34,7 +34,7 @@ export default function AppBattle() {
   
   const urlRoomId = searchParams.get('room');
 
-  // ★★★ 1. 戰報圖片生成邏輯 (同步更新) ★★★
+  // --- 戰報圖片生成邏輯 ---
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -42,45 +42,20 @@ export default function AppBattle() {
 
   const handleDownloadReport = async (currentFundName) => {
       if (isGenerating) return;
-      
-      if (!resultCardRef.current) {
-          alert("系統錯誤：找不到戰報元件");
-          return;
-      }
-      
+      if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
       setIsGenerating(true);
-
       try {
-          // 延遲以確保 UI 渲染
           await new Promise(r => setTimeout(r, 100));
-
-          const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: null, 
-              scale: 3, 
-              useCORS: true,
-              logging: false,
-              ignoreElements: (el) => el.tagName === 'IMG' && !el.complete 
-          });
-
+          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
           canvas.toBlob((blob) => {
-              if (!blob) {
-                  alert("生成圖片失敗 (Blob is null)");
-                  setIsGenerating(false);
-                  return;
-              }
+              if (!blob) { alert("生成圖片失敗"); setIsGenerating(false); return; }
               const url = URL.createObjectURL(blob);
               setGeneratedImage(url);
-              setShowImageModal(true); // 開啟預覽視窗
+              setShowImageModal(true);
               setIsGenerating(false);
           }, 'image/png');
-
-      } catch (err) {
-          console.error(err);
-          alert(`發生錯誤：${err?.message || '未知錯誤'}`);
-          setIsGenerating(false);
-      }
+      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
   };
-  // ★★★ 結束 ★★★
 
   const getSavedState = (key, defaultValue, type = 'number') => {
       const savedRoom = localStorage.getItem('battle_roomId');
@@ -130,8 +105,12 @@ export default function AppBattle() {
   
   const [feeRate, setFeeRate] = useState(0.01);
   const [champion, setChampion] = useState(null);
-
   const [tradeType, setTradeType] = useState(null);
+
+  // ★★★ 2025v10.0 新增：玩家端倒數計時狀態 ★★★
+  const [gameEndTime, setGameEndTime] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [isTimeUp, setIsTimeUp] = useState(false); // 時間到標記
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
@@ -161,6 +140,7 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
+  // ★★★ 階段三：監聽房間資訊 (含 gameEndTime) ★★★
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -189,9 +169,14 @@ export default function AppBattle() {
       if (roomData.startDay) setStartDay(roomData.startDay);
       if (roomData.indicators) setShowIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
+      if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
       
-      if (roomData.feeRate !== undefined) {
-          setFeeRate(roomData.feeRate);
+      // 同步結束時間
+      if (roomData.gameEndTime) {
+          setGameEndTime(roomData.gameEndTime);
+      } else {
+          setGameEndTime(null);
+          setIsTimeUp(false); // 如果主持人重置，解除時間到鎖定
       }
 
       if (fullData.length === 0 && roomData.fundId) {
@@ -203,12 +188,43 @@ export default function AppBattle() {
          }
       }
 
-      if (roomData.finalWinner) {
-          setChampion(roomData.finalWinner);
-      }
+      if (roomData.finalWinner) setChampion(roomData.finalWinner);
     });
     return () => unsubscribe();
   }, [roomId, status, fullData.length]);
+
+  // ★★★ 階段三：玩家端倒數計時邏輯 ★★★
+  useEffect(() => {
+      let interval = null;
+      if (status === 'playing' && gameEndTime) {
+          interval = setInterval(() => {
+              const now = Date.now();
+              const diff = gameEndTime - now;
+              
+              if (diff <= 0) {
+                  setRemainingTime(0);
+                  setIsTimeUp(true); // 時間到，鎖定交易
+                  if (isTrading) setIsTrading(false); // 如果正在交易中，強制關閉
+                  clearInterval(interval);
+              } else {
+                  setRemainingTime(diff);
+                  setIsTimeUp(false);
+              }
+          }, 1000);
+      } else {
+          setRemainingTime(0);
+      }
+      return () => { if(interval) clearInterval(interval); };
+  }, [status, gameEndTime, isTrading]);
+
+  // 格式化時間 mm:ss
+  const formatTime = (ms) => {
+      if (ms <= 0) return "00:00";
+      const totalSeconds = Math.floor(ms / 1000);
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const currentNav = fullData[currentDay]?.nav || 10;
   const totalAssets = cash + (units * currentNav);
@@ -217,24 +233,14 @@ export default function AppBattle() {
 
   const trendSignal = useMemo(() => {
       if (!fullData[currentDay]) return { char: '', color: '' };
-      
       const idx = currentDay;
       const curNav = fullData[idx].nav;
       const ind20 = calculateIndicators(fullData, 20, idx);
       const ind60 = calculateIndicators(fullData, 60, idx);
-      
-      const ma20 = ind20.ma;
-      const ma60 = ind60.ma;
-
+      const ma20 = ind20.ma; const ma60 = ind60.ma;
       if (!ma20 || !ma60) return { char: '', color: '' };
-
-      if (curNav > ma20 && ma20 > ma60) {
-          return { char: '多', color: 'text-red-500' };
-      }
-      else if (curNav < ma20 && ma20 < ma60) {
-          return { char: '空', color: 'text-green-600' };
-      }
-      
+      if (curNav > ma20 && ma20 > ma60) return { char: '多', color: 'text-red-500' };
+      else if (curNav < ma20 && ma20 < ma60) return { char: '空', color: 'text-green-600' };
       return { char: '', color: '' };
   }, [fullData, currentDay]);
 
@@ -243,10 +249,7 @@ export default function AppBattle() {
           const now = Date.now();
           if (now - lastReportTime.current > 1500) {
               updateDoc(doc(db, "battle_rooms", roomId, "players", userId), {
-                  roi: displayRoi, 
-                  assets: totalAssets, 
-                  units: units, 
-                  lastUpdate: serverTimestamp()
+                  roi: displayRoi, assets: totalAssets, units: units, lastUpdate: serverTimestamp()
               }).catch(e => console.log(e));
               lastReportTime.current = now;
           }
@@ -256,10 +259,7 @@ export default function AppBattle() {
   useEffect(() => {
       if ((status === 'playing' || status === 'waiting') && userId) {
           updateDoc(doc(db, "battle_rooms", roomId, "players", userId), {
-              roi: displayRoi, 
-              assets: totalAssets, 
-              units: units, 
-              lastUpdate: serverTimestamp()
+              roi: displayRoi, assets: totalAssets, units: units, lastUpdate: serverTimestamp()
           }).catch(e => console.log(e));
           lastReportTime.current = Date.now(); 
       }
@@ -273,7 +273,6 @@ export default function AppBattle() {
   const handleJoinGame = async () => {
       if (!nickname.trim()) { alert("請輸入暱稱"); return; }
       if (!phoneNumber.trim()) { alert("請輸入手機號碼"); return; }
-
       setIsJoining(true);
       try {
         await setDoc(doc(db, "battle_rooms", roomId, "players", userId), {
@@ -290,115 +289,51 @@ export default function AppBattle() {
   };
 
   const handleRequestTrade = async () => {
-      setIsTrading(true);
-      setTradeType(null); 
-      try {
-          await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), {
-              nickname: nickname,
-              timestamp: serverTimestamp()
-          });
-      } catch (e) { console.error(e); }
+      if (isTimeUp) { alert("比賽時間已到，停止交易！"); return; } // 防呆
+      setIsTrading(true); setTradeType(null); 
+      try { await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), { nickname: nickname, timestamp: serverTimestamp() }); } catch (e) { console.error(e); }
   };
 
   const handleCancelTrade = async () => {
-      setIsTrading(false);
-      setTradeType(null); 
-      setInputAmount(''); 
-      try {
-          await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId));
-      } catch (e) { console.error(e); }
+      setIsTrading(false); setTradeType(null); setInputAmount(''); 
+      try { await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId)); } catch (e) { console.error(e); }
   };
 
   const handleInputChange = (e) => {
       const rawValue = e.target.value.replace(/,/g, ''); 
-      if (!rawValue) {
-          setInputAmount('');
-          setTradeType(null); 
-          return;
-      }
-      if (!isNaN(rawValue)) {
-          setInputAmount(Number(rawValue).toLocaleString());
-          setTradeType(null); 
-      }
+      if (!rawValue) { setInputAmount(''); setTradeType(null); return; }
+      if (!isNaN(rawValue)) { setInputAmount(Number(rawValue).toLocaleString()); setTradeType(null); }
   };
 
   const handleQuickAmount = (type, percent) => {
       setTradeType(type); 
-
-      if (type === 'buy') {
-          const amount = Math.floor(cash * percent);
-          setInputAmount(amount.toLocaleString()); 
-      } else if (type === 'sell') {
-          const assetValue = units * currentNav;
-          const amount = Math.floor(assetValue * percent);
-          setInputAmount(amount.toLocaleString()); 
-      }
+      if (type === 'buy') { const amount = Math.floor(cash * percent); setInputAmount(amount.toLocaleString()); } 
+      else if (type === 'sell') { const assetValue = units * currentNav; const amount = Math.floor(assetValue * percent); setInputAmount(amount.toLocaleString()); }
   };
 
   const executeTrade = async (type) => {
       if (isProcessingRef.current) return;
-      isProcessingRef.current = true; 
-
-      const amount = parseFloat(inputAmount.replace(/,/g, ''));
+      if (isTimeUp) { alert("比賽時間已到！"); return; }
       
-      if (!amount || amount <= 0) {
-          isProcessingRef.current = false; 
-          return;
-      }
+      isProcessingRef.current = true; 
+      const amount = parseFloat(inputAmount.replace(/,/g, ''));
+      if (!amount || amount <= 0) { isProcessingRef.current = false; return; }
 
       if (type === 'buy') {
-          if (amount > Math.floor(cash)) { 
-              alert(`現金不足 (可用: $${Math.floor(cash).toLocaleString()})`); 
-              isProcessingRef.current = false; 
-              return; 
-          }
-          
-          const fee = Math.floor(amount * feeRate); 
-          const netInvestment = amount - fee;       
-          const buyUnits = netInvestment / currentNav;
-          
-          const newUnits = units + buyUnits;
-          setAvgCost((units * avgCost + amount) / newUnits);
-          
-          setUnits(newUnits);
-          setCash(prev => {
-              const remains = prev - amount;
-              return Math.abs(remains) < 1 ? 0 : remains; 
-          });
+          if (amount > Math.floor(cash)) { alert(`現金不足 (可用: $${Math.floor(cash).toLocaleString()})`); isProcessingRef.current = false; return; }
+          const fee = Math.floor(amount * feeRate); const netInvestment = amount - fee; const buyUnits = netInvestment / currentNav;
+          const newUnits = units + buyUnits; setAvgCost((units * avgCost + amount) / newUnits); setUnits(newUnits);
+          setCash(prev => { const remains = prev - amount; return Math.abs(remains) < 1 ? 0 : remains; });
       } else {
           const currentAssetValue = units * currentNav;
-          if (amount >= Math.floor(currentAssetValue)) { 
-              if (units <= 0) { 
-                  isProcessingRef.current = false; 
-                  return; 
-              }
-              setCash(prev => prev + currentAssetValue); 
-              setUnits(0);
-              setAvgCost(0);
-          } else {
-              const sellUnits = amount / currentNav;
-              if (sellUnits > units * 1.0001) { 
-                  alert('單位不足'); 
-                  isProcessingRef.current = false; 
-                  return; 
-              }
-              setUnits(prev => Math.max(0, prev - sellUnits));
-              setCash(prev => prev + amount);
-          }
+          if (amount >= Math.floor(currentAssetValue)) { if (units <= 0) { isProcessingRef.current = false; return; } setCash(prev => prev + currentAssetValue); setUnits(0); setAvgCost(0); } 
+          else { const sellUnits = amount / currentNav; if (sellUnits > units * 1.0001) { alert('單位不足'); isProcessingRef.current = false; return; } setUnits(prev => Math.max(0, prev - sellUnits)); setCash(prev => prev + amount); }
       }
       
-      setInputAmount(''); 
-      if (navigator.vibrate) navigator.vibrate(50);
-      
-      setIsTrading(false);
-      setTradeType(null);
-      try {
-          await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId));
-      } catch (e) { console.error(e); }
-
-      setTimeout(() => {
-          isProcessingRef.current = false;
-      }, 500); 
+      setInputAmount(''); if (navigator.vibrate) navigator.vibrate(50);
+      setIsTrading(false); setTradeType(null);
+      try { await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId)); } catch (e) { console.error(e); }
+      setTimeout(() => { isProcessingRef.current = false; }, 500); 
   };
 
   const getDisplayDate = (dateStr) => {
@@ -415,21 +350,16 @@ export default function AppBattle() {
       if (!dateStr) return '---';
       const dateObj = new Date(dateStr);
       if (isNaN(dateObj.getTime())) return dateStr;
-      const year = dateObj.getFullYear(); 
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
+      const year = dateObj.getFullYear(); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const day = String(dateObj.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
   };
 
   const chartData = useMemo(() => {
-      const start = Math.max(0, currentDay - 330);
-      const end = currentDay + 1;
+      const start = Math.max(0, currentDay - 330); const end = currentDay + 1;
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
-          const ind20 = calculateIndicators(fullData, 20, realIdx);
-          const ind60 = calculateIndicators(fullData, 60, realIdx);
-          let riverTop = null; let riverBottom = null;
-          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
+          const ind20 = calculateIndicators(fullData, 20, realIdx); const ind60 = calculateIndicators(fullData, 60, realIdx);
+          let riverTop = null; let riverBottom = null; if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
           return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom };
       });
   }, [fullData, currentDay]);
@@ -443,7 +373,7 @@ export default function AppBattle() {
   if (status === 'input_room') return (
       <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">
           <Zap size={64} className="text-emerald-500 mb-6"/>
-          <h1 className="text-3xl font-bold mb-2 text-slate-800">重新加入現場對戰輸入Room ID</h1>
+          <h1 className="text-3xl font-bold mb-2 text-slate-800">加入現場對戰</h1>
           <input type="number" value={inputRoomId} onChange={e => setInputRoomId(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl p-4 text-center text-3xl font-mono text-slate-800 mb-6 tracking-widest outline-none focus:border-emerald-500 shadow-sm" placeholder="0000" />
           <button onClick={handleConfirmRoom} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-lg transition-colors">下一步</button>
       </div>
@@ -494,8 +424,28 @@ export default function AppBattle() {
           
           <div className="sticky top-0 z-20 shadow-sm">
               <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-lg font-black text-slate-700">
-                 <span className="truncate max-w-[200px]">{fundName}</span>
-                 <span className="font-mono tracking-wider">{currentDisplayDate}</span>
+                 {/* ★★★ 階段三：Header UI 修改 (倒數計時 / 基金名稱 / 離開) ★★★ */}
+                 
+                 {/* 左側：離開(小圖示) + 倒數計時 */}
+                 <div className="flex items-center gap-2 w-1/3">
+                     <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
+                         <LogOut size={16} />
+                     </button>
+                     <div className={`flex items-center gap-1 font-mono font-bold ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
+                         <Timer size={16} />
+                         {formatTime(remainingTime)}
+                     </div>
+                 </div>
+
+                 {/* 中間：基金名稱 (放大) */}
+                 <div className="w-1/3 text-center">
+                     <span className="truncate max-w-full font-bold text-xl">{fundName}</span>
+                 </div>
+
+                 {/* 右側：日期 (維持原樣或簡化) */}
+                 <div className="w-1/3 text-right">
+                     <span className="font-mono tracking-wider text-sm">{currentDisplayDate}</span>
+                 </div>
               </div>
               
               <div className="bg-white px-2 py-1.5 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
@@ -576,11 +526,20 @@ export default function AppBattle() {
 
               {!isTrading ? (
                   <div className="px-4 pb-2">
-                      <button onClick={handleRequestTrade} className="w-full py-6 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-white rounded-xl font-black text-3xl shadow-lg flex items-center justify-center gap-3 animate-pulse"><Hand size={32} className="text-yellow-400"/> 請求交易</button>
-                      <p className="text-center text-xs text-slate-400 mt-2">按下後行情將暫停，供您思考決策</p>
+                      {/* ★★★ 階段三：按鈕狀態控制 - 時間到則 Disable ★★★ */}
+                      <button 
+                          onClick={handleRequestTrade} 
+                          disabled={isTimeUp}
+                          className={`w-full py-6 transition-all text-white rounded-xl font-black text-3xl shadow-lg flex items-center justify-center gap-3 ${isTimeUp ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 active:scale-95 animate-pulse'}`}
+                      >
+                          {isTimeUp ? <Lock size={32}/> : <Hand size={32} className="text-yellow-400"/>} 
+                          {isTimeUp ? '比賽結束' : '請求交易'}
+                      </button>
+                      <p className="text-center text-xs text-slate-400 mt-2">{isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策'}</p>
                   </div>
               ) : (
                   <>
+                      {/* 交易區塊 (保持原樣) */}
                       <div className="px-2 grid grid-cols-5 gap-1 mb-1">
                           <button 
                             onClick={() => handleQuickAmount('buy', 1.0)} 
@@ -688,7 +647,7 @@ export default function AppBattle() {
             </div>
         )}
         
-        {/* ★★★ 3. 插入戰報卡片與下載按鈕 ★★★ */}
+        {/* ★★★ 3. 插入戰報卡片與下載按鈕 (含預覽功能) ★★★ */}
         <ResultCard 
             ref={resultCardRef} 
             data={{

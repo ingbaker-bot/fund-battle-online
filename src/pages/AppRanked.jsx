@@ -1,4 +1,4 @@
-// 2025v9.5 - 會員版
+// 2025v9.6 - 會員版 (預覽戰報修正版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, ExternalLink, FileSpreadsheet, Share2, Mail, MessageCircle, Monitor, Trophy, Globe, User, Sword, CalendarClock, History, Settings2, Zap } from 'lucide-react';
@@ -96,17 +96,15 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // ★★★ 戰報圖片相關邏輯 (放在這裡) ★★★
+  // ★★★ 戰報圖片與 Modal 邏輯 ★★★
   const resultCardRef = useRef(null);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
-// 在 AppRanked.jsx 內
-
-// 修改 AppRanked.jsx 中的 handleDownloadReport
   const handleDownloadReport = async () => {
-      console.log("下載按鈕被點擊 (v2)");
-
+      console.log("開始生成戰報...");
       if (!resultCardRef.current) {
-          alert("系統錯誤：找不到戰報元件 (Ref is null)");
+          alert("系統錯誤：找不到戰報元件");
           return;
       }
       
@@ -114,45 +112,31 @@ export default function AppRanked() {
           const originalText = document.activeElement.innerText;
           document.activeElement.innerText = "生成中...";
           
-          // ★★★ 關鍵修改：加入 useCORS, allowTaint, foreignObjectRendering ★★★
           const canvas = await html2canvas(resultCardRef.current, {
               backgroundColor: null, 
               scale: 3, 
-              useCORS: true,       // 允許跨域
-              allowTaint: true,    // 允許污染 (雖然 Base64 不應該污染)
-              foreignObjectRendering: false, // 關閉此選項以增加相容性
-              logging: true,
-              // 強制忽略讀取失敗的圖片，避免因為一張小圖壞掉導致全黑
-              ignoreElements: (element) => {
-                  if (element.tagName === 'IMG' && !element.complete) return true;
-                  return false;
-              }
+              useCORS: true,
+              logging: false,
           });
 
-          // 嘗試使用 toBlob (比 toDataURL 更穩定，尤其在手機上)
           canvas.toBlob((blob) => {
               if (!blob) {
-                  alert("圖片生成失敗 (Blob is null)");
+                  alert("圖片生成失敗");
                   return;
               }
               const url = URL.createObjectURL(blob);
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = `fund_report_${currentFundName || 'game'}.png`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              URL.revokeObjectURL(url); // 釋放記憶體
-              
+              setGeneratedImage(url);
+              setShowImageModal(true);
               document.activeElement.innerText = originalText;
           }, 'image/png');
 
       } catch (err) {
           console.error("戰報生成失敗:", err);
-          alert(`下載失敗詳細原因：${err.name}: ${err.message}`);
+          alert(`生成失敗：${err.message}`);
           document.activeElement.innerText = "下載戰績圖卡";
       }
-  };	  // ★★★ 結束 ★★★
+  };
+  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
@@ -1101,6 +1085,34 @@ export default function AppRanked() {
                         <button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button>
                         <button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button>
                     </div>
+                </div>
+            </div>
+        )}
+
+        {/* 圖片預覽與儲存 Modal (新增部分) */}
+        {showImageModal && (
+            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
+                    <div className="text-white text-center">
+                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
+                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+                    </div>
+                    
+                    {/* 顯示生成的圖片 */}
+                    {generatedImage && (
+                        <img 
+                            src={generatedImage} 
+                            alt="戰報" 
+                            className="w-full rounded-xl shadow-2xl border border-white/20"
+                        />
+                    )}
+
+                    <button 
+                        onClick={() => setShowImageModal(false)} 
+                        className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all"
+                    >
+                        關閉
+                    </button>
                 </div>
             </div>
         )}

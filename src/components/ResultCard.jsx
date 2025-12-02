@@ -64,11 +64,11 @@ const ResultCard = forwardRef(({ data }, ref) => {
             <div className="bg-white p-2 rounded-lg shadow-lg flex items-center justify-center w-24 h-12">
                 {/* 請確認圖片路徑正確，並確保伺服器允許 CORS */}
                 <img 
-                    src="/logo.jpg" 
-                    alt="Logo" 
-                    className="w-full h-full object-contain" 
-                    crossOrigin="anonymous" // 嘗試解決跨域問題
-                />
+    			src="/logo.jpg" 
+   			 alt="Logo" 
+   			 className="w-full h-full object-contain" 
+   			 crossOrigin="anonymous"  // ★★★ 這一行非常重要，請務必加入 ★★★
+			/>
             </div>
         </div>
 

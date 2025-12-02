@@ -99,33 +99,51 @@ export default function AppRanked() {
   // ★★★ 戰報圖片相關邏輯 (放在這裡) ★★★
   const resultCardRef = useRef(null);
 
-const handleDownloadReport = async () => {
-      // 1. 檢查 Ref 是否抓到元件
+// 在 AppRanked.jsx 內
+
+  const handleDownloadReport = async () => {
+      // 1. Debug: 確認按鈕有點擊反應
+      console.log("下載按鈕被點擊");
+
       if (!resultCardRef.current) {
-          alert("錯誤：找不到戰報元件，請確認畫面已載入");
-          console.error("ResultCard Ref is null");
+          alert("系統錯誤：找不到戰報元件 (Ref is null)");
           return;
       }
       
       try {
-          // 2. 加入 useCORS 與 logging 設定
+          // 2. 顯示讀取中，讓玩家知道有在跑
+          const originalText = document.activeElement.innerText;
+          document.activeElement.innerText = "圖卡生成中...";
+          
+          // 3. 執行截圖 (加入 useCORS 參數)
           const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: null, // 設為 null 以使用 CSS 的漸層背景
-              scale: 3, // 提高解析度 (原本 2 可能不夠清晰)
-              useCORS: true, // ★★★ 關鍵：允許載入跨域圖片 (Logo)
-              logging: true, // 開啟 Log 以便除錯
+              backgroundColor: null, // 使用 CSS 原本的漸層
+              scale: 3, // 高解析度
+              useCORS: true, // ★★★ 關鍵：允許載入圖片 ★★★
+              allowTaint: true,
+              logging: true, // 開啟記錄，方便除錯
           });
 
+          // 4. 轉成圖片並下載
           const image = canvas.toDataURL("image/png");
           const link = document.createElement("a");
           link.href = image;
-          link.download = `fund_report_${currentFundName}.png`;
+          link.download = `fund_report_${currentFundName || 'game'}.png`;
+          document.body.appendChild(link); // 某些手機瀏覽器需要將 link 加入 body 才能觸發
           link.click();
+          document.body.removeChild(link);
+
+          // 5. 恢復按鈕文字
+          document.activeElement.innerText = originalText;
+
       } catch (err) {
           console.error("戰報生成失敗:", err);
-          alert(`圖片生成失敗：${err.message}`);
+          // 6. 如果失敗，彈出視窗顯示具體錯誤
+          alert(`下載失敗：${err.message}\n請嘗試使用「分享」功能截圖。`);
+          document.activeElement.innerText = "下載戰績圖卡";
       }
-  };  // ★★★ 結束 ★★★
+  };
+	  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 

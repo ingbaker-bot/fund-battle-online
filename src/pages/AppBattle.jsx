@@ -1,12 +1,16 @@
-// 2025v9.3 - 玩家端 (1141201B終版)
+// 2025v9.5 - 玩家端 (戰報功能整合版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
-import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown } from 'lucide-react';
+import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2 } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
+
+// ★★★ 1. 引入截圖套件與元件 ★★★
+import html2canvas from 'html2canvas';
+import ResultCard from '../components/ResultCard'; 
 
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
@@ -30,6 +34,29 @@ export default function AppBattle() {
   const navigate = useNavigate();
   
   const urlRoomId = searchParams.get('room');
+
+  // ★★★ 2. 戰報圖片相關邏輯 (Hooks 放在元件最上方) ★★★
+  const resultCardRef = useRef(null);
+
+  // 由於 AppBattle 的 state 變數名稱與 AppRanked 不同 (例如 fundName, displayRoi)，這裡需要對應調整
+  const handleDownloadReport = async (currentFundName) => {
+      if (!resultCardRef.current) return;
+      try {
+          const canvas = await html2canvas(resultCardRef.current, {
+              backgroundColor: '#0f172a', 
+              scale: 2, 
+          });
+          const image = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = image;
+          link.download = `battle_report_${currentFundName || 'fund'}.png`;
+          link.click();
+      } catch (err) {
+          console.error("戰報生成失敗:", err);
+          alert("圖片生成失敗，請稍後再試");
+      }
+  };
+  // ★★★ 結束 ★★★
 
   const getSavedState = (key, defaultValue, type = 'number') => {
       const savedRoom = localStorage.getItem('battle_roomId');
@@ -80,7 +107,6 @@ export default function AppBattle() {
   const [feeRate, setFeeRate] = useState(0.01);
   const [champion, setChampion] = useState(null);
 
-  // ★★★ 新增：交易方向鎖定 (buy / sell / null) ★★★
   const [tradeType, setTradeType] = useState(null);
 
   const lastReportTime = useRef(0);
@@ -241,7 +267,7 @@ export default function AppBattle() {
 
   const handleRequestTrade = async () => {
       setIsTrading(true);
-      setTradeType(null); // 重置交易方向
+      setTradeType(null); 
       try {
           await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), {
               nickname: nickname,
@@ -252,39 +278,36 @@ export default function AppBattle() {
 
   const handleCancelTrade = async () => {
       setIsTrading(false);
-      setTradeType(null); // 重置交易方向
-      setInputAmount(''); // 清空輸入
+      setTradeType(null); 
+      setInputAmount(''); 
       try {
           await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId));
       } catch (e) { console.error(e); }
   };
 
-  // ★★★ 修改處：輸入格式化 (千分位) 與解除鎖定 ★★★
   const handleInputChange = (e) => {
-      const rawValue = e.target.value.replace(/,/g, ''); // 移除逗號
+      const rawValue = e.target.value.replace(/,/g, ''); 
       if (!rawValue) {
           setInputAmount('');
-          setTradeType(null); // 清空時解除鎖定
+          setTradeType(null); 
           return;
       }
       if (!isNaN(rawValue)) {
-          // 轉為千分位字串儲存
           setInputAmount(Number(rawValue).toLocaleString());
-          setTradeType(null); // 手動輸入時解除鎖定，讓玩家自己選
+          setTradeType(null); 
       }
   };
 
-  // ★★★ 修改處：快速鍵連動鎖定 ★★★
   const handleQuickAmount = (type, percent) => {
-      setTradeType(type); // 鎖定方向
+      setTradeType(type); 
 
       if (type === 'buy') {
           const amount = Math.floor(cash * percent);
-          setInputAmount(amount.toLocaleString()); // 顯示千分位
+          setInputAmount(amount.toLocaleString()); 
       } else if (type === 'sell') {
           const assetValue = units * currentNav;
           const amount = Math.floor(assetValue * percent);
-          setInputAmount(amount.toLocaleString()); // 顯示千分位
+          setInputAmount(amount.toLocaleString()); 
       }
   };
 
@@ -292,7 +315,6 @@ export default function AppBattle() {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true; 
 
-      // ★★★ 修正：移除逗號再運算 ★★★
       const amount = parseFloat(inputAmount.replace(/,/g, ''));
       
       if (!amount || amount <= 0) {
@@ -344,9 +366,6 @@ export default function AppBattle() {
       setInputAmount(''); 
       if (navigator.vibrate) navigator.vibrate(50);
       
-      // ★★★ 修正：交易成功後直接返回看盤 ★★★
-      // 不用再呼叫 handleCancelTrade，因為那是給"取消"按鈕用的
-      // 我們直接在裡面做狀態切換，效果更順暢
       setIsTrading(false);
       setTradeType(null);
       try {
@@ -449,18 +468,13 @@ export default function AppBattle() {
               </div>
           )}
           
-          {/* ★★★ 雙層 Header (資訊大字體優化) ★★★ */}
           <div className="sticky top-0 z-20 shadow-sm">
-              {/* 第一層：資訊條 (字體放大) */}
               <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-lg font-black text-slate-700">
                  <span className="truncate max-w-[200px]">{fundName}</span>
                  <span className="font-mono tracking-wider">{currentDisplayDate}</span>
               </div>
               
-              {/* 第二層：戰鬥數據儀表板 */}
               <div className="bg-white px-2 py-1.5 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
-                 
-                 {/* 左：趨勢燈號 */}
                  <div className="flex flex-col items-center border-r border-slate-100">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">趨勢</div>
                     <div className={`text-xl font-black leading-none h-6 flex items-center ${trendSignal.color}`}>
@@ -468,7 +482,6 @@ export default function AppBattle() {
                     </div>
                  </div>
 
-                 {/* 中：報酬率 */}
                  <div className="flex flex-col items-center border-r border-slate-100">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">報酬率</div>
                     <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -476,7 +489,6 @@ export default function AppBattle() {
                     </div>
                  </div>
 
-                 {/* 右：總資產 */}
                  <div className="flex flex-col items-center">
                     <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
                     <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -490,39 +502,37 @@ export default function AppBattle() {
              <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
-		    <XAxis dataKey="date" hide />
+		            <XAxis dataKey="date" hide />
                     {showIndicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={1} dot={false} isAnimationActive={false} opacity={0.3} />}
                     {showIndicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={1} dot={false} isAnimationActive={false} opacity={0.3} />}
                     {showIndicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showIndicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
-			{/* ★★★ 新增 2：扣抵值標註點 (只有當 trend 開啟且對應 MA 開啟時才顯示) ★★★ */}
-        		{/* 月線扣抵點 (無 label) */}
-        	{showIndicators.trend && showIndicators.ma20 && deduction20 && (
-           		 <ReferenceDot
-                		x={deduction20.date}
-                		y={deduction20.nav}
-                		r={4} // 半徑設小一點，比較精緻
-                		fill="#38bdf8" // 顏色對應 MA20
-                		stroke="white"
-                		strokeWidth={2}
-              		  isAnimationActive={false}
-            		/>
-        	)}
+			        
+        	        {showIndicators.trend && showIndicators.ma20 && deduction20 && (
+           		        <ReferenceDot
+                		    x={deduction20.date}
+                		    y={deduction20.nav}
+                		    r={4} 
+                		    fill="#38bdf8" 
+                		    stroke="white"
+                		    strokeWidth={2}
+              		      isAnimationActive={false}
+            		    />
+        	        )}
 
-        {/* 季線扣抵點 (無 label) */}
-        {showIndicators.trend && showIndicators.ma60 && deduction60 && (
-            <ReferenceDot
-                x={deduction60.date}
-                y={deduction60.nav}
-                r={4}
-                fill="#1d4ed8" // 顏色對應 MA60
-                stroke="white"
-                strokeWidth={2}
-                isAnimationActive={false}
-            />
-        )}                    
+                    {showIndicators.trend && showIndicators.ma60 && deduction60 && (
+                        <ReferenceDot
+                            x={deduction60.date}
+                            y={deduction60.nav}
+                            r={4}
+                            fill="#1d4ed8" 
+                            stroke="white"
+                            strokeWidth={2}
+                            isAnimationActive={false}
+                        />
+                    )}                    
 
-<Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
+                    <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
                     <YAxis domain={['auto', 'auto']} hide />
                 </ComposedChart>
              </ResponsiveContainer>
@@ -550,15 +560,14 @@ export default function AppBattle() {
                       <div className="px-2 grid grid-cols-5 gap-1 mb-1">
                           <button 
                             onClick={() => handleQuickAmount('buy', 1.0)} 
-                            disabled={tradeType === 'sell'} // ★ 互斥鎖
+                            disabled={tradeType === 'sell'} 
                             className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-700 text-white active:scale-95'}`}
                           >
                              <span>買入</span><span className="text-[10px] opacity-80">All In</span>
                           </button>
                           
-                          {/* ★★★ 輸入框：支援千分位顯示 ★★★ */}
                           <input 
-                             type="text" // 改為 text 以支援逗號 
+                             type="text" 
                              value={inputAmount} 
                              onChange={handleInputChange} 
                              placeholder="輸入金額" 
@@ -567,7 +576,7 @@ export default function AppBattle() {
                           
                           <button 
                              onClick={() => handleQuickAmount('sell', 1.0)} 
-                             disabled={tradeType === 'buy'} // ★ 互斥鎖
+                             disabled={tradeType === 'buy'} 
                              className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-700 text-white active:scale-95'}`}
                           >
                              <span>賣出</span><span className="text-[10px] opacity-80">All In</span>
@@ -581,33 +590,27 @@ export default function AppBattle() {
                           <button onClick={() => handleQuickAmount('sell', 0.5)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-200 text-emerald-800 active:bg-emerald-300'}`}>賣出 50%</button>
                       </div>
 
-<div className="px-2 grid grid-cols-2 gap-2">
-    {/* 左邊：買入按鈕 (單行模式) */}
-    <button 
-        onClick={() => executeTrade('buy')} 
-        disabled={tradeType === 'sell'} 
-        /* 修改重點：移除 flex-col，保留 flex 讓內容左右排列，py-2 控制高度 */
-        className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
-    >
-        <TrendingUp size={18} />
-        <span>買入確認</span>
-        {/* 手續費縮小並緊跟在後 */}
-        <span className="text-[10px] opacity-80 font-normal pt-1">(費{Math.round(feeRate*100)}%)</span>
-    </button>
-    
-    {/* 右邊：賣出按鈕 (單行模式) */}
-    <button 
-        onClick={() => executeTrade('sell')} 
-        disabled={tradeType === 'buy'} 
-        className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
-    >
-        <TrendingDown size={18} />
-        <span>賣出確認</span>
-        <span className="text-[10px] opacity-80 font-normal pt-1">(免手續費)</span>
-    </button>
-
-
-                      </div>
+                        <div className="px-2 grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => executeTrade('buy')} 
+                                disabled={tradeType === 'sell'} 
+                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
+                            >
+                                <TrendingUp size={18} />
+                                <span>買入確認</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-1">(費{Math.round(feeRate*100)}%)</span>
+                            </button>
+                            
+                            <button 
+                                onClick={() => executeTrade('sell')} 
+                                disabled={tradeType === 'buy'} 
+                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
+                            >
+                                <TrendingDown size={18} />
+                                <span>賣出確認</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-1">(免手續費)</span>
+                            </button>
+                        </div>
                       <div className="px-2 mt-1">
                           <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-sm flex items-center justify-center gap-1"><X size={16}/> 取消交易 (恢復行情)</button>
                       </div>
@@ -617,7 +620,6 @@ export default function AppBattle() {
       </div>
   );
 
-  // ★★★ 結算畫面 (v9.2：左右分割佈局) ★★★
   return (
     <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
         <Trophy size={64} className="text-amber-500 mb-4 animate-bounce"/>
@@ -628,10 +630,7 @@ export default function AppBattle() {
             <span className="text-lg font-bold text-emerald-600">{fundName}</span>
         </div>
 
-        {/* ★ 左右分割佈局 ★ */}
         <div className="w-full max-w-sm flex gap-2 mb-6">
-            
-            {/* 左：玩家成績 (2/3) */}
             <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-md flex flex-col justify-center items-center">
                 <div className="text-xs text-slate-400 mb-1 font-bold">您的最終成績</div>
                 <div className={`text-4xl font-black ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -639,22 +638,12 @@ export default function AppBattle() {
                 </div>
             </div>
 
-            {/* 右：冠軍資訊 (1/3) */}
             {champion && (
                <div className="w-1/3 bg-gradient-to-br from-yellow-400 to-orange-500 p-3 rounded-xl border border-amber-300 shadow-md flex flex-col justify-center items-center relative overflow-hidden text-white">
-       		 {/* 背景裝飾皇冠：改成淡淡的白色透明 */}
         	<Crown size={40} className="absolute -right-2 -top-2 text-white/30"/>
-        
-        	{/* 小皇冠圖示：改成白色 */}
         	<Crown size={20} className="text-white mb-1" fill="currentColor"/>
-        
-        	{/* 標題：改中文、放大、加粗 */}
         	<div className="text-lg text-white font-black mb-0 shadow-sm">本場冠軍</div>
-        
-       		 {/* 玩家暱稱 */}
         	<div className="text-sm font-bold truncate w-full text-center mb-1 drop-shadow-md">{champion.nickname}</div>
-        
-        	{/* 報酬率：改成白色大字 */}
         	<div className="text-lg font-mono font-black text-white drop-shadow-md">
             	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(1)}%
                     </div>
@@ -663,7 +652,7 @@ export default function AppBattle() {
         </div>
 
         {fullData.length > 0 && (
-            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-sm border border-slate-200">
+            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-sm border border-slate-200 mb-6">
                 <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-2 text-xs">
                     <Calendar size={14}/> 真實歷史區間
                 </div>
@@ -674,8 +663,30 @@ export default function AppBattle() {
                 </div>
             </div>
         )}
+        
+        {/* ★★★ 3. 插入戰報卡片與下載按鈕 ★★★ */}
+        <ResultCard 
+            ref={resultCardRef} 
+            data={{
+                fundName: fundName,
+                roi: displayRoi,
+                assets: Math.round(totalAssets),
+                duration: `${getRealDate(fullData[startDay]?.date)}~${getRealDate(fullData[currentDay]?.date)}`,
+                nickname: nickname || '匿名戰士',
+                gameType: '多人對戰',
+                dateRange: 'Live Battle'
+            }}
+        />
 
-        <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-8 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
+        <button 
+            onClick={() => handleDownloadReport(fundName)} 
+            className="w-full max-w-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] mb-4"
+        >
+            <Share2 size={18} /> 下載對戰成績卡
+        </button>
+        {/* ★★★ 結束插入 ★★★ */}
+
+        <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-4 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
     </div>
   );
 }

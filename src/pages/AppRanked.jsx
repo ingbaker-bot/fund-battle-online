@@ -99,24 +99,33 @@ export default function AppRanked() {
   // ★★★ 戰報圖片相關邏輯 (放在這裡) ★★★
   const resultCardRef = useRef(null);
 
-  const handleDownloadReport = async () => {
-      if (!resultCardRef.current) return;
+const handleDownloadReport = async () => {
+      // 1. 檢查 Ref 是否抓到元件
+      if (!resultCardRef.current) {
+          alert("錯誤：找不到戰報元件，請確認畫面已載入");
+          console.error("ResultCard Ref is null");
+          return;
+      }
+      
       try {
+          // 2. 加入 useCORS 與 logging 設定
           const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: '#0f172a', 
-              scale: 2, 
+              backgroundColor: null, // 設為 null 以使用 CSS 的漸層背景
+              scale: 3, // 提高解析度 (原本 2 可能不夠清晰)
+              useCORS: true, // ★★★ 關鍵：允許載入跨域圖片 (Logo)
+              logging: true, // 開啟 Log 以便除錯
           });
+
           const image = canvas.toDataURL("image/png");
           const link = document.createElement("a");
           link.href = image;
-          link.download = `fund_battle_report_${currentFundName}.png`;
+          link.download = `fund_report_${currentFundName}.png`;
           link.click();
       } catch (err) {
           console.error("戰報生成失敗:", err);
-          alert("圖片生成失敗，請稍後再試");
+          alert(`圖片生成失敗：${err.message}`);
       }
-  };
-  // ★★★ 結束 ★★★
+  };  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 

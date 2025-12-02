@@ -674,7 +674,7 @@ export default function AppBattle() {
                 duration: `${getRealDate(fullData[startDay]?.date)}~${getRealDate(fullData[currentDay]?.date)}`,
                 nickname: nickname || '匿名戰士',
                 gameType: '多人對戰',
-                dateRange: 'Live Battle'
+                dateRange: `${getRealDate(fullData[startDay]?.date)}~${getRealDate(fullData[currentDay]?.date)}`
             }}
         />
 

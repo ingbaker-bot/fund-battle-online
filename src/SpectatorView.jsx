@@ -1,4 +1,4 @@
-// 2025v10.0 - 主持人端 (階段一：時間設定)
+// 2025v10.0 - 主持人端 (階段一：時間設定A)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';

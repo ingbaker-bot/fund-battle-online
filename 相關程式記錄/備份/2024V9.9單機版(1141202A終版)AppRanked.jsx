@@ -1,17 +1,16 @@
-// 2025v10.0 - 會員版 (含新手引導與測試重置)
+// 2025v9.8 - 會員版 (潔淨部署版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, Mail, MessageCircle, Trophy, Globe, CalendarClock, History, Zap } from 'lucide-react';
+// 移除未使用的 icon 引用，避免 Build Error
+import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap } from 'lucide-react';
 
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
 import { useNavigate } from 'react-router-dom'; 
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
-
-// ★★★ 1. 引入 Joyride ★★★
-import Joyride, { STATUS } from 'react-joyride';
 
 import { 
   checkUserNickname, 
@@ -64,19 +63,23 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     let units = 0;
     let totalInvested = 0;
     let lastRspMonth = -1;
+
     const startDate = new Date(data[startDay].date);
     lastRspMonth = startDate.getFullYear() * 12 + startDate.getMonth() - 1;
+
     for (let i = startDay; i <= endDay; i++) {
         const d = data[i];
         const dateObj = new Date(d.date);
         const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth();
         const dayOfMonth = dateObj.getDate();
+
         if (currentMonth > lastRspMonth && dayOfMonth >= rspDay) {
             units += rspAmount / d.nav;
             totalInvested += rspAmount;
             lastRspMonth = currentMonth;
         }
     }
+    
     if (totalInvested === 0) return 0;
     const finalValue = units * data[endDay].nav;
     return ((finalValue - totalInvested) / totalInvested) * 100;
@@ -90,7 +93,7 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // --- 戰報圖片生成 ---
+  // ★★★ 戰報生成邏輯 (修復版) ★★★
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -98,20 +101,45 @@ export default function AppRanked() {
 
   const handleDownloadReport = async () => {
       if (isGenerating) return;
-      if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
+      if (!resultCardRef.current) {
+          alert("系統錯誤：找不到戰報元件");
+          return;
+      }
+      
       setIsGenerating(true);
+
       try {
-          await new Promise(r => setTimeout(r, 100)); 
-          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
+          // 延遲以確保 UI 渲染
+          await new Promise(r => setTimeout(r, 100));
+
+          const canvas = await html2canvas(resultCardRef.current, {
+              backgroundColor: null, 
+              scale: 3, 
+              useCORS: true,
+              logging: false,
+              ignoreElements: (el) => el.tagName === 'IMG' && !el.complete 
+          });
+
           canvas.toBlob((blob) => {
-              if (!blob) { alert("生成圖片失敗"); setIsGenerating(false); return; }
+              if (!blob) {
+                  alert("生成圖片失敗 (Blob is null)");
+                  setIsGenerating(false);
+                  return;
+              }
               const url = URL.createObjectURL(blob);
               setGeneratedImage(url);
               setShowImageModal(true);
               setIsGenerating(false);
           }, 'image/png');
-      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
+
+      } catch (err) {
+          console.error(err);
+          // 顯示詳細錯誤，不再是 undefined
+          alert(`發生錯誤：${err?.message || '未知錯誤'}`);
+          setIsGenerating(false);
+      }
   };
+  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
@@ -163,52 +191,18 @@ export default function AppRanked() {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [detectedEnv, setDetectedEnv] = useState('Browser');
 
-  // ★★★ 2. 新手引導狀態與設定 ★★★
-  const [runTour, setRunTour] = useState(false);
-  const steps = [
-    {
-        target: 'body',
-        placement: 'center',
-        title: '歡迎來到 Fund 手遊！',
-        content: '這是一個模擬真實基金市場的挑戰遊戲。你的目標是：透過買賣操作，讓你的獲利超越大盤！準備好接受挑戰了嗎？',
-        disableBeacon: true,
-    },
-    {
-        target: '.tour-assets',
-        content: '這裡顯示你的「總資產」與「現金」。隨時留意你的水位，不要輕易讓子彈打光喔！',
-    },
-    {
-        target: '.tour-indicators',
-        content: '迷惘了嗎？這裡可以開啟「月線」、「季線」或「河流圖」，輔助你判斷趨勢。',
-    },
-    {
-        target: '.tour-controls',
-        content: '這是你的控制台。按下「買進」或「賣出」來進行交易，也可以用「自動」來加速時間流逝。',
-        placement: 'top',
-    },
-    {
-        target: '.tour-chart',
-        content: '這是 K 線圖與淨值走勢。拖曳或點擊可以看到詳細資訊。祝你操作順利，成為股海狼人！',
-    }
-  ];
-
-  // 處理引導結束的回呼
-  const handleJoyrideCallback = (data) => {
-    const { status } = data;
-    if ([STATUS.FINISHED, STATUS.SKIPPED].includes(status)) {
-      setRunTour(false);
-      localStorage.setItem('hasSeenTutorial_v1', 'true'); // 標記已看過
-    }
-  };
-
   const autoPlayRef = useRef(null);
 
-  // --- Effects ---
+  // ... (Firebase Auth & Data Loading Effects 省略，保持原樣)
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
-          setUser(u); setAuthLoading(false);
-          if (u) { const nick = await checkUserNickname(u.uid); if (nick) setMyNickname(nick); }
+          setUser(u); 
+          setAuthLoading(false);
+          if (u) {
+             const nick = await checkUserNickname(u.uid);
+             if (nick) setMyNickname(nick);
+          }
       });
       return () => unsubscribe();
   }, []);
@@ -219,23 +213,36 @@ export default function AppRanked() {
   }, []);
 
   useEffect(() => {
-    const data = generateRandomData(30); setFullData(data); setCurrentDay(260); setIsReady(true);
+    const data = generateRandomData(30);
+    setFullData(data);
+    setCurrentDay(260);
+    setIsReady(true);
     const ua = (navigator.userAgent || navigator.vendor || window.opera || "").toLowerCase();
-    if (ua.indexOf('line') > -1) setDetectedEnv('Line'); else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook'); else setDetectedEnv('Browser');
+    if (ua.indexOf('line') > -1) setDetectedEnv('Line');
+    else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook');
+    else setDetectedEnv('Browser');
   }, []);
 
+  // ... (Game Logic Effects: RSP, End Game check 省略，保持原樣)
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
-          const currentData = fullData[currentDay]; if (!currentData) return;
-          const dateObj = new Date(currentData.date); const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth(); const dayOfMonth = dateObj.getDate();
+          const currentData = fullData[currentDay];
+          if (!currentData) return;
+          const dateObj = new Date(currentData.date);
+          const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth();
+          const dayOfMonth = dateObj.getDate();
           if (currentMonth > lastRspMonth && dayOfMonth >= rspConfig.day) {
               if (cash >= rspConfig.amount) {
-                  const buyUnits = rspConfig.amount / currentData.nav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + rspConfig.amount) / newTotalUnits;
+                  const buyUnits = rspConfig.amount / currentData.nav;
+                  const newTotalUnits = units + buyUnits;
+                  const newAvgCost = (units * avgCost + rspConfig.amount) / newTotalUnits;
                   setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - rspConfig.amount);
                   setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'RSP', price: currentData.nav, units: buyUnits, amount: rspConfig.amount, balance: cash - rspConfig.amount }, ...prev]);
-                  setLastRspMonth(currentMonth); if (units === 0) setHighestNavSinceBuy(currentData.nav);
+                  setLastRspMonth(currentMonth);
+                  if (units === 0) setHighestNavSinceBuy(currentData.nav);
               } else {
-                  setRspConfig(prev => ({ ...prev, enabled: false })); setShowRspAlert(true); setTimeout(() => setShowRspAlert(false), 3000);
+                  setRspConfig(prev => ({ ...prev, enabled: false }));
+                  setShowRspAlert(true); setTimeout(() => setShowRspAlert(false), 3000);
                   if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); }
               }
           }
@@ -244,51 +251,76 @@ export default function AppRanked() {
 
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0) {
-          if (currentDay >= fullData.length - 1) { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setGameStatus('ended'); }
+          if (currentDay >= fullData.length - 1) {
+              if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); }
+              setGameStatus('ended');
+          }
       }
   }, [currentDay, fullData, gameStatus, isAutoPlaying]);
 
-  // ★★★ 3. 啟動教學 (只在進入 playing 狀態且沒看過時觸發) ★★★
-  useEffect(() => {
-      if (gameStatus === 'playing') {
-          const hasSeen = localStorage.getItem('hasSeenTutorial_v1');
-          if (!hasSeen) {
-              // 延遲一下讓畫面 render 完畢再開始
-              setTimeout(() => setRunTour(true), 1000);
-          }
-      }
-  }, [gameStatus]);
-
-  // --- Calculations ---
+  // ... (Calculations: currentNav, getDisplayDate, ROI, ChartData ... 省略，保持原樣)
   const currentNav = fullData[currentDay]?.nav || 10;
-  const getDisplayDate = (dateStr) => { if (!dateStr || dataSourceType === 'random') return dateStr; const dateObj = new Date(dateStr); if (isNaN(dateObj.getTime())) return dateStr; const newYear = dateObj.getFullYear() + timeOffset; const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const day = String(dateObj.getDate()).padStart(2, '0'); return `${newYear}-${month}-${day}`; };
-  const benchmarkRoi = useMemo(() => { if (!benchmarkStartNav || benchmarkStartNav === 0) return 0; return ((currentNav - benchmarkStartNav) / benchmarkStartNav) * 100; }, [currentNav, benchmarkStartNav]);
-  const pureRspRoi = useMemo(() => { if (gameStatus !== 'ended') return 0; return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day); }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
+  const getDisplayDate = (dateStr) => {
+      if (!dateStr || dataSourceType === 'random') return dateStr;
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj.getTime())) return dateStr;
+      const newYear = dateObj.getFullYear() + timeOffset;
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${newYear}-${month}-${day}`;
+  };
+  const benchmarkRoi = useMemo(() => {
+      if (!benchmarkStartNav || benchmarkStartNav === 0) return 0;
+      return ((currentNav - benchmarkStartNav) / benchmarkStartNav) * 100;
+  }, [currentNav, benchmarkStartNav]);
+  const pureRspRoi = useMemo(() => {
+      if (gameStatus !== 'ended') return 0;
+      return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
+  }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
   
   const chartDataInfo = useMemo(() => {
     if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
-    const start = Math.max(0, currentDay - chartPeriod); const end = currentDay + 1;
+    const start = Math.max(0, currentDay - chartPeriod);
+    const end = currentDay + 1;
     const slice = fullData.slice(start, end).map((d, idx) => {
-        const realIdx = start + idx; const ind20 = calculateIndicators(fullData, 20, realIdx); const ind60 = calculateIndicators(fullData, 60, realIdx);
-        const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev; let riverTop = null; let riverBottom = null;
-        if (ma60) { if (riverMode === 'fixed') { const ratio = riverWidthInput / 100; riverTop = ma60 * (1 + ratio); riverBottom = ma60 * (1 - ratio); } else { if (stdDev60) { riverTop = ma60 + (stdDev60 * riverSDMultiplier); riverBottom = ma60 - (stdDev60 * riverSDMultiplier); } } }
+        const realIdx = start + idx;
+        const ind20 = calculateIndicators(fullData, 20, realIdx);
+        const ind60 = calculateIndicators(fullData, 60, realIdx);
+        const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev;
+        let riverTop = null; let riverBottom = null;
+        if (ma60) {
+            if (riverMode === 'fixed') { const ratio = riverWidthInput / 100; riverTop = ma60 * (1 + ratio); riverBottom = ma60 * (1 - ratio); } 
+            else { if (stdDev60) { riverTop = ma60 + (stdDev60 * riverSDMultiplier); riverBottom = ma60 - (stdDev60 * riverSDMultiplier); } }
+        }
         return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom };
     });
     let min = Infinity, max = -Infinity;
-    slice.forEach(d => { const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null]; values.forEach(v => { if (v !== null && !isNaN(v)) { if (v < min) min = v; if (v > max) max = v; } }); });
+    slice.forEach(d => {
+        const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null];
+        values.forEach(v => { if (v !== null && !isNaN(v)) { if (v < min) min = v; if (v > max) max = v; } });
+    });
     if (min === Infinity) min = 0;
     const stopLossPrice = (units > 0 && highestNavSinceBuy > 0) ? highestNavSinceBuy * (1 - (customStopLossInput / 100)) : null;
     let finalMin = min, finalMax = max;
     if (stopLossPrice !== null) { if (stopLossPrice < finalMin) finalMin = stopLossPrice; if (highestNavSinceBuy > finalMax) finalMax = highestNavSinceBuy; }
-    const padding = (finalMax - finalMin) * 0.1; const domainMin = Math.max(0, Math.floor(finalMin - padding)); const domainMax = Math.ceil(finalMax + padding);
+    const padding = (finalMax - finalMin) * 0.1; 
+    const domainMin = Math.max(0, Math.floor(finalMin - padding));
+    const domainMax = Math.ceil(finalMax + padding);
     return { data: slice, domain: [domainMin, domainMax], stopLossPrice };
   }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset]);
 
   const totalAssets = cash + (units * currentNav);
   const roi = initialCapital > 0 ? ((totalAssets - initialCapital) / initialCapital) * 100 : 0;
 
-  useEffect(() => { if (units > 0) { if (currentNav > highestNavSinceBuy) setHighestNavSinceBuy(currentNav); const stopPrice = highestNavSinceBuy * (1 - (customStopLossInput / 100)); setWarningActive(highestNavSinceBuy > 0 && currentNav < stopPrice); } else { setHighestNavSinceBuy(0); setWarningActive(false); } }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
+  useEffect(() => {
+    if (units > 0) {
+      if (currentNav > highestNavSinceBuy) setHighestNavSinceBuy(currentNav);
+      const stopPrice = highestNavSinceBuy * (1 - (customStopLossInput / 100));
+      setWarningActive(highestNavSinceBuy > 0 && currentNav < stopPrice);
+    } else { setHighestNavSinceBuy(0); setWarningActive(false); }
+  }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
 
+  // ... (Game Actions: login, logout, start, trade ... 省略，保持原樣)
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
   const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
@@ -299,8 +331,14 @@ export default function AppRanked() {
     if (dataSourceType === 'real') {
         const selectedFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId); setGameStatus('loading_data');
         try {
-            const response = await fetch(selectedFund.file); if (!response.ok) throw new Error("找不到數據檔案");
-            const rawData = await response.json(); if (rawData && rawData.length > 5) { data = processRealData(rawData); fundName = selectedFund.name; const minStart = 60; const maxStart = Math.max(minStart, data.length - 250); startDay = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart; } else { throw new Error("數據過少"); }
+            const response = await fetch(selectedFund.file);
+            if (!response.ok) throw new Error("找不到數據檔案");
+            const rawData = await response.json();
+            if (rawData && rawData.length > 5) {
+                 data = processRealData(rawData); fundName = selectedFund.name;
+                 const minStart = 60; const maxStart = Math.max(minStart, data.length - 250);
+                 startDay = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart;
+            } else { throw new Error("數據過少"); }
         } catch (error) { alert(`讀取失敗：${error.message}`); data = generateRandomData(30); startDay = 260; fundName = "隨機模擬基金"; }
     } else { data = generateRandomData(30); startDay = 260; fundName = "隨機模擬基金"; }
     setRankUploadStatus('idle'); setFullData(data); setCash(initialCapital); setCurrentDay(startDay); 
@@ -309,28 +347,7 @@ export default function AppRanked() {
     setCurrentFundName(fundName); setGameStatus('playing');
   };
 
-  // ★★★ 4. 測試用重置：同時清除 localStorage 讓教學重現 ★★★
-  const executeReset = () => { 
-      setConfirmModal({ show: false, type: null }); 
-      setShowShareMenu(false); 
-      clearInterval(autoPlayRef.current); 
-      setIsAutoPlaying(false); 
-      setTradeMode(null); 
-      setShowRiver(false); 
-      setUnits(0); 
-      setAvgCost(0); 
-      setTransactions([]); 
-      setHighestNavSinceBuy(0); 
-      setBenchmarkStartNav(null); 
-      setRealStartDay(0); 
-      setTimeOffset(0); 
-      
-      // 清除教學紀錄 (測試用)
-      localStorage.removeItem('hasSeenTutorial_v1'); 
-      
-      setGameStatus('setup'); 
-  };
-
+  const executeReset = () => { setConfirmModal({ show: false, type: null }); setShowShareMenu(false); clearInterval(autoPlayRef.current); setIsAutoPlaying(false); setTradeMode(null); setShowRiver(false); setUnits(0); setAvgCost(0); setTransactions([]); setHighestNavSinceBuy(0); setBenchmarkStartNav(null); setRealStartDay(0); setTimeOffset(0); setGameStatus('setup'); };
   const executeEndGame = () => { setConfirmModal({ show: false, type: null }); setGameStatus('ended'); };
   const executeExit = () => { setConfirmModal({ show: false, type: null }); setGameStatus('shutdown'); };
   
@@ -439,14 +456,33 @@ export default function AppRanked() {
             <div className="flex justify-center mb-4 text-emerald-500"><Activity size={56} strokeWidth={1.5} /></div>
             <h1 className="text-3xl font-bold text-center mb-2 tracking-tight text-slate-800">Fund 手遊</h1>
             <div className="mb-6 mt-4"><button onClick={() => window.location.href = '/competition'} className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"><Sword size={20} className="group-hover:rotate-12 transition-transform"/> 前往 S1 賽季競技場</button><p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p></div>
+            
             {tickerData.length > 0 && (<div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+
             <div className="flex items-center justify-center gap-2 mb-4"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label><input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4"><div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>{rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}</div>
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">選擇挑戰項目</label><div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
+            
+            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label>
+            <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
+            
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
+                <div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>
+                {rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}
+            </div>
+
+            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">選擇挑戰項目</label>
+            <div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
+
             {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><div className="flex items-center justify-between mb-3 text-blue-600"><div className="flex items-center gap-2"><Waves size={18} /><span className="text-sm font-bold uppercase tracking-wider">河流圖參數</span></div><span className="text-xs bg-blue-100 px-2 py-0.5 rounded text-blue-600 border border-blue-200">N=60 (季線)</span></div><div className="flex gap-2 mb-3"><button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>固定 %</button><button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>動態標準差</button></div><div className="flex items-center bg-white border border-slate-300 rounded-lg px-4 py-2 shadow-sm">{riverMode === 'fixed' ? (<><span className="text-sm text-slate-500 mr-3 font-bold">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">%</span></>) : (<><span className="text-sm text-slate-500 mr-3 font-bold" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">SD</span></>)}</div></div>
-            <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">停損設定 (%)</label><div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8 shadow-inner"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-slate-800 focus:outline-none"/><span className="text-slate-500 font-bold px-4 text-lg">%</span></div>
+            
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
+                <div className="flex items-center justify-between mb-3 text-blue-600"><div className="flex items-center gap-2"><Waves size={18} /><span className="text-sm font-bold uppercase tracking-wider">河流圖參數</span></div><span className="text-xs bg-blue-100 px-2 py-0.5 rounded text-blue-600 border border-blue-200">N=60 (季線)</span></div>
+                <div className="flex gap-2 mb-3"><button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>固定 %</button><button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>動態標準差</button></div>
+                <div className="flex items-center bg-white border border-slate-300 rounded-lg px-4 py-2 shadow-sm">{riverMode === 'fixed' ? (<><span className="text-sm text-slate-500 mr-3 font-bold">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">%</span></>) : (<><span className="text-sm text-slate-500 mr-3 font-bold" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">SD</span></>)}</div>
+            </div>
+
+            <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">停損設定 (%)</label>
+            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8 shadow-inner"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-slate-800 focus:outline-none"/><span className="text-slate-500 font-bold px-4 text-lg">%</span></div>
+
             <button onClick={startGame} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl text-xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Play size={24} fill="currentColor" /> 開始挑戰</button>
             <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v1.3 版權所有 NBS-奈AI團隊</span></div>
         </div>
@@ -459,35 +495,13 @@ export default function AppRanked() {
   // Game Playing Screen
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
-        {/* ★★★ 5. 加入 Joyride 元件 (固定不變) ★★★ */}
-        <Joyride
-            steps={steps}
-            run={runTour}
-            continuous
-            showSkipButton
-            styles={{
-                options: {
-                    primaryColor: '#10b981', // Emerald 500
-                    zIndex: 10000,
-                }
-            }}
-            callback={handleJoyrideCallback}
-            locale={{
-                back: '上一步',
-                close: '關閉',
-                last: '開始挑戰',
-                next: '下一步',
-                skip: '跳過教學'
-            }}
-        />
-
         <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-14 z-30 relative shadow-sm">
             <button onClick={triggerExit} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200 active:scale-95 transition-all font-bold"><LogOut size={14} /> 離開</button>
             <div className="flex flex-col items-center"><span className="text-[10px] text-slate-400 max-w-[140px] truncate font-bold">{currentFundName}</span><span className={`text-base font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span></div>
-            <div className="flex gap-2 tour-indicators"><button onClick={toggleFullscreen} className="p-2 rounded hover:bg-slate-100 text-slate-500"><Maximize size={18} /></button><button onClick={triggerEndGame} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm hover:bg-emerald-100 active:scale-95 transition-all font-bold"><Flag size={14} /> 結算</button></div>
+            <div className="flex gap-2"><button onClick={toggleFullscreen} className="p-2 rounded hover:bg-slate-100 text-slate-500"><Maximize size={18} /></button><button onClick={triggerEndGame} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm hover:bg-emerald-100 active:scale-95 transition-all font-bold"><Flag size={14} /> 結算</button></div>
         </header>
 
-        <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0 tour-chart" style={{ height: '50%' }}>
+        <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
             <div className="absolute top-3 left-4 z-0 pointer-events-none">
                 <div className="flex items-baseline gap-3"><span className="text-4xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">${currentNav.toFixed(2)}</span><span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">{getDisplayDate(getSafeDate(currentDay))}{timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span></div>
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
@@ -516,12 +530,12 @@ export default function AppRanked() {
         </div>
 
         <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
-            <div className="flex justify-between px-5 py-2 bg-slate-50 border-b border-slate-200 text-xs tour-assets">
+            <div className="flex justify-between px-5 py-2 bg-slate-50 border-b border-slate-200 text-xs">
                 <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-base ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
                 <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={14} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-base">${Math.round(cash).toLocaleString()}</span></div>
             </div>
             
-            <div className="grid grid-cols-4 gap-2 p-3 bg-white tour-controls">
+            <div className="grid grid-cols-4 gap-2 p-3 bg-white">
                 <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={20} className="text-slate-400"/> 觀望</button>
                 <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={20} /> 買進</button>
                 <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={20} /> 賣出</button>
@@ -604,6 +618,7 @@ export default function AppRanked() {
             <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
                     <div className="text-white text-center"><h3 className="text-xl font-bold mb-1">戰報已生成！</h3><p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p></div>
+                    {/* 這裡確保 src 有值才會顯示 */}
                     {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
                     <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>

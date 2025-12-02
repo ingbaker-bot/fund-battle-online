@@ -1072,7 +1072,27 @@ export default function AppRanked() {
                         {showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}
                     </button>
                     
+{/* 1. 放入隱藏的戰報卡片元件，將當前數據傳入 */}
+<ResultCard 
+    ref={resultCardRef} 
+    data={{
+        fundName: currentFundName,
+        roi: roi,
+        assets: Math.round(totalAssets),
+        duration: getDurationString(),
+        nickname: myNickname || user.email.split('@')[0],
+        gameType: '個人挑戰賽 S1',
+        dateRange: `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}`
+    }}
+/>
 
+{/* 2. 修改原本的分享按鈕，或新增一個按鈕 */}
+<button 
+    onClick={handleDownloadReport} 
+    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]"
+>
+    <Share2 size={18} /> 下載戰績圖卡
+</button>
                     <div className="h-6"></div>
                     
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">

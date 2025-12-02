@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "firebase": "^12.6.0",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.554.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",

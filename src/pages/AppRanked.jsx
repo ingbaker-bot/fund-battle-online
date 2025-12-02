@@ -1,3 +1,4 @@
+// 2025v9.5 - 會員版
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // V2025v1.3: 引入需要的 Icons (新增 Zap, LogIn)
@@ -10,6 +11,9 @@ import { auth } from '../config/firebase';
 import { FUNDS_LIBRARY } from '../config/funds';
 // 找到這一行，加入 useNavigate
 import { useNavigate } from 'react-router-dom'; // ★ 新增這行
+import html2canvas from 'html2canvas';
+import ResultCard from '../components/ResultCard'; // 假設路徑
+import { useRef } from 'react'; // 記得從 react 引入 useRef
 
 import { 
   checkUserNickname, 
@@ -18,6 +22,35 @@ import {
   getLeaderboard, 
   getTickerData 
 } from '../services/firestoreService';
+
+const resultCardRef = useRef(null);
+
+const handleDownloadReport = async () => {
+    if (!resultCardRef.current) return;
+
+    try {
+        // 開始截圖
+        const canvas = await html2canvas(resultCardRef.current, {
+            backgroundColor: '#0f172a', // 背景色 (對應 bg-slate-900)
+            scale: 2, // 提高解析度，讓圖片更清晰
+        });
+
+        // 轉成圖片連結
+        const image = canvas.toDataURL("image/png");
+
+        // 觸發下載
+        const link = document.createElement("a");
+        link.href = image;
+        link.download = `fund_battle_report_${currentFundName}.png`;
+        link.click();
+
+    } catch (err) {
+        console.error("戰報生成失敗:", err);
+        alert("圖片生成失敗，請稍後再試");
+    }
+};
+
+
 
 // --- Helper Functions ---
 const generateRandomData = (years = 30) => {
@@ -1038,6 +1071,28 @@ export default function AppRanked() {
                         {showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}
                     </button>
                     
+{/* 1. 放入隱藏的戰報卡片元件，將當前數據傳入 */}
+<ResultCard 
+    ref={resultCardRef} 
+    data={{
+        fundName: currentFundName,
+        roi: roi,
+        assets: Math.round(totalAssets),
+        duration: getDurationString(),
+        nickname: myNickname || user.email.split('@')[0],
+        gameType: '個人挑戰賽 S1',
+        dateRange: `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}`
+    }}
+/>
+
+{/* 2. 修改原本的分享按鈕，或新增一個按鈕 */}
+<button 
+    onClick={handleDownloadReport} 
+    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]"
+>
+    <Share2 size={18} /> 下載戰績圖卡
+</button>
+
                     <div className="h-6"></div>
                     
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">

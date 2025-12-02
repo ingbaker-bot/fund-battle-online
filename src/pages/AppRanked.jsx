@@ -1,7 +1,6 @@
-// 2025v9.8 - 會員版 (潔淨部署版)
+// 2025v9.8.1 - 會員版 (還原版：保留戰報下載，移除新手引導)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// 移除未使用的 icon 引用，避免 Build Error
 import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap } from 'lucide-react';
 
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
@@ -11,6 +10,8 @@ import { FUNDS_LIBRARY } from '../config/funds';
 import { useNavigate } from 'react-router-dom'; 
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
+
+// 已移除 Joyride 相關引用
 
 import { 
   checkUserNickname, 
@@ -93,7 +94,7 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // ★★★ 戰報生成邏輯 (修復版) ★★★
+  // ★★★ 戰報圖片生成邏輯 (保留預覽功能) ★★★
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -109,7 +110,6 @@ export default function AppRanked() {
       setIsGenerating(true);
 
       try {
-          // 延遲以確保 UI 渲染
           await new Promise(r => setTimeout(r, 100));
 
           const canvas = await html2canvas(resultCardRef.current, {
@@ -134,7 +134,6 @@ export default function AppRanked() {
 
       } catch (err) {
           console.error(err);
-          // 顯示詳細錯誤，不再是 undefined
           alert(`發生錯誤：${err?.message || '未知錯誤'}`);
           setIsGenerating(false);
       }
@@ -193,7 +192,7 @@ export default function AppRanked() {
 
   const autoPlayRef = useRef(null);
 
-  // ... (Firebase Auth & Data Loading Effects 省略，保持原樣)
+  // --- Effects ---
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
@@ -223,7 +222,6 @@ export default function AppRanked() {
     else setDetectedEnv('Browser');
   }, []);
 
-  // ... (Game Logic Effects: RSP, End Game check 省略，保持原樣)
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
@@ -258,7 +256,7 @@ export default function AppRanked() {
       }
   }, [currentDay, fullData, gameStatus, isAutoPlaying]);
 
-  // ... (Calculations: currentNav, getDisplayDate, ROI, ChartData ... 省略，保持原樣)
+  // --- Calculations ---
   const currentNav = fullData[currentDay]?.nav || 10;
   const getDisplayDate = (dateStr) => {
       if (!dateStr || dataSourceType === 'random') return dateStr;
@@ -320,7 +318,6 @@ export default function AppRanked() {
     } else { setHighestNavSinceBuy(0); setWarningActive(false); }
   }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
 
-  // ... (Game Actions: login, logout, start, trade ... 省略，保持原樣)
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
   const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
@@ -564,7 +561,7 @@ export default function AppRanked() {
         
         {showRankModal && (<div className="absolute inset-0 bg-slate-900/50 z-[70] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"><div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Trophy size={18} className="text-amber-500"/> 排行榜</h3><button onClick={() => setShowRankModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">{rankUploadStatus === 'asking_nick' && (<div className="text-center py-6"><User size={48} className="mx-auto text-emerald-500 mb-4"/><h4 className="text-xl font-bold text-slate-800 mb-2">初次見面！</h4><p className="text-slate-500 text-sm mb-6">請輸入您在江湖上的稱號 (日後將無法修改)</p><input type="text" value={inputNickname} onChange={e => setInputNickname(e.target.value)} placeholder="例如：股海小童" className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4" maxLength={12} /><button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">確認並上傳成績</button></div>)}{rankUploadStatus === 'uploading' && (<div className="flex flex-col items-center justify-center py-10"><Loader2 size={40} className="animate-spin text-emerald-500 mb-4"/><p className="text-slate-500">正在將您的戰績刻入石碑...</p></div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length > 0 && (<div className="space-y-2"><div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1"><span>排名 / 玩家</span><span>報酬率</span></div>{leaderboardData.map((entry, idx) => { const years = Math.floor(entry.durationMonths / 12); const months = entry.durationMonths % 12; const durationStr = years > 0 ? `${years}年${months}月` : `${months}個月`; return (<div key={entry.id} className={`flex justify-between items-center p-3 rounded-lg border ${entry.uid === user.uid ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>{idx + 1}</div><div className="flex flex-col"><span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>{entry.displayName}</span><span className="text-[10px] text-slate-400">{entry.fundName.substring(0, 10)}</span></div></div><div className="text-right"><div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{entry.roi > 0 ? '+' : ''}{entry.roi}%</div><div className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><span>${(entry.finalAssets/10000).toFixed(0)}萬</span><span className="text-slate-300">|</span><span className="text-slate-400">{durationStr}</span></div></div></div>); })}</div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && <div className="text-center py-10 text-slate-500">暫無排名資料，快來搶頭香！</div>}</div></div></div>)}
 
-        {/* 結算畫面 (Final Modal) */}
+        {/* 結算畫面 (Final Modal) - 含下載功能 */}
         {gameStatus === 'ended' && (
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100"><Activity size={56} className="text-emerald-500" /></div>
@@ -592,7 +589,7 @@ export default function AppRanked() {
                         }}
                     />
 
-                    {/* ★★★ 修正後的下載按鈕：綁定 isGenerating ★★★ */}
+                    {/* ★★★ 戰報下載按鈕 (預覽模式) ★★★ */}
                     <button 
                         onClick={handleDownloadReport} 
                         disabled={isGenerating}
@@ -613,12 +610,14 @@ export default function AppRanked() {
 
         {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
 
-        {/* ★★★ 圖片預覽 Modal (黑屏修復版) ★★★ */}
+        {/* ★★★ 圖片預覽 Modal (修正版：黑色背景彈窗) ★★★ */}
         {showImageModal && (
-            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
-                    <div className="text-white text-center"><h3 className="text-xl font-bold mb-1">戰報已生成！</h3><p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p></div>
-                    {/* 這裡確保 src 有值才會顯示 */}
+                    <div className="text-white text-center">
+                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
+                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+                    </div>
                     {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
                     <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>

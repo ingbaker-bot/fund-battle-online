@@ -1,7 +1,6 @@
 // 2025v9.5 - 會員版
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// V2025v1.3: 引入需要的 Icons (新增 Zap, LogIn)
 import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, ExternalLink, FileSpreadsheet, Share2, Mail, MessageCircle, Monitor, Trophy, Globe, User, Sword, CalendarClock, History, Settings2, Zap } from 'lucide-react';
 
 import { initializeApp } from "firebase/app";
@@ -9,10 +8,9 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from
 
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
-// 找到這一行，加入 useNavigate
-import { useNavigate } from 'react-router-dom'; // ★ 新增這行
+import { useNavigate } from 'react-router-dom'; 
 import html2canvas from 'html2canvas';
-import ResultCard from '../components/ResultCard'; // 假設路徑
+import ResultCard from '../components/ResultCard'; 
 
 import { 
   checkUserNickname, 
@@ -21,9 +19,6 @@ import {
   getLeaderboard, 
   getTickerData 
 } from '../services/firestoreService';
-
-
-
 
 // --- Helper Functions ---
 const generateRandomData = (years = 30) => {
@@ -63,14 +58,12 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)), stdDev: parseFloat(stdDev.toFixed(2)) };
 };
 
-// 2025v1.3: 計算純定期定額報酬率
 const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     if (!data || startDay >= endDay) return 0;
     let units = 0;
     let totalInvested = 0;
     let lastRspMonth = -1;
 
-    // 初始化 lastRspMonth 為開始前一個月
     const startDate = new Date(data[startDay].date);
     lastRspMonth = startDate.getFullYear() * 12 + startDate.getMonth() - 1;
 
@@ -101,9 +94,29 @@ export default function AppRanked() {
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(true); 
-  const navigate = useNavigate(); // ★ 新增這行
+  const navigate = useNavigate();
 
+  // ★★★ 戰報圖片相關邏輯 (放在這裡) ★★★
+  const resultCardRef = useRef(null);
 
+  const handleDownloadReport = async () => {
+      if (!resultCardRef.current) return;
+      try {
+          const canvas = await html2canvas(resultCardRef.current, {
+              backgroundColor: '#0f172a', 
+              scale: 2, 
+          });
+          const image = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = image;
+          link.download = `fund_battle_report_${currentFundName}.png`;
+          link.click();
+      } catch (err) {
+          console.error("戰報生成失敗:", err);
+          alert("圖片生成失敗，請稍後再試");
+      }
+  };
+  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
@@ -111,30 +124,7 @@ export default function AppRanked() {
   const [showRankModal, setShowRankModal] = useState(false); 
   const [rankUploadStatus, setRankUploadStatus] = useState('idle'); 
   const [inputNickname, setInputNickname] = useState(''); 
-  const resultCardRef = useRef(null);
 
-  const handleDownloadReport = async () => {
-      // 這裡才能讀取到 currentFundName 這個 state
-      if (!resultCardRef.current) return;
-
-      try {
-          const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: '#0f172a', 
-              scale: 2, 
-          });
-
-          const image = canvas.toDataURL("image/png");
-          const link = document.createElement("a");
-          link.href = image;
-          link.download = `fund_battle_report_${currentFundName}.png`; // 這裡讀取 state
-          link.click();
-
-      } catch (err) {
-          console.error("戰報生成失敗:", err);
-          alert("圖片生成失敗，請稍後再試");
-      }
-  };
-  // ★★★ 修正結束 ★★★
   const [fullData, setFullData] = useState([]);
   const [currentDay, setCurrentDay] = useState(0);
   const [gameStatus, setGameStatus] = useState('setup'); 
@@ -146,10 +136,7 @@ export default function AppRanked() {
   const [units, setUnits] = useState(0);
   const [avgCost, setAvgCost] = useState(0);
   const [transactions, setTransactions] = useState([]);
-
-
   
-  // 2025v1.3: 新增狀態 (Benchmark, TimeOffset, RSP)
   const [benchmarkStartNav, setBenchmarkStartNav] = useState(null);
   const [timeOffset, setTimeOffset] = useState(0); 
   const [realStartDay, setRealStartDay] = useState(0);
@@ -220,7 +207,6 @@ export default function AppRanked() {
     else setDetectedEnv('Standard Browser');
   }, []);
 
-  // 2025v1.3: RSP 自動扣款邏輯
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
@@ -275,7 +261,6 @@ export default function AppRanked() {
 
   const currentNav = fullData[currentDay]?.nav || 10;
   
-  // 2025v1.3: 日期偽裝
   const getDisplayDate = (dateStr) => {
       if (!dateStr || dataSourceType === 'random') return dateStr;
       const dateObj = new Date(dateStr);
@@ -346,7 +331,6 @@ export default function AppRanked() {
     let data; 
     let startDay = 0; 
     let fundName = "模擬基金";
-    // 2025v1.3: 生成隨機年份偏移
     const randomTimeOffset = Math.floor(Math.random() * 51) + 50;
     setTimeOffset(randomTimeOffset);
 
@@ -360,12 +344,9 @@ export default function AppRanked() {
             if (rawData && rawData.length > 5) {
                  data = processRealData(rawData);
                  fundName = selectedFund.name;
-                 
-                 // 2025v1.3: 隨機歷史切入點
                  const minStart = 60;
                  const maxStart = Math.max(minStart, data.length - 250);
                  startDay = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart;
-                 
             } else {
                  throw new Error("數據過少");
             }
@@ -383,11 +364,9 @@ export default function AppRanked() {
     setRankUploadStatus('idle');
     setFullData(data); setCash(initialCapital); setCurrentDay(startDay); 
     
-    // 2025v1.3: 設定 Benchmark 
     setRealStartDay(startDay);
     if (data && data[startDay]) {
         setBenchmarkStartNav(data[startDay].nav);
-        // 2025v1.3: 設定 RSP 初始月份
         const sd = new Date(data[startDay].date);
         setLastRspMonth(sd.getFullYear() * 12 + sd.getMonth() - 1);
     }
@@ -603,8 +582,6 @@ export default function AppRanked() {
                   <div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div>
                   <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button>
               </form>
-
-              {/* ★★★ 新增：快速前往現場對戰按鈕 ★★★ */}
               <div className="mt-6 pt-6 border-t border-slate-100">
                   <button 
                       onClick={() => navigate('/battle')}
@@ -614,7 +591,6 @@ export default function AppRanked() {
                       我是現場參賽者 (輸入房號)
                   </button>
               </div>
-
               {authError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-500 text-xs text-center">{authError}</div>}
           </div>
       </div>
@@ -622,7 +598,6 @@ export default function AppRanked() {
 
   if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-300 rounded hover:bg-white hover:text-slate-800 transition-colors">重啟電源</button></div> );
   
-  // 設定畫面 (Setup) - 淺色版 + 2025v1.3 RSP 設定
   if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
@@ -664,7 +639,6 @@ export default function AppRanked() {
             <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label>
             <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
             
-            {/* 2025v1.3: 定期定額設定區塊 */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
                 <div className="flex items-center justify-between mb-3 text-indigo-600">
                     <div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
@@ -746,7 +720,7 @@ export default function AppRanked() {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
 
-  // Game Playing Screen - 淺色版
+  // Game Playing Screen
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
         <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-14 z-30 relative shadow-sm">
@@ -779,7 +753,6 @@ export default function AppRanked() {
             
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
-                    {/* 按鈕顏色修正: 月線(淺藍), 季線(深藍) */}
                     <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
                     <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
                     <button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button>
@@ -820,7 +793,6 @@ export default function AppRanked() {
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} width={40} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         
-                        {/* 線條顏色修正: 月線(淺藍), 季線(深藍), 淨值(黑) */}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
@@ -831,12 +803,10 @@ export default function AppRanked() {
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
         </div>
 
-        {/* Control Panel - 淺色版 */}
         <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
             <div className="flex justify-between px-5 py-2 bg-slate-50 border-b border-slate-200 text-xs">
                 <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-base ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
                 
-                {/* 2025v1.3: RSP 開關 (中文 + 高對比) */}
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))}
@@ -880,7 +850,6 @@ export default function AppRanked() {
                             {t.type === 'BUY' ? '買進' : (t.type === 'RSP' ? '定額' : '賣出')}
                         </span>
                         <div className="flex flex-col">
-                            {/* 顯示偽裝日期 */}
                             <span className="text-slate-700 font-mono font-bold">{getDisplayDate(getSafeDate(t.day))}</span>
                             <span className="text-slate-400 text-[10px]">{t.type !== 'SELL' ? `$${t.amount.toLocaleString()}` : `${parseFloat(t.units).toFixed(2)} 單位`}</span>
                         </div>
@@ -893,7 +862,6 @@ export default function AppRanked() {
             ))}
         </div>
 
-        {/* Trade Modal - 淺色版 */}
         {tradeMode && (
             <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-5 pb-8 shadow-[0_-10px_50px_rgba(0,0,0,0.1)] z-50 animate-in slide-in-from-bottom duration-200 rounded-t-3xl">
                 <div className="flex justify-between items-center mb-6">
@@ -922,11 +890,9 @@ export default function AppRanked() {
             </div>
         )}
         
-        {/* V30: 結算後的排行榜 Modal 與邏輯 - 淺色化 + 2025v1.3 數據 */}
         {showRankModal && (
              <div className="absolute inset-0 bg-slate-900/50 z-[70] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                    
                     <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
                         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                             <Trophy size={18} className="text-amber-500"/> 排行榜
@@ -935,88 +901,47 @@ export default function AppRanked() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">
-                        {/* 狀態 1: 詢問暱稱 */}
                         {rankUploadStatus === 'asking_nick' && (
                             <div className="text-center py-6">
                                 <User size={48} className="mx-auto text-emerald-500 mb-4"/>
                                 <h4 className="text-xl font-bold text-slate-800 mb-2">初次見面！</h4>
                                 <p className="text-slate-500 text-sm mb-6">請輸入您在江湖上的稱號 (日後將無法修改)</p>
-                                <input 
-                                    type="text" 
-                                    value={inputNickname} 
-                                    onChange={e => setInputNickname(e.target.value)}
-                                    placeholder="例如：股海小童"
-                                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4"
-                                    maxLength={12}
-                                />
-                                <button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">
-                                    確認並上傳成績
-                                </button>
+                                <input type="text" value={inputNickname} onChange={e => setInputNickname(e.target.value)} placeholder="例如：股海小童" className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4" maxLength={12} />
+                                <button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">確認並上傳成績</button>
                             </div>
                         )}
-
-                        {/* 狀態 2: 上傳中 */}
                         {rankUploadStatus === 'uploading' && (
                             <div className="flex flex-col items-center justify-center py-10">
                                 <Loader2 size={40} className="animate-spin text-emerald-500 mb-4"/>
                                 <p className="text-slate-500">正在將您的戰績刻入石碑...</p>
                             </div>
                         )}
-
-                        {/* 狀態 3: 顯示排行榜 */}
                         {(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length > 0 && (
                             <div className="space-y-2">
-                                <div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1">
-                                    <span>排名 / 玩家</span>
-                                    <span>報酬率</span>
-                                </div>
+                                <div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1"><span>排名 / 玩家</span><span>報酬率</span></div>
                                 {leaderboardData.map((entry, idx) => {
                                     const years = Math.floor(entry.durationMonths / 12);
                                     const months = entry.durationMonths % 12;
                                     const durationStr = years > 0 ? `${years}年${months}月` : `${months}個月`;
-
                                     return (
                                         <div key={entry.id} className={`flex justify-between items-center p-3 rounded-lg border ${entry.uid === user.uid ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'}`}>
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>
-                                                    {idx + 1}
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    <span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>
-                                                        {entry.displayName}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-400">
-                                                        {entry.fundName.substring(0, 10)}
-                                                    </span>
-                                                </div>
+                                                <div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>{idx + 1}</div>
+                                                <div className="flex flex-col"><span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>{entry.displayName}</span><span className="text-[10px] text-slate-400">{entry.fundName.substring(0, 10)}</span></div>
                                             </div>
-                                            <div className="text-right">
-                                                <div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                                                    {entry.roi > 0 ? '+' : ''}{entry.roi}%
-                                                </div>
-                                                <div className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
-                                                    <span>${(entry.finalAssets/10000).toFixed(0)}萬</span>
-                                                    <span className="text-slate-300">|</span>
-                                                    <span className="text-slate-400">{durationStr}</span>
-                                                </div>
-                                            </div>
+                                            <div className="text-right"><div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{entry.roi > 0 ? '+' : ''}{entry.roi}%</div><div className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><span>${(entry.finalAssets/10000).toFixed(0)}萬</span><span className="text-slate-300">|</span><span className="text-slate-400">{durationStr}</span></div></div>
                                         </div>
                                     );
                                 })}
                             </div>
                         )}
-                        
-                        {(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && (
-                            <div className="text-center py-10 text-slate-500">
-                                暫無排名資料，快來搶頭香！
-                            </div>
-                        )}
+                        {(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && <div className="text-center py-10 text-slate-500">暫無排名資料，快來搶頭香！</div>}
                     </div>
                 </div>
              </div>
         )}
 
-        {/* 結算畫面 & 確認 Modal - 淺色版 */}
+        {/* 結算畫面 - 修正版 */}
         {gameStatus === 'ended' && (
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100">
@@ -1029,14 +954,12 @@ export default function AppRanked() {
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">你的 ROI</div>
                         <div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</div>
                     </div>
-                    {/* 2025v1.3: Benchmark Display */}
                     <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner">
                         <div className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-bold">大盤 (Buy&Hold)</div>
                         <div className={`text-xl font-mono font-bold ${benchmarkRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%</div>
                     </div>
                 </div>
 
-                {/* 2025v1.3: 純定期定額績效 */}
                 <div className="w-full max-w-xs bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-6 flex justify-between items-center shadow-sm">
                     <span className="text-indigo-800 font-bold text-sm flex items-center gap-1"><CalendarClock size={16}/> 純定期定額績效</span>
                     <span className={`font-mono font-bold text-lg ${pureRspRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -1044,7 +967,6 @@ export default function AppRanked() {
                     </span>
                 </div>
 
-                {/* 2025v1.3: 時空解密 */}
                 {dataSourceType === 'real' && fullData[realStartDay] && fullData[currentDay] && (
                     <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl w-full max-w-xs mb-6 text-left">
                          <div className="flex items-center gap-2 mb-2 text-amber-700 font-bold">
@@ -1071,28 +993,31 @@ export default function AppRanked() {
                     <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm">
                         {showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}
                     </button>
-                    
-{/* 1. 放入隱藏的戰報卡片元件，將當前數據傳入 */}
-<ResultCard 
-    ref={resultCardRef} 
-    data={{
-        fundName: currentFundName,
-        roi: roi,
-        assets: Math.round(totalAssets),
-        duration: getDurationString(),
-        nickname: myNickname || user.email.split('@')[0],
-        gameType: '個人挑戰賽 S1',
-        dateRange: `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}`
-    }}
-/>
 
-{/* 2. 修改原本的分享按鈕，或新增一個按鈕 */}
-<button 
-    onClick={handleDownloadReport} 
-    className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]"
->
-    <Share2 size={18} /> 下載戰績圖卡
-</button>
+                    {/* ★★★ 插入戰報卡片與下載按鈕 ★★★ */}
+                    <ResultCard 
+                        ref={resultCardRef} 
+                        data={{
+                            fundName: currentFundName,
+                            roi: roi,
+                            assets: Math.round(totalAssets),
+                            duration: getDurationString(),
+                            nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家'),
+                            gameType: '個人挑戰賽 S1',
+                            dateRange: fullData[realStartDay] && fullData[currentDay] 
+                                ? `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}` 
+                                : 'N/A'
+                        }}
+                    />
+
+                    <button 
+                        onClick={handleDownloadReport} 
+                        className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98]"
+                    >
+                        <Share2 size={18} /> 下載戰績圖卡
+                    </button>
+                    {/* ★★★ 結束插入 ★★★ */}
+                    
                     <div className="h-6"></div>
                     
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">
@@ -1106,7 +1031,6 @@ export default function AppRanked() {
             </div>
         )}
         
-        {/* Confirm Modal - 淺色版 */}
         {confirmModal.show && (
             <div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-xs text-center">
@@ -1120,7 +1044,6 @@ export default function AppRanked() {
                     </h3>
                     <div className="flex gap-3 justify-center mt-6">
                          <button onClick={() => setConfirmModal({show:false, type:null})} className="flex-1 py-3 rounded-xl bg-white text-slate-500 font-bold hover:bg-slate-50 border border-slate-200">取消</button>
-                         
                          <button 
                             onClick={handleConfirmClick}
                             className={`flex-1 py-3 rounded-xl font-bold text-white shadow-md ${confirmModal.type === 'exit' ? 'bg-red-500 hover:bg-red-600' : (confirmModal.type === 'reset' ? 'bg-slate-500 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600')}`}
@@ -1132,7 +1055,6 @@ export default function AppRanked() {
             </div>
         )}
 
-        {/* Share Menu - 淺色版 */}
         {showShareMenu && (
             <div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative">

@@ -1,4 +1,4 @@
-// 2025v9.5 - 玩家端 (戰報功能整合版)
+// 2025v9.12 - 多人對戰版 (戰報預覽功能同步更新)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -8,7 +8,6 @@ import { db } from '../config/firebase';
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
 
-// ★★★ 1. 引入截圖套件與元件 ★★★
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
@@ -35,25 +34,50 @@ export default function AppBattle() {
   
   const urlRoomId = searchParams.get('room');
 
-  // ★★★ 2. 戰報圖片相關邏輯 (Hooks 放在元件最上方) ★★★
+  // ★★★ 1. 戰報圖片生成邏輯 (同步更新) ★★★
   const resultCardRef = useRef(null);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // 由於 AppBattle 的 state 變數名稱與 AppRanked 不同 (例如 fundName, displayRoi)，這裡需要對應調整
   const handleDownloadReport = async (currentFundName) => {
-      if (!resultCardRef.current) return;
+      if (isGenerating) return;
+      
+      if (!resultCardRef.current) {
+          alert("系統錯誤：找不到戰報元件");
+          return;
+      }
+      
+      setIsGenerating(true);
+
       try {
+          // 延遲以確保 UI 渲染
+          await new Promise(r => setTimeout(r, 100));
+
           const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: '#0f172a', 
-              scale: 2, 
+              backgroundColor: null, 
+              scale: 3, 
+              useCORS: true,
+              logging: false,
+              ignoreElements: (el) => el.tagName === 'IMG' && !el.complete 
           });
-          const image = canvas.toDataURL("image/png");
-          const link = document.createElement("a");
-          link.href = image;
-          link.download = `battle_report_${currentFundName || 'fund'}.png`;
-          link.click();
+
+          canvas.toBlob((blob) => {
+              if (!blob) {
+                  alert("生成圖片失敗 (Blob is null)");
+                  setIsGenerating(false);
+                  return;
+              }
+              const url = URL.createObjectURL(blob);
+              setGeneratedImage(url);
+              setShowImageModal(true); // 開啟預覽視窗
+              setIsGenerating(false);
+          }, 'image/png');
+
       } catch (err) {
-          console.error("戰報生成失敗:", err);
-          alert("圖片生成失敗，請稍後再試");
+          console.error(err);
+          alert(`發生錯誤：${err?.message || '未知錯誤'}`);
+          setIsGenerating(false);
       }
   };
   // ★★★ 結束 ★★★
@@ -678,15 +702,47 @@ export default function AppBattle() {
             }}
         />
 
+        {/* 修正後的下載按鈕：綁定 isGenerating 狀態 */}
         <button 
             onClick={() => handleDownloadReport(fundName)} 
-            className="w-full max-w-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] mb-4"
+            disabled={isGenerating}
+            className={`w-full max-w-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] mb-4 ${isGenerating ? 'opacity-70 cursor-wait' : ''}`}
         >
-            <Share2 size={18} /> 下載對戰成績卡
+            {isGenerating ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18} />}
+            {isGenerating ? '戰報生成中...' : '下載對戰成績卡'}
         </button>
         {/* ★★★ 結束插入 ★★★ */}
 
         <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-4 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
+
+        {/* ★★★ 4. 新增預覽視窗 (Modal) ★★★ */}
+        {showImageModal && (
+            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
+                <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
+                    <div className="text-white text-center">
+                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
+                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+                    </div>
+                    
+                    {/* 顯示生成的圖片 */}
+                    {generatedImage && (
+                        <img 
+                            src={generatedImage} 
+                            alt="戰報" 
+                            className="w-full rounded-xl shadow-2xl border border-white/20"
+                        />
+                    )}
+
+                    <button 
+                        onClick={() => setShowImageModal(false)} 
+                        className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all"
+                    >
+                        關閉
+                    </button>
+                </div>
+            </div>
+        )}
+        {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
 }

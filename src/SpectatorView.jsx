@@ -1,4 +1,4 @@
-// 2025v10.0 - 主持人端 (階段一：時間設定A)
+// 2025v10.0 - 主持人端 (階段二：佈局搬移與倒數計時)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -7,7 +7,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon, Timer
+  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -56,8 +56,11 @@ export default function SpectatorView() {
   const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
   
-  // ★★★ 2025v10.0 新增：遊戲時間設定 (預設 60 分鐘) ★★★
+  // 遊戲時間設定 (分鐘)
   const [gameDuration, setGameDuration] = useState(60);
+  // ★★★ 階段二新增：倒數計時相關狀態 ★★★
+  const [gameEndTime, setGameEndTime] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(0);
   
   const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
   
@@ -109,7 +112,8 @@ export default function SpectatorView() {
         timeOffset: randomTimeOffset,
         indicators: { ma20: false, ma60: false, river: false, trend: false }, 
         feeRate: 0.01,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        gameEndTime: null // 初始化
       });
       setGameStatus('waiting');
     } catch (error) { 
@@ -173,6 +177,77 @@ export default function SpectatorView() {
       loadData();
   }, [selectedFundId]);
 
+  // ★★★ 階段二：監聽房間資訊 (同步 gameEndTime) ★★★
+  useEffect(() => {
+    if (!roomId) return;
+    const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
+      if (!docSnap.exists()) { 
+          alert("找不到此房間"); 
+          localStorage.clear();
+          return; 
+      }
+      const roomData = docSnap.data();
+      
+      if (roomData.status) setGameStatus(roomData.status);
+      if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
+      if (roomData.startDay) setStartDay(roomData.startDay);
+      if (roomData.indicators) setShowIndicators(roomData.indicators);
+      if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
+      if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
+      
+      // 同步結束時間
+      if (roomData.gameEndTime) {
+          setGameEndTime(roomData.gameEndTime);
+      } else {
+          setGameEndTime(null);
+      }
+
+      if (fullData.length === 0 && roomData.fundId) {
+         const targetFund = FUNDS_LIBRARY.find(f => f.id === roomData.fundId);
+         if (targetFund) {
+             setFundName(targetFund.name);
+             const res = await fetch(targetFund.file);
+             setFullData(processRealData(await res.json()));
+         }
+      }
+    });
+    return () => unsubscribe();
+  }, [roomId, fullData.length]);
+
+  // ★★★ 階段二：倒數計時器邏輯 ★★★
+  useEffect(() => {
+      let interval = null;
+      if (gameStatus === 'playing' && gameEndTime) {
+          interval = setInterval(() => {
+              const now = Date.now();
+              const diff = gameEndTime - now;
+              
+              if (diff <= 0) {
+                  setRemainingTime(0);
+                  // 時間到，自動結算
+                  handleEndGame(); 
+                  clearInterval(interval);
+              } else {
+                  setRemainingTime(diff);
+              }
+          }, 1000);
+      } else {
+          setRemainingTime(0);
+      }
+      return () => {
+          if(interval) clearInterval(interval);
+      };
+  }, [gameStatus, gameEndTime]);
+
+  // 格式化時間 mm:ss
+  const formatTime = (ms) => {
+      if (ms <= 0) return "00:00";
+      const totalSeconds = Math.floor(ms / 1000);
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -196,12 +271,7 @@ export default function SpectatorView() {
     const randomStartDay = Math.floor(Math.random() * (maxStart - minBuffer)) + minBuffer;
     const randomOffset = Math.floor(Math.random() * 50) + 10;
 
-    setCurrentDay(randomStartDay);
-    setStartDay(randomStartDay);
-    setTimeOffset(randomOffset);
-
-    // ★★★ 2025v10.0 修改：計算結束時間並寫入資料庫 ★★★
-    // 結束時間 = 現在時間 + 設定分鐘數 * 60 * 1000
+    // 計算結束時間 (現在 + 分鐘數)
     const calculatedEndTime = Date.now() + (gameDuration * 60 * 1000);
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
@@ -210,8 +280,8 @@ export default function SpectatorView() {
         currentDay: randomStartDay, 
         startDay: randomStartDay,   
         timeOffset: randomOffset,
-        gameEndTime: calculatedEndTime, // 寫入結束時間戳記
-        gameDuration: gameDuration      // 紀錄原始設定時長
+        gameEndTime: calculatedEndTime,
+        gameDuration: gameDuration
     });
     setGameStatus('playing');
   };
@@ -256,7 +326,7 @@ export default function SpectatorView() {
   };
 
   const handleEndGame = async () => {
-    clearInterval(autoPlayRef.current);
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     
     let winnerInfo = null;
@@ -269,6 +339,7 @@ export default function SpectatorView() {
     }
 
     if (roomId) {
+        // 確保如果是由 Timer 觸發，不用重複寫入 (雖然寫入也無妨)
         await updateDoc(doc(db, "battle_rooms", roomId), { 
             status: 'ended',
             finalWinner: winnerInfo 
@@ -284,10 +355,11 @@ export default function SpectatorView() {
     setStartDay(400);
     setIndicators({ ma20: false, ma60: false, river: false, trend: false });
     setFeeRate(0.01);
-    clearInterval(autoPlayRef.current);
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setTradeRequests([]); 
     setCountdown(15); 
+    setGameEndTime(null);
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'waiting', 
@@ -296,7 +368,7 @@ export default function SpectatorView() {
         indicators: { ma20: false, ma60: false, river: false, trend: false },
         feeRate: 0.01,
         finalWinner: null,
-        gameEndTime: null // 清除時間
+        gameEndTime: null
     });
     
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
@@ -414,7 +486,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v9.1 Trend Edition | NBS Team
+            v10.0 Time Attack | NBS Team
           </div>
         </div>
       </div>
@@ -471,6 +543,7 @@ export default function SpectatorView() {
         
         <div className="flex-1 flex justify-center items-center px-4">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
+                // ★★★ 階段二：Header 佈局重構 - 中央包含所有資訊 ★★★
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
                     
                     {currentTrendInfo && (
@@ -483,21 +556,30 @@ export default function SpectatorView() {
                     <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
                     <div className="flex items-baseline gap-2">
                         <span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span>
-                        <span className="text-3xl font-mono font-black text-slate-800 tracking-tight">{currentNav.toFixed(2)}</span>
+                        <span className="text-3xl font-mono font-black text-slate-800 tracking-tight">${currentNav.toFixed(2)}</span>
+                    </div>
+                    {/* 新增：資金水位移入中央 */}
+                    <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
+                    <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase">
+                            <Wallet size={10} /> 總資金
+                        </div>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount / 10000)}萬</span>
+                            <span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>({positionRatio.toFixed(0)}%)</span>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
         <div className="flex items-center gap-4 justify-end shrink-0">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-3 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg">
-                     <div className="text-right">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase">買入總資金</div>
-                        <div className="flex items-baseline gap-2 justify-end">
-                            <span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount).toLocaleString()}</span>
-                            <span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>(水位 {positionRatio.toFixed(0)}%)</span>
-                        </div>
-                     </div>
+                // ★★★ 階段二：右側改為倒數計時器 ★★★
+                <div className="flex items-center gap-2 px-4 py-1 bg-red-50 border border-red-100 rounded-lg animate-pulse">
+                     <Timer size={20} className="text-red-500"/>
+                     <span className="text-2xl font-mono font-black text-red-600 tracking-wider">
+                         {formatTime(remainingTime)}
+                     </span>
                 </div>
             )}
             <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 hidden md:flex">
@@ -540,11 +622,10 @@ export default function SpectatorView() {
                                 </select>
                              </div>
                              
-                             {/* ★★★ 2025v10.0 修改：加入時間設定區塊 ★★★ */}
                              <div className="mb-6">
                                 <label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label>
                                 <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2">
-                                    <Timer size={18} className="text-slate-400"/>
+                                    <Clock size={18} className="text-slate-400"/>
                                     <input 
                                         type="number" 
                                         value={gameDuration} 

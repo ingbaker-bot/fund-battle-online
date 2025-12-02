@@ -1,17 +1,15 @@
-// 2025v9.8.1 - 會員版 (還原版：保留戰報下載，移除新手引導)
+// 2025v9.8.2 - 急救版 (移除 Joyride，修復 Vercel 部署)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap } from 'lucide-react';
+import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Share2, Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Download, Copy, Maximize } from 'lucide-react';
 
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
 import { useNavigate } from 'react-router-dom'; 
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
-
-// 已移除 Joyride 相關引用
 
 import { 
   checkUserNickname, 
@@ -21,7 +19,6 @@ import {
   getTickerData 
 } from '../services/firestoreService';
 
-// --- Helper Functions ---
 const generateRandomData = (years = 30) => {
   const data = [];
   let price = 100.0; 
@@ -94,7 +91,7 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // ★★★ 戰報圖片生成邏輯 (保留預覽功能) ★★★
+  // ★★★ 戰報圖片生成與預覽邏輯 ★★★
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -138,7 +135,6 @@ export default function AppRanked() {
           setIsGenerating(false);
       }
   };
-  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
@@ -196,12 +192,8 @@ export default function AppRanked() {
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
-          setUser(u); 
-          setAuthLoading(false);
-          if (u) {
-             const nick = await checkUserNickname(u.uid);
-             if (nick) setMyNickname(nick);
-          }
+          setUser(u); setAuthLoading(false);
+          if (u) { const nick = await checkUserNickname(u.uid); if (nick) setMyNickname(nick); }
       });
       return () => unsubscribe();
   }, []);
@@ -212,14 +204,9 @@ export default function AppRanked() {
   }, []);
 
   useEffect(() => {
-    const data = generateRandomData(30);
-    setFullData(data);
-    setCurrentDay(260);
-    setIsReady(true);
+    const data = generateRandomData(30); setFullData(data); setCurrentDay(260); setIsReady(true);
     const ua = (navigator.userAgent || navigator.vendor || window.opera || "").toLowerCase();
-    if (ua.indexOf('line') > -1) setDetectedEnv('Line');
-    else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook');
-    else setDetectedEnv('Browser');
+    if (ua.indexOf('line') > -1) setDetectedEnv('Line'); else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook'); else setDetectedEnv('Browser');
   }, []);
 
   useEffect(() => {
@@ -453,33 +440,14 @@ export default function AppRanked() {
             <div className="flex justify-center mb-4 text-emerald-500"><Activity size={56} strokeWidth={1.5} /></div>
             <h1 className="text-3xl font-bold text-center mb-2 tracking-tight text-slate-800">Fund 手遊</h1>
             <div className="mb-6 mt-4"><button onClick={() => window.location.href = '/competition'} className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"><Sword size={20} className="group-hover:rotate-12 transition-transform"/> 前往 S1 賽季競技場</button><p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p></div>
-            
             {tickerData.length > 0 && (<div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
-
             <div className="flex items-center justify-center gap-2 mb-4"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
-            
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label>
-            <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
-            
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                <div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>
-                {rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}
-            </div>
-
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">選擇挑戰項目</label>
-            <div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
-
+            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label><input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4"><div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>{rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}</div>
+            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">選擇挑戰項目</label><div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
             {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
-            
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-                <div className="flex items-center justify-between mb-3 text-blue-600"><div className="flex items-center gap-2"><Waves size={18} /><span className="text-sm font-bold uppercase tracking-wider">河流圖參數</span></div><span className="text-xs bg-blue-100 px-2 py-0.5 rounded text-blue-600 border border-blue-200">N=60 (季線)</span></div>
-                <div className="flex gap-2 mb-3"><button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>固定 %</button><button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>動態標準差</button></div>
-                <div className="flex items-center bg-white border border-slate-300 rounded-lg px-4 py-2 shadow-sm">{riverMode === 'fixed' ? (<><span className="text-sm text-slate-500 mr-3 font-bold">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">%</span></>) : (<><span className="text-sm text-slate-500 mr-3 font-bold" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">SD</span></>)}</div>
-            </div>
-
-            <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">停損設定 (%)</label>
-            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8 shadow-inner"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-slate-800 focus:outline-none"/><span className="text-slate-500 font-bold px-4 text-lg">%</span></div>
-
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6"><div className="flex items-center justify-between mb-3 text-blue-600"><div className="flex items-center gap-2"><Waves size={18} /><span className="text-sm font-bold uppercase tracking-wider">河流圖參數</span></div><span className="text-xs bg-blue-100 px-2 py-0.5 rounded text-blue-600 border border-blue-200">N=60 (季線)</span></div><div className="flex gap-2 mb-3"><button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>固定 %</button><button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>動態標準差</button></div><div className="flex items-center bg-white border border-slate-300 rounded-lg px-4 py-2 shadow-sm">{riverMode === 'fixed' ? (<><span className="text-sm text-slate-500 mr-3 font-bold">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">%</span></>) : (<><span className="text-sm text-slate-500 mr-3 font-bold" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">SD</span></>)}</div></div>
+            <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">停損設定 (%)</label><div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8 shadow-inner"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-slate-800 focus:outline-none"/><span className="text-slate-500 font-bold px-4 text-lg">%</span></div>
             <button onClick={startGame} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl text-xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Play size={24} fill="currentColor" /> 開始挑戰</button>
             <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v1.3 版權所有 NBS-奈AI團隊</span></div>
         </div>
@@ -610,7 +578,7 @@ export default function AppRanked() {
 
         {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
 
-        {/* ★★★ 圖片預覽 Modal (修正版：黑色背景彈窗) ★★★ */}
+        {/* ★★★ 圖片預覽 Modal (保留黑屏修復版) ★★★ */}
         {showImageModal && (
             <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
@@ -618,11 +586,26 @@ export default function AppRanked() {
                         <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
                         <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
                     </div>
-                    {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
-                    <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
+                    
+                    {/* 顯示生成的圖片 */}
+                    {generatedImage && (
+                        <img 
+                            src={generatedImage} 
+                            alt="戰報" 
+                            className="w-full rounded-xl shadow-2xl border border-white/20"
+                        />
+                    )}
+
+                    <button 
+                        onClick={() => setShowImageModal(false)} 
+                        className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all"
+                    >
+                        關閉
+                    </button>
                 </div>
             </div>
         )}
+        {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
 }

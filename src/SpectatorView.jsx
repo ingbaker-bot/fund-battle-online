@@ -1,4 +1,4 @@
-// 2025v9.1 - 主持人端 (1141201終版)
+// 2025v10.0 - 主持人端 (階段一：時間設定)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -7,7 +7,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon 
+  Copy, Check, Percent, TrendingUp as TrendIcon, Timer
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -56,7 +56,9 @@ export default function SpectatorView() {
   const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
   
-  // ★★★ 修改點 1：新增 trend 狀態 ★★★
+  // ★★★ 2025v10.0 新增：遊戲時間設定 (預設 60 分鐘) ★★★
+  const [gameDuration, setGameDuration] = useState(60);
+  
   const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
   
   const [fullData, setFullData] = useState([]);
@@ -105,7 +107,7 @@ export default function SpectatorView() {
         startDay: 400,
         fundId: selectedFundId,
         timeOffset: randomTimeOffset,
-        indicators: { ma20: false, ma60: false, river: false, trend: false }, // 初始化
+        indicators: { ma20: false, ma60: false, river: false, trend: false }, 
         feeRate: 0.01,
         createdAt: serverTimestamp()
       });
@@ -198,12 +200,18 @@ export default function SpectatorView() {
     setStartDay(randomStartDay);
     setTimeOffset(randomOffset);
 
+    // ★★★ 2025v10.0 修改：計算結束時間並寫入資料庫 ★★★
+    // 結束時間 = 現在時間 + 設定分鐘數 * 60 * 1000
+    const calculatedEndTime = Date.now() + (gameDuration * 60 * 1000);
+
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'playing', 
         fundId: selectedFundId,
         currentDay: randomStartDay, 
         startDay: randomStartDay,   
-        timeOffset: randomOffset
+        timeOffset: randomOffset,
+        gameEndTime: calculatedEndTime, // 寫入結束時間戳記
+        gameDuration: gameDuration      // 紀錄原始設定時長
     });
     setGameStatus('playing');
   };
@@ -287,7 +295,8 @@ export default function SpectatorView() {
         startDay: 400,
         indicators: { ma20: false, ma60: false, river: false, trend: false },
         feeRate: 0.01,
-        finalWinner: null 
+        finalWinner: null,
+        gameEndTime: null // 清除時間
     });
     
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
@@ -321,25 +330,18 @@ export default function SpectatorView() {
       return `${newYear}-${month}-${day}`;
   };
 
-  // ★★★ 2. 計算扣抵價 (20MA, 60MA) ★★★
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
-  // ★★★ 3. 趨勢判斷邏輯 (多頭/空頭/盤整) ★★★
   const currentTrendInfo = useMemo(() => {
       if (!fullData[currentDay] || !indicators.trend) return null;
-      
       const realIdx = currentDay;
       const curNav = fullData[realIdx].nav;
       const ind20 = calculateIndicators(fullData, 20, realIdx);
       const ind60 = calculateIndicators(fullData, 60, realIdx);
-      
       const ma20 = ind20.ma;
       const ma60 = ind60.ma;
-      
       if (!ma20 || !ma60) return null;
-
-      // 判斷邏輯
       if (curNav > ma20 && ma20 > ma60) {
           return { text: '多頭排列 🔥', color: 'text-red-500', bg: 'bg-red-50' };
       } else if (curNav < ma20 && ma20 < ma60) {
@@ -471,7 +473,6 @@ export default function SpectatorView() {
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
                     
-                    {/* ★★★ 修改點 2：顯示趨勢儀表板 (如果 Trend 開啟) ★★★ */}
                     {currentTrendInfo && (
                          <div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}>
                              <span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span>
@@ -532,10 +533,28 @@ export default function SpectatorView() {
                          </button>
 
                          <div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg">
-                             <label className="text-xs text-slate-400 block mb-2">本場戰役目標</label>
-                             <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 mb-4 outline-none">
-                                 {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
-                             </select>
+                             <div className="mb-4">
+                                <label className="text-xs text-slate-400 block mb-2">本場戰役目標</label>
+                                <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 outline-none">
+                                    {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                                </select>
+                             </div>
+                             
+                             {/* ★★★ 2025v10.0 修改：加入時間設定區塊 ★★★ */}
+                             <div className="mb-6">
+                                <label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label>
+                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2">
+                                    <Timer size={18} className="text-slate-400"/>
+                                    <input 
+                                        type="number" 
+                                        value={gameDuration} 
+                                        onChange={(e) => setGameDuration(Number(e.target.value))}
+                                        className="w-full bg-transparent outline-none text-slate-800 font-bold"
+                                        min="1"
+                                    />
+                                </div>
+                             </div>
+
                              <button onClick={handleStartGame} disabled={players.length === 0} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-lg transition-all shadow-md flex items-center justify-center gap-2"><Play fill="currentColor"/> 開始比賽 ({players.length}人)</button>
                          </div>
                      </div>
@@ -559,7 +578,6 @@ export default function SpectatorView() {
                                   tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}}
                                   width={0}
                                 />
-                                {/* ★★★ 修改點 3：顯示扣抵點 (只在 trend=true 時) ★★★ */}
                                 {indicators.trend && indicators.ma20 && deduction20 && (
                                     <ReferenceDot
                                         x={deduction20.date}
@@ -635,7 +653,6 @@ export default function SpectatorView() {
                   <button onClick={() => toggleIndicator('ma20')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma20 ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-300 text-slate-400'}`}>月線</button>
                   <button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button>
                   <button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button>
-                  {/* ★★★ 修改點 4：新增「趨勢」按鈕 ★★★ */}
                   <button onClick={() => toggleIndicator('trend')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.trend ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-slate-300 text-slate-400'}`}>趨勢</button>
                   
                   <div className="flex items-center ml-2 pl-2 border-l border-slate-200">

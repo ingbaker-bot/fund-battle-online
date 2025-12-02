@@ -101,9 +101,9 @@ export default function AppRanked() {
 
 // 在 AppRanked.jsx 內
 
+// 修改 AppRanked.jsx 中的 handleDownloadReport
   const handleDownloadReport = async () => {
-      // 1. Debug: 確認按鈕有點擊反應
-      console.log("下載按鈕被點擊");
+      console.log("下載按鈕被點擊 (v2)");
 
       if (!resultCardRef.current) {
           alert("系統錯誤：找不到戰報元件 (Ref is null)");
@@ -111,39 +111,48 @@ export default function AppRanked() {
       }
       
       try {
-          // 2. 顯示讀取中，讓玩家知道有在跑
           const originalText = document.activeElement.innerText;
-          document.activeElement.innerText = "圖卡生成中...";
+          document.activeElement.innerText = "生成中...";
           
-          // 3. 執行截圖 (加入 useCORS 參數)
+          // ★★★ 關鍵修改：加入 useCORS, allowTaint, foreignObjectRendering ★★★
           const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: null, // 使用 CSS 原本的漸層
-              scale: 3, // 高解析度
-              useCORS: true, // ★★★ 關鍵：允許載入圖片 ★★★
-              allowTaint: true,
-              logging: true, // 開啟記錄，方便除錯
+              backgroundColor: null, 
+              scale: 3, 
+              useCORS: true,       // 允許跨域
+              allowTaint: true,    // 允許污染 (雖然 Base64 不應該污染)
+              foreignObjectRendering: false, // 關閉此選項以增加相容性
+              logging: true,
+              // 強制忽略讀取失敗的圖片，避免因為一張小圖壞掉導致全黑
+              ignoreElements: (element) => {
+                  if (element.tagName === 'IMG' && !element.complete) return true;
+                  return false;
+              }
           });
 
-          // 4. 轉成圖片並下載
-          const image = canvas.toDataURL("image/png");
-          const link = document.createElement("a");
-          link.href = image;
-          link.download = `fund_report_${currentFundName || 'game'}.png`;
-          document.body.appendChild(link); // 某些手機瀏覽器需要將 link 加入 body 才能觸發
-          link.click();
-          document.body.removeChild(link);
-
-          // 5. 恢復按鈕文字
-          document.activeElement.innerText = originalText;
+          // 嘗試使用 toBlob (比 toDataURL 更穩定，尤其在手機上)
+          canvas.toBlob((blob) => {
+              if (!blob) {
+                  alert("圖片生成失敗 (Blob is null)");
+                  return;
+              }
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `fund_report_${currentFundName || 'game'}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url); // 釋放記憶體
+              
+              document.activeElement.innerText = originalText;
+          }, 'image/png');
 
       } catch (err) {
           console.error("戰報生成失敗:", err);
-          // 6. 如果失敗，彈出視窗顯示具體錯誤
-          alert(`下載失敗：${err.message}\n請嘗試使用「分享」功能截圖。`);
+          alert(`下載失敗詳細原因：${err.name}: ${err.message}`);
           document.activeElement.innerText = "下載戰績圖卡";
       }
-  };
-	  // ★★★ 結束 ★★★
+  };	  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 

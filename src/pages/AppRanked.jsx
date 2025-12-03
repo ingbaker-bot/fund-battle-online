@@ -1,4 +1,4 @@
-// 2025v10.11.1 - 單機版 (Setup UI 優化 + 部署修復版)
+// 2025v10.11.2 - 單機版 (Setup UI 優化 + 部署修復版v1)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
@@ -452,10 +452,10 @@ export default function AppRanked() {
             </div>
 
             {/* ★★★ 2025v10.11.1 - 優化：停損設定與開始按鈕併列 (各佔50%) ★★★ */}
-            <div className="flex gap-2 mb-6">
+            <div className="flex gap-1 mb-6">
                 {/* 停損設定 (50%) */}
                 <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
+                    <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
                     <input 
                         type="number" 
                         value={customStopLossInput} 
@@ -467,13 +467,13 @@ export default function AppRanked() {
                 {/* 開始按鈕 (50%) */}
                 <button 
                     onClick={startGame} 
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-1"
                 >
-                    <Play size={24} fill="currentColor" /> 開始
+                    <Play size={18} fill="currentColor" /> 開始挑戰
                 </button>
             </div>
             
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 SetupUI Update | NBS Team</span></div>
+            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 NBS Team</span></div>
         </div>
       </div>
     );

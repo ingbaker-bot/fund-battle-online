@@ -1,15 +1,13 @@
-// 2025v10.11.2 - 單機版 (Setup UI 優化 + 部署修復版)
+// 2025v10.11.1 - 單機版 (Setup UI 優化 + 部署修復版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
-// [Source: AppRanked.jsx] Line 6-9
-// ★★★ 最佳修正：補回 Activity (結算用) 與 Power (關機用)，移除 AlertTriangle (會崩潰) ★★★
 import { 
-  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
+  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, AlertTriangle, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
-  Mail, MessageCircle, Trophy, Globe, User, CalendarClock, History, Zap,
-  Activity, Power // <--- 補回這兩個遺失的 Icon
+  Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
 } from 'lucide-react';
+
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';

@@ -1,13 +1,12 @@
-// 2025v10.9 - 單機版 (補齊遺漏 Icon，確保部署成功)
+// 2025v10.10 - 單機版 (補齊遺漏 Icon，確保部署成功)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：補上 AlertTriangle 與 RefreshCw，確保 Vercel 建置成功 ★★★
 import { 
-  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
+  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
-  Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
+  Mail, MessageCircle, Trophy, Globe, User, CalendarClock, History, Zap 
 } from 'lucide-react';
-
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
@@ -418,7 +417,7 @@ export default function AppRanked() {
             <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
             
             <div className="flex items-center justify-center gap-3 mb-8">
-                <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
+                <img src="NBS-奈AI團隊" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-xl text-slate-800 leading-tight">Fund 手遊</span>
                     <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
@@ -593,7 +592,7 @@ export default function AppRanked() {
 
         {/* ★★★ 圖片預覽 Modal (修正版：黑色背景彈窗 + 修復CSS衝突) ★★★ */}
         {showImageModal && (
-            <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
                     <div className="text-white text-center">
                         <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>

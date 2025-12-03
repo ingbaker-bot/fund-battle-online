@@ -1,10 +1,10 @@
-// 2025v10.6 - 單機版 (嚴格潔淨版：修復部署與下載問題)
+// 2025v10.7 - 單機版 (Setup優化 + 遊戲畫面緊湊 + 部署修復 終極合併版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// ★★★ 嚴格篩選：只保留有在程式碼中出現的 Icon ★★★
+// 只引入有用到的 Icon
 import { 
-  Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
-  Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
+  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
+  Download, Copy, Maximize, LogOut, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
   Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
 } from 'lucide-react';
 
@@ -84,7 +84,7 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     return ((finalValue - totalInvested) / totalInvested) * 100;
 };
 
-// 千分位格式化
+// 千分位格式化工具
 const formatNumber = (num) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
@@ -97,7 +97,7 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // 戰報生成邏輯 (預覽模式)
+  // 戰報生成邏輯
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -110,21 +110,14 @@ export default function AppRanked() {
       try {
           await new Promise(r => setTimeout(r, 100));
           const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
-          
-          // 使用 toBlob 進行預覽，解決手機下載失敗問題
           canvas.toBlob((blob) => {
               if (!blob) { alert("生成圖片失敗 (Blob is null)"); setIsGenerating(false); return; }
               const url = URL.createObjectURL(blob);
               setGeneratedImage(url);
-              setShowImageModal(true); // 顯示預覽視窗
+              setShowImageModal(true);
               setIsGenerating(false);
           }, 'image/png');
-      } catch (err) { 
-          console.error(err); 
-          // 將錯誤轉為字串顯示，避免 undefined
-          alert(`發生錯誤：${err?.message || JSON.stringify(err)}`); 
-          setIsGenerating(false); 
-      }
+      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
   };
 
   const [myNickname, setMyNickname] = useState(null); 
@@ -176,7 +169,7 @@ export default function AppRanked() {
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [detectedEnv, setDetectedEnv] = useState('Browser');
-  
+
   const autoPlayRef = useRef(null);
 
   // --- Effects ---
@@ -293,6 +286,7 @@ export default function AppRanked() {
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
   const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
+  // 處理資金輸入 (格式化為數字)
   const handleCapitalChange = (e) => {
       const val = e.target.value.replace(/,/g, '');
       if (!isNaN(val) && val !== '') {
@@ -374,7 +368,7 @@ export default function AppRanked() {
   const handleShareAction = async (method) => {
     const durationStr = getDurationString();
     const shareText = `📊 Fund 手遊戰報\n基金: ${currentFundName}\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n交易時長: ${durationStr}\n大盤: ${benchmarkRoi.toFixed(2)}% | 定額: ${pureRspRoi.toFixed(2)}%\n`;
-    const encodedText = encodeURIComponent(shareText); const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText);
+    const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText); const encodedText = encodeURIComponent(shareText);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (method === 'line') window.open(`https://line.me/R/msg/text/?${encodedText}`, '_blank');
@@ -417,7 +411,7 @@ export default function AppRanked() {
 
   if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-300 rounded hover:bg-white hover:text-slate-800 transition-colors">重啟電源</button></div> );
   
-  // ★★★ Setup UI 優化版 ★★★
+  // ★★★ Setup UI (保留優化版) ★★★
   if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
@@ -436,20 +430,17 @@ export default function AppRanked() {
             
             <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
             
+            {/* 初始資金優化 */}
             <div className="flex items-center gap-3 mb-4 bg-slate-50 border border-slate-300 rounded-xl p-3">
                 <div className="w-1/3 text-xs font-bold text-slate-500 uppercase tracking-wider">初始資金</div>
-                <input 
-                    type="text" 
-                    value={formatNumber(initialCapital)} 
-                    onChange={handleCapitalChange} 
-                    className="w-2/3 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"
-                />
+                <input type="text" value={formatNumber(initialCapital)} onChange={handleCapitalChange} className="w-2/3 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"/>
             </div>
             
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4"><div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>{rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}</div>
             <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">選擇挑戰項目</label><div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
             {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
             
+            {/* 河流圖參數優化 */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
                 <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
                 <div className="flex gap-2">
@@ -463,6 +454,7 @@ export default function AppRanked() {
                 </div>
             </div>
 
+            {/* 停損設定優化 */}
             <div className="flex items-center gap-3 bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8">
                  <span className="w-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider">停損設定 (%)</span>
                  <input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="w-1/2 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"/>
@@ -477,10 +469,11 @@ export default function AppRanked() {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
 
-  // Game Playing Screen
+  // Game Playing Screen (★ 強制使用緊湊型 Header & UI ★)
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
-        <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-14 z-30 relative shadow-sm">
+        {/* Header: h-12 (48px) */}
+        <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">
             <button onClick={triggerExit} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200 active:scale-95 transition-all font-bold"><LogOut size={14} /> 離開</button>
             <div className="flex flex-col items-center"><span className="text-[10px] text-slate-400 max-w-[140px] truncate font-bold">{currentFundName}</span><span className={`text-base font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span></div>
             <div className="flex gap-2"><button onClick={toggleFullscreen} className="p-2 rounded hover:bg-slate-100 text-slate-500"><Maximize size={18} /></button><button onClick={triggerEndGame} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm hover:bg-emerald-100 active:scale-95 transition-all font-bold"><Flag size={14} /> 結算</button></div>
@@ -514,17 +507,18 @@ export default function AppRanked() {
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
         </div>
 
+        {/* Control Panel (Compact: py-1.5, text-[10px]) */}
         <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
-            <div className="flex justify-between px-5 py-2 bg-slate-50 border-b border-slate-200 text-xs">
-                <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-base ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
-                <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={14} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-base">${Math.round(cash).toLocaleString()}</span></div>
+            <div className="flex justify-between px-5 py-1.5 bg-slate-50 border-b border-slate-200 text-[10px]">
+                <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-xs ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
+                <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={12} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-xs">${Math.round(cash).toLocaleString()}</span></div>
             </div>
             
-            <div className="grid grid-cols-4 gap-2 p-3 bg-white">
-                <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={20} className="text-slate-400"/> 觀望</button>
-                <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={20} /> 買進</button>
-                <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={20} /> 賣出</button>
-                <button onClick={toggleAutoPlay} disabled={tradeMode} className={`flex flex-col items-center justify-center gap-1 rounded-xl font-bold text-sm border-b-4 active:border-b-0 active:translate-y-[2px] transition-all shadow-sm py-3 ${isAutoPlaying ? 'bg-amber-500 border-amber-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:text-slate-400'}`}>{isAutoPlaying ? <Pause size={20} /> : <Play size={20} />} {isAutoPlaying ? '暫停' : '自動'}</button>
+            <div className="grid grid-cols-4 gap-1 p-1.5 bg-white">
+                <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={16} className="text-slate-400"/> 觀望</button>
+                <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={16} /> 買進</button>
+                <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={16} /> 賣出</button>
+                <button onClick={toggleAutoPlay} disabled={tradeMode} className={`flex flex-col items-center justify-center gap-1 rounded-xl font-bold text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all shadow-sm py-2 ${isAutoPlaying ? 'bg-amber-500 border-amber-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:text-slate-400'}`}>{isAutoPlaying ? <Pause size={16} /> : <Play size={16} />} {isAutoPlaying ? '暫停' : '自動'}</button>
             </div>
         </div>
 
@@ -549,7 +543,7 @@ export default function AppRanked() {
         
         {showRankModal && (<div className="absolute inset-0 bg-slate-900/50 z-[70] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"><div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Trophy size={18} className="text-amber-500"/> 排行榜</h3><button onClick={() => setShowRankModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">{rankUploadStatus === 'asking_nick' && (<div className="text-center py-6"><User size={48} className="mx-auto text-emerald-500 mb-4"/><h4 className="text-xl font-bold text-slate-800 mb-2">初次見面！</h4><p className="text-slate-500 text-sm mb-6">請輸入您在江湖上的稱號 (日後將無法修改)</p><input type="text" value={inputNickname} onChange={e => setInputNickname(e.target.value)} placeholder="例如：股海小童" className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4" maxLength={12} /><button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">確認並上傳成績</button></div>)}{rankUploadStatus === 'uploading' && (<div className="flex flex-col items-center justify-center py-10"><Loader2 size={40} className="animate-spin text-emerald-500 mb-4"/><p className="text-slate-500">正在將您的戰績刻入石碑...</p></div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length > 0 && (<div className="space-y-2"><div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1"><span>排名 / 玩家</span><span>報酬率</span></div>{leaderboardData.map((entry, idx) => { const years = Math.floor(entry.durationMonths / 12); const months = entry.durationMonths % 12; const durationStr = years > 0 ? `${years}年${months}月` : `${months}個月`; return (<div key={entry.id} className={`flex justify-between items-center p-3 rounded-lg border ${entry.uid === user.uid ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>{idx + 1}</div><div className="flex flex-col"><span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>{entry.displayName}</span><span className="text-[10px] text-slate-400">{entry.fundName.substring(0, 10)}</span></div></div><div className="text-right"><div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{entry.roi > 0 ? '+' : ''}{entry.roi}%</div><div className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><span>${(entry.finalAssets/10000).toFixed(0)}萬</span><span className="text-slate-300">|</span><span className="text-slate-400">{durationStr}</span></div></div></div>); })}</div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && <div className="text-center py-10 text-slate-500">暫無排名資料，快來搶頭香！</div>}</div></div></div>)}
 
-        {/* 結算畫面 (Final Modal) */}
+        {/* 結算畫面 (Final Modal) - 含預覽下載 */}
         {gameStatus === 'ended' && (
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100"><Activity size={56} className="text-emerald-500" /></div>
@@ -561,9 +555,9 @@ export default function AppRanked() {
                 <div className="flex flex-col w-full max-w-xs gap-3">
                     <button onClick={handleInitiateUpload} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all mb-2 animate-pulse"><Globe size={18} /> {rankUploadStatus === 'uploaded' ? '查看目前排名' : '上傳戰績 / 爭奪排名'}</button>
                     <button onClick={() => setShowShareMenu(true)} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm"><Share2 size={16} className="text-blue-500"/> 匯出 Excel / 分享</button>
-                    <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm">{showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'} </button>
+                    <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm">{showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}</button>
 
-                    {/* ★★★ 戰報卡片 (隱藏) ★★★ */}
+                    {/* 戰報卡片 (隱藏) */}
                     <ResultCard 
                         ref={resultCardRef} 
                         data={{
@@ -577,7 +571,7 @@ export default function AppRanked() {
                         }}
                     />
 
-                    {/* ★★★ 戰報下載按鈕 (預覽模式) ★★★ */}
+                    {/* 修正後的下載按鈕：預覽模式 */}
                     <button 
                         onClick={handleDownloadReport} 
                         disabled={isGenerating}
@@ -598,14 +592,12 @@ export default function AppRanked() {
 
         {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
 
-        {/* ★★★ 圖片預覽 Modal (保留黑屏修復版) ★★★ */}
+        {/* 圖片預覽 Modal (修正版) */}
         {showImageModal && (
             <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
-                    <div className="text-white text-center">
-                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
-                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
-                    </div>
+                    <div className="text-white text-center"><h3 className="text-xl font-bold mb-1">戰報已生成！</h3><p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p></div>
+                    {/* 確保 src 有值才顯示 */}
                     {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
                     <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>

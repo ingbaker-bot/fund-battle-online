@@ -1,9 +1,8 @@
-// 2025v10.10.1 - 單機版 (修復 AlertTriangle 缺失導致的部署失敗)
+// 2025v10.11 - 單機版 (移除未使用的 CSV 函式，修復部署與黑屏)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// ★★★ 修正：補上 AlertTriangle 與 RefreshCw，確保 Vercel 建置成功 ★★★
 import { 
-  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
+  Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
   Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
 } from 'lucide-react';
@@ -169,7 +168,6 @@ export default function AppRanked() {
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [detectedEnv, setDetectedEnv] = useState('Browser');
-  const [showCsvCopyToast, setShowCsvCopyToast] = useState(false);
 
   const autoPlayRef = useRef(null);
 
@@ -368,7 +366,7 @@ export default function AppRanked() {
   const handleShareAction = async (method) => {
     const durationStr = getDurationString();
     const shareText = `📊 Fund 手遊戰報\n基金: ${currentFundName}\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n交易時長: ${durationStr}\n大盤: ${benchmarkRoi.toFixed(2)}% | 定額: ${pureRspRoi.toFixed(2)}%\n`;
-    const encodedText = encodeURIComponent(shareText); const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText);
+    const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText); const encodedText = encodeURIComponent(shareText);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (method === 'line') window.open(`https://line.me/R/msg/text/?${encodedText}`, '_blank');
@@ -592,7 +590,7 @@ export default function AppRanked() {
 
         {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
 
-        {/* ★★★ 圖片預覽 Modal (修正版：黑色背景彈窗 + 修復CSS衝突) ★★★ */}
+        {/* ★★★ 圖片預覽 Modal (修正版：fixed + z-9999) ★★★ */}
         {showImageModal && (
             <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
@@ -600,6 +598,7 @@ export default function AppRanked() {
                         <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
                         <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
                     </div>
+                    {/* 這裡確保 src 有值才會顯示 */}
                     {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
                     <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>

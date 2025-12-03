@@ -1,23 +1,15 @@
-// 2025v10.3 - 主持人端 (扣抵三角形優化版)
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { QRCodeSVG } from 'qrcode.react'; 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
-import { 
-  Trophy, Users, Play, Pause, FastForward, RotateCcw, 
-  Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
-  DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
-  Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
-} from 'lucide-react';
+// 2025v10.3 - 玩家端 (扣抵三角形優化版)
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
+import { TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2, Timer, LogOut, Lock, RotateCcw } from 'lucide-react';
 
-import { db, auth } from './config/firebase'; 
-import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-import { 
-  doc, setDoc, onSnapshot, updateDoc, collection, 
-  serverTimestamp, increment, deleteDoc, getDocs, getDoc 
-} from 'firebase/firestore';
+import { db } from '../config/firebase'; 
+import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit } from 'firebase/firestore';
+import { FUNDS_LIBRARY } from '../config/funds';
 
-import { FUNDS_LIBRARY } from './config/funds';
+import html2canvas from 'html2canvas';
+import ResultCard from '../components/ResultCard'; 
 
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
@@ -36,11 +28,9 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// ★★★ 新增：自定義三角形繪製函數 ★★★
+// ★★★ 新增：自定義三角形繪製函數 (與主持人端一致) ★★★
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
-    // 繪製一個向上指的實心三角形 (▲)
-    // 尖端位於 (cx, cy-6)，底部寬度為 12px
     return (
         <polygon 
             points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
@@ -51,166 +41,143 @@ const renderTriangle = (props) => {
     );
 };
 
-export default function SpectatorView() {
-  const [hostUser, setHostUser] = useState(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginError, setLoginError] = useState('');
-  const [permissionError, setPermissionError] = useState(''); 
-  const [isAuthChecking, setIsAuthChecking] = useState(true);
-
-  const [roomId, setRoomId] = useState(null);
-  const [gameStatus, setGameStatus] = useState('waiting'); 
-  const [players, setPlayers] = useState([]);
+export default function AppBattle() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   
-  const [currentDay, setCurrentDay] = useState(400);
-  const [startDay, setStartDay] = useState(400); 
-  const [timeOffset, setTimeOffset] = useState(0); 
+  const urlRoomId = searchParams.get('room');
 
-  const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
-  const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
-  
-  const [gameDuration, setGameDuration] = useState(60);
-  const [gameEndTime, setGameEndTime] = useState(null);
-  const [remainingTime, setRemainingTime] = useState(0);
-  
-  const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
-  const [fullData, setFullData] = useState([]);
-  const [fundName, setFundName] = useState('');
-  const [feeRate, setFeeRate] = useState(0.01);
-  const [showQrModal, setShowQrModal] = useState(false);
-  const [tradeRequests, setTradeRequests] = useState([]);
-  const [countdown, setCountdown] = useState(15); 
-  const [copied, setCopied] = useState(false);
+  // --- 戰報圖片生成邏輯 ---
+  const resultCardRef = useRef(null);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const roomIdRef = useRef(null);
-  const autoPlayRef = useRef(null);
-
-  // 權限檢查
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setIsAuthChecking(true);
-        setPermissionError('');
-        try {
-            const userDocRef = doc(db, "users", user.uid);
-            const userSnap = await getDoc(userDocRef);
-
-            if (userSnap.exists()) {
-                const role = userSnap.data().role;
-                if (['admin', 'host', 'vip'].includes(role)) {
-                    setHostUser(user);
-                } else {
-                    await signOut(auth);
-                    setHostUser(null);
-                    setPermissionError('您的帳號沒有主持人權限 (需為 VIP 或 Host)');
-                }
-            } else {
-                await signOut(auth);
-                setHostUser(null);
-                setPermissionError('查無會員資料，請聯繫管理員');
-            }
-        } catch (error) {
-            console.error("權限檢查失敗", error);
-            setPermissionError('系統錯誤，無法驗證身分');
-            await signOut(auth);
-        }
-        setIsAuthChecking(false);
-      } else {
-        setHostUser(null);
-        setIsAuthChecking(false);
-        setRoomId(null);
-        roomIdRef.current = null;
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleCreateRoom = async () => {
-    if (!hostUser) return;
-    const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
-    roomIdRef.current = newRoomId;
-    setRoomId(newRoomId);
-    setFeeRate(0.01);
-    const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
-    setTimeOffset(randomTimeOffset);
-    
-    try {
-      await setDoc(doc(db, "battle_rooms", newRoomId), {
-        ownerId: hostUser.uid, 
-        status: 'waiting',
-        currentDay: 400,
-        startDay: 400,
-        fundId: selectedFundId,
-        timeOffset: randomTimeOffset,
-        indicators: { ma20: false, ma60: false, river: false, trend: false }, 
-        feeRate: 0.01,
-        createdAt: serverTimestamp(),
-        gameEndTime: null
-      });
-      setGameStatus('waiting');
-    } catch (error) { 
-      console.error("開房失敗:", error); 
-      alert("開房失敗");
-      setRoomId(null);
-    }
+  const handleDownloadReport = async (currentFundName) => {
+      if (isGenerating) return;
+      if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
+      setIsGenerating(true);
+      try {
+          await new Promise(r => setTimeout(r, 100));
+          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
+          canvas.toBlob((blob) => {
+              if (!blob) { alert("生成圖片失敗"); setIsGenerating(false); return; }
+              const url = URL.createObjectURL(blob);
+              setGeneratedImage(url);
+              setShowImageModal(true);
+              setIsGenerating(false);
+          }, 'image/png');
+      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
   };
 
-  useEffect(() => {
-    if (!roomId) return;
-    const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
-      const livePlayers = [];
-      snapshot.forEach((doc) => livePlayers.push({ id: doc.id, ...doc.data() }));
-      livePlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
-      setPlayers(livePlayers);
-    });
-    return () => unsubscribe();
-  }, [roomId]);
-
-  useEffect(() => {
-      if (!roomId) return;
-      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
-          const reqs = [];
-          snapshot.forEach(doc => reqs.push(doc.data()));
-          setTradeRequests(reqs);
-          if (reqs.length > 0) {
-              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
-              setAutoPlaySpeed(null); 
+  const getSavedState = (key, defaultValue, type = 'number') => {
+      const savedRoom = localStorage.getItem('battle_roomId');
+      if (!urlRoomId || savedRoom === urlRoomId) {
+          const savedValue = localStorage.getItem(key);
+          if (savedValue !== null && savedValue !== undefined) {
+              return type === 'number' ? parseFloat(savedValue) : savedValue;
           }
-      });
-      return () => unsubscribe();
-  }, [roomId]);
-
-  useEffect(() => {
-      let timer;
-      if (tradeRequests.length > 0 && countdown > 0) {
-          timer = setInterval(() => { setCountdown((prev) => prev - 1); }, 1000);
-      } else if (tradeRequests.length === 0) {
-          setCountdown(15); 
       }
-      return () => clearInterval(timer);
-  }, [tradeRequests.length, countdown]);
+      return defaultValue;
+  };
+
+  const [roomId, setRoomId] = useState(urlRoomId || '');
+  const [inputRoomId, setInputRoomId] = useState('');
+  
+  const [status, setStatus] = useState(() => {
+      const savedRoom = localStorage.getItem('battle_roomId');
+      const savedNick = localStorage.getItem('battle_nickname');
+      if (urlRoomId && savedRoom === urlRoomId && savedNick) return 'waiting';
+      return urlRoomId ? 'login' : 'input_room';
+  });
+
+  const [nickname, setNickname] = useState(() => getSavedState('battle_nickname', '', 'string'));
+  const [phoneNumber, setPhoneNumber] = useState(() => getSavedState('battle_phone', '', 'string'));
+  
+  const [userId, setUserId] = useState(() => {
+      const savedUid = getSavedState('battle_userId', '', 'string');
+      return savedUid || 'user_' + Math.floor(Math.random() * 100000);
+  });
+
+  const [fullData, setFullData] = useState([]);
+  const [currentDay, setCurrentDay] = useState(400);
+  const [startDay, setStartDay] = useState(0); 
+  const [timeOffset, setTimeOffset] = useState(0);
+  const [fundName, setFundName] = useState('');
+  const [showIndicators, setShowIndicators] = useState({ ma20: false, ma60: false, river: false });
+  
+  const [cash, setCash] = useState(() => getSavedState('battle_cash', 1000000));
+  const [units, setUnits] = useState(() => getSavedState('battle_units', 0));
+  const [avgCost, setAvgCost] = useState(() => getSavedState('battle_avgCost', 0));
+  const [initialCapital] = useState(1000000);
+  const [resetCount, setResetCount] = useState(() => getSavedState('battle_resetCount', 0));
+
+  const [inputAmount, setInputAmount] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+  const [isTrading, setIsTrading] = useState(false);
+  
+  const [feeRate, setFeeRate] = useState(0.01);
+  const [champion, setChampion] = useState(null);
+  const [tradeType, setTradeType] = useState(null);
+
+  // 倒數計時狀態
+  const [gameEndTime, setGameEndTime] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(0);
+  const [isTimeUp, setIsTimeUp] = useState(false);
+
+  const lastReportTime = useRef(0);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
-      const loadData = async () => {
-          const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
-          if (!targetFund) return;
-          setFundName(targetFund.name);
-          try {
-              const res = await fetch(targetFund.file);
-              setFullData(processRealData(await res.json()));
-          } catch (err) { console.error(err); }
-      };
-      loadData();
-  }, [selectedFundId]);
+    if (urlRoomId) { 
+        setRoomId(urlRoomId);
+        const savedRoom = localStorage.getItem('battle_roomId');
+        if (savedRoom && savedRoom !== urlRoomId) {
+            localStorage.clear();
+            setCash(1000000); setUnits(0); setAvgCost(0); setNickname(''); setResetCount(0); setIsTrading(false);
+            setStatus('login');
+        }
+    } else { 
+        setStatus('input_room'); 
+    }
+  }, [urlRoomId]);
 
   useEffect(() => {
-    if (!roomId) return;
+      if (roomId) localStorage.setItem('battle_roomId', roomId);
+      if (userId) localStorage.setItem('battle_userId', userId);
+      if (nickname) localStorage.setItem('battle_nickname', nickname);
+      if (phoneNumber) localStorage.setItem('battle_phone', phoneNumber);
+      localStorage.setItem('battle_cash', cash);
+      localStorage.setItem('battle_units', units);
+      localStorage.setItem('battle_avgCost', avgCost);
+      localStorage.setItem('battle_resetCount', resetCount);
+  }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
+
+  // 監聽房間資訊
+  useEffect(() => {
+    if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
-      if (!docSnap.exists()) { localStorage.clear(); return; }
+      if (!docSnap.exists()) { 
+          alert("找不到此房間"); 
+          localStorage.clear();
+          setStatus('input_room'); 
+          setRoomId(''); 
+          return; 
+      }
       const roomData = docSnap.data();
       
-      if (roomData.status) setGameStatus(roomData.status);
+      if (roomData.status === 'ended') {
+          setStatus('ended');
+      } else if (roomData.status === 'playing') {
+          if (status !== 'login' && status !== 'input_room') {
+              setStatus('playing');
+          }
+      } else if (roomData.status === 'waiting') {
+          if (status !== 'login' && status !== 'input_room') {
+              setStatus('waiting');
+          }
+      }
+
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
       if (roomData.startDay) setStartDay(roomData.startDay);
       if (roomData.indicators) setShowIndicators(roomData.indicators);
@@ -218,11 +185,10 @@ export default function SpectatorView() {
       if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
       
       if (roomData.gameEndTime) {
-          const t = roomData.gameEndTime;
-          const millis = typeof t.toMillis === 'function' ? t.toMillis() : Number(t);
-          setGameEndTime(millis);
+          setGameEndTime(roomData.gameEndTime);
       } else {
           setGameEndTime(null);
+          setIsTimeUp(false);
       }
 
       if (fullData.length === 0 && roomData.fundId) {
@@ -233,170 +199,156 @@ export default function SpectatorView() {
              setFullData(processRealData(await res.json()));
          }
       }
+
+      if (roomData.finalWinner) setChampion(roomData.finalWinner);
     });
     return () => unsubscribe();
-  }, [roomId, fullData.length]);
+  }, [roomId, status, fullData.length]);
 
+  // 倒數計時邏輯
   useEffect(() => {
       let interval = null;
-      const tick = () => {
-          if (gameStatus === 'playing' && gameEndTime) {
+      if (status === 'playing' && gameEndTime) {
+          interval = setInterval(() => {
               const now = Date.now();
               const diff = gameEndTime - now;
+              
               if (diff <= 0) {
                   setRemainingTime(0);
-                  if (gameStatus === 'playing') handleEndGame();
+                  setIsTimeUp(true);
+                  if (isTrading) setIsTrading(false);
+                  clearInterval(interval);
               } else {
                   setRemainingTime(diff);
+                  setIsTimeUp(false);
               }
-          } else {
-              setRemainingTime(0);
-          }
-      };
-      tick();
-      if (gameStatus === 'playing' && gameEndTime) {
-          interval = setInterval(tick, 1000);
+          }, 1000);
+      } else {
+          setRemainingTime(0);
       }
       return () => { if(interval) clearInterval(interval); };
-  }, [gameStatus, gameEndTime]);
+  }, [status, gameEndTime, isTrading]);
 
   const formatTime = (ms) => {
       if (ms <= 0) return "00:00";
-      const totalSeconds = Math.ceil(ms / 1000);
+      const totalSeconds = Math.floor(ms / 1000);
       const m = Math.floor(totalSeconds / 60);
       const s = totalSeconds % 60;
       return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    setPermissionError('');
-    try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setLoginError("登入失敗：帳號或密碼錯誤"); }
+  const currentNav = fullData[currentDay]?.nav || 10;
+  const totalAssets = cash + (units * currentNav);
+  const rawRoi = ((totalAssets - initialCapital) / initialCapital) * 100;
+  const displayRoi = rawRoi - (resetCount * 50); 
+
+  const trendSignal = useMemo(() => {
+      if (!fullData[currentDay]) return { char: '', color: '' };
+      const idx = currentDay;
+      const curNav = fullData[idx].nav;
+      const ind20 = calculateIndicators(fullData, 20, idx);
+      const ind60 = calculateIndicators(fullData, 60, idx);
+      const ma20 = ind20.ma; const ma60 = ind60.ma;
+      if (!ma20 || !ma60) return { char: '', color: '' };
+      if (curNav > ma20 && ma20 > ma60) return { char: '多', color: 'text-red-500' };
+      else if (curNav < ma20 && ma20 < ma60) return { char: '空', color: 'text-green-600' };
+      return { char: '', color: '' };
+  }, [fullData, currentDay]);
+
+  useEffect(() => {
+      if ((status === 'playing' || status === 'waiting') && userId) {
+          const now = Date.now();
+          if (now - lastReportTime.current > 1500) {
+              updateDoc(doc(db, "battle_rooms", roomId, "players", userId), {
+                  roi: displayRoi, assets: totalAssets, units: units, lastUpdate: serverTimestamp()
+              }).catch(e => console.log(e));
+              lastReportTime.current = now;
+          }
+      }
+  }, [currentDay]); 
+
+  useEffect(() => {
+      if ((status === 'playing' || status === 'waiting') && userId) {
+          updateDoc(doc(db, "battle_rooms", roomId, "players", userId), {
+              roi: displayRoi, assets: totalAssets, units: units, lastUpdate: serverTimestamp()
+          }).catch(e => console.log(e));
+          lastReportTime.current = Date.now(); 
+      }
+  }, [cash, units, resetCount]); 
+
+  const handleConfirmRoom = () => {
+      if (!inputRoomId.trim()) return;
+      setRoomId(inputRoomId); setStatus('login'); setSearchParams({ room: inputRoomId });
   };
 
-  const handleLogout = () => {
-    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    signOut(auth);
+  const handleJoinGame = async () => {
+      if (!nickname.trim()) { alert("請輸入暱稱"); return; }
+      if (!phoneNumber.trim()) { alert("請輸入手機號碼"); return; }
+      setIsJoining(true);
+      try {
+        await setDoc(doc(db, "battle_rooms", roomId, "players", userId), {
+            nickname, phone: phoneNumber, roi: 0, assets: initialCapital, units: 0, isOut: false, joinedAt: serverTimestamp()
+        });
+        setStatus('waiting');
+      } catch (err) { alert("加入失敗: " + err.message); } finally { setIsJoining(false); }
   };
 
-  const handleStartGame = async () => {
-    if (!roomId || fullData.length === 0) return;
-    const minBuffer = 100;
-    const maxStart = Math.max(minBuffer, fullData.length - 1250);
-    const randomStartDay = Math.floor(Math.random() * (maxStart - minBuffer)) + minBuffer;
-    const randomOffset = Math.floor(Math.random() * 50) + 10;
-
-    const duration = Number(gameDuration) || 60;
-    const calculatedEndTime = Date.now() + (duration * 60 * 1000);
-
-    setGameEndTime(calculatedEndTime);
-    setGameStatus('playing');
-
-    await updateDoc(doc(db, "battle_rooms", roomId), { 
-        status: 'playing', 
-        fundId: selectedFundId,
-        currentDay: randomStartDay, 
-        startDay: randomStartDay,   
-        timeOffset: randomOffset,
-        gameEndTime: calculatedEndTime,
-        gameDuration: duration
-    });
+  const handleBankruptcyReset = () => {
+      if (window.confirm("確定申請紓困？\n\n您的資產將重置為 $1,000,000\n但總成績將扣除 50%！")) {
+          setCash(1000000); setUnits(0); setAvgCost(0); setResetCount(prev => prev + 1);
+      }
   };
 
-  const handleNextDay = async () => {
-    if (tradeRequests.length > 0) return; 
-    if (!roomId) return;
-    await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
-    setCurrentDay(prev => prev + 1);
+  const handleRequestTrade = async () => {
+      if (isTimeUp) { alert("比賽時間已到，停止交易！"); return; } 
+      setIsTrading(true); setTradeType(null); 
+      try { await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), { nickname: nickname, timestamp: serverTimestamp() }); } catch (e) { console.error(e); }
   };
 
-  const toggleIndicator = async (key) => {
-      const newIndicators = { ...indicators, [key]: !indicators[key] };
-      setIndicators(newIndicators); 
-      if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { indicators: newIndicators }); 
+  const handleCancelTrade = async () => {
+      setIsTrading(false); setTradeType(null); setInputAmount(''); 
+      try { await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId)); } catch (e) { console.error(e); }
   };
 
-  const handleChangeFee = async (e) => {
-      const rate = parseFloat(e.target.value);
-      setFeeRate(rate);
-      if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { feeRate: rate });
+  const handleInputChange = (e) => {
+      const rawValue = e.target.value.replace(/,/g, ''); 
+      if (!rawValue) { setInputAmount(''); setTradeType(null); return; }
+      if (!isNaN(rawValue)) { setInputAmount(Number(rawValue).toLocaleString()); setTradeType(null); }
   };
 
-  const toggleAutoPlay = (speed) => {
-    if (tradeRequests.length > 0) return;
-    if (autoPlaySpeed === speed) {
-      clearInterval(autoPlayRef.current);
-      setAutoPlaySpeed(null);
-    } else {
-      clearInterval(autoPlayRef.current);
-      setAutoPlaySpeed(speed);
-      autoPlayRef.current = setInterval(async () => {
-        if (roomIdRef.current) {
-           await updateDoc(doc(db, "battle_rooms", roomIdRef.current), { currentDay: increment(1) });
-           setCurrentDay(prev => prev + 1);
-        }
-      }, speed);
-    }
+  const handleQuickAmount = (type, percent) => {
+      setTradeType(type); 
+      if (type === 'buy') { const amount = Math.floor(cash * percent); setInputAmount(amount.toLocaleString()); } 
+      else if (type === 'sell') { const assetValue = units * currentNav; const amount = Math.floor(assetValue * percent); setInputAmount(amount.toLocaleString()); }
   };
 
-  const handleEndGame = async () => {
-    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    setAutoPlaySpeed(null);
-    let winnerInfo = null;
-    if (players.length > 0) {
-        const champion = players[0];
-        winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
-    }
-    if (roomId) {
-        await updateDoc(doc(db, "battle_rooms", roomId), { status: 'ended', finalWinner: winnerInfo });
-    }
-    setGameStatus('ended');
-  };
+  const executeTrade = async (type) => {
+      if (isProcessingRef.current) return;
+      if (isTimeUp) { alert("比賽時間已到！"); return; }
+      
+      isProcessingRef.current = true; 
+      const amount = parseFloat(inputAmount.replace(/,/g, ''));
+      if (!amount || amount <= 0) { isProcessingRef.current = false; return; }
 
-  const handleResetRoom = async () => {
-    if (!roomId || !window.confirm("確定重置？")) return;
-    setGameStatus('waiting');
-    setCurrentDay(400); setStartDay(400);
-    setIndicators({ ma20: false, ma60: false, river: false, trend: false });
-    setFeeRate(0.01);
-    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
-    setAutoPlaySpeed(null);
-    setTradeRequests([]); setCountdown(15); 
-    setGameEndTime(null); 
-
-    await updateDoc(doc(db, "battle_rooms", roomId), { 
-        status: 'waiting', 
-        currentDay: 400, 
-        startDay: 400,
-        indicators: { ma20: false, ma60: false, river: false, trend: false },
-        feeRate: 0.01,
-        finalWinner: null,
-        gameEndTime: null
-    });
-    
-    const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
-    snapshot.forEach(async (d) => await deleteDoc(doc(db, "battle_rooms", roomId, "players", d.id)));
-    const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
-    reqSnap.forEach(async (d) => await deleteDoc(d.ref));
-  };
-
-  const handleForceClearRequests = async () => {
-      if (!roomId) return;
-      const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
-      reqSnap.forEach(async (d) => await deleteDoc(d.ref));
-      setTradeRequests([]); setCountdown(15);
-  };
-
-  const handleCopyUrl = () => {
-      if (!joinUrl) return;
-      navigator.clipboard.writeText(joinUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000); 
+      if (type === 'buy') {
+          if (amount > Math.floor(cash)) { alert(`現金不足 (可用: $${Math.floor(cash).toLocaleString()})`); isProcessingRef.current = false; return; }
+          const fee = Math.floor(amount * feeRate); const netInvestment = amount - fee; const buyUnits = netInvestment / currentNav;
+          const newUnits = units + buyUnits; setAvgCost((units * avgCost + amount) / newUnits); setUnits(newUnits);
+          setCash(prev => { const remains = prev - amount; return Math.abs(remains) < 1 ? 0 : remains; });
+      } else {
+          const currentAssetValue = units * currentNav;
+          if (amount >= Math.floor(currentAssetValue)) { if (units <= 0) { isProcessingRef.current = false; return; } setCash(prev => prev + currentAssetValue); setUnits(0); setAvgCost(0); } 
+          else { const sellUnits = amount / currentNav; if (sellUnits > units * 1.0001) { alert('單位不足'); isProcessingRef.current = false; return; } setUnits(prev => Math.max(0, prev - sellUnits)); setCash(prev => prev + amount); }
+      }
+      
+      setInputAmount(''); if (navigator.vibrate) navigator.vibrate(50);
+      setIsTrading(false); setTradeType(null);
+      try { await deleteDoc(doc(db, "battle_rooms", roomId, "requests", userId)); } catch (e) { console.error(e); }
+      setTimeout(() => { isProcessingRef.current = false; }, 500); 
   };
 
   const getDisplayDate = (dateStr) => {
-      if (!dateStr) return 'Loading...';
+      if (!dateStr) return '---';
       const dateObj = new Date(dateStr);
       if (isNaN(dateObj.getTime())) return dateStr;
       const newYear = dateObj.getFullYear() + timeOffset;
@@ -405,193 +357,358 @@ export default function SpectatorView() {
       return `${newYear}-${month}-${day}`;
   };
 
-  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
-  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
-
-  const currentTrendInfo = useMemo(() => {
-      if (!fullData[currentDay] || !indicators.trend) return null;
-      const realIdx = currentDay;
-      const curNav = fullData[realIdx].nav;
-      const ind20 = calculateIndicators(fullData, 20, realIdx);
-      const ind60 = calculateIndicators(fullData, 60, realIdx);
-      const ma20 = ind20.ma; const ma60 = ind60.ma;
-      if (!ma20 || !ma60) return null;
-      if (curNav > ma20 && ma20 > ma60) return { text: '多頭排列 🔥', color: 'text-red-500', bg: 'bg-red-50' };
-      else if (curNav < ma20 && ma20 < ma60) return { text: '空頭排列 🧊', color: 'text-green-600', bg: 'bg-green-50' };
-      return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
-  }, [fullData, currentDay, indicators.trend]);
+  const getRealDate = (dateStr) => {
+      if (!dateStr) return '---';
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj.getTime())) return dateStr;
+      const year = dateObj.getFullYear(); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
 
   const chartData = useMemo(() => {
       const start = Math.max(0, currentDay - 330); const end = currentDay + 1;
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
-          const ind20 = calculateIndicators(fullData, 20, realIdx);
-          const ind60 = calculateIndicators(fullData, 60, realIdx);
-          let riverTop = null; let riverBottom = null;
-          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
+          const ind20 = calculateIndicators(fullData, 20, realIdx); const ind60 = calculateIndicators(fullData, 60, realIdx);
+          let riverTop = null; let riverBottom = null; if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
           return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom };
       });
   }, [fullData, currentDay]);
 
-  const { totalInvestedAmount, positionRatio } = useMemo(() => {
-      let totalAssets = 0; let totalInvested = 0;
-      players.forEach(p => {
-          const pAssets = p.assets || 1000000; totalAssets += pAssets;
-          const pUnits = p.units || 0; const currentNav = fullData[currentDay]?.nav || 0;
-          let marketValue = pUnits * currentNav; if (marketValue > pAssets) marketValue = pAssets;
-          totalInvested += marketValue;
-      });
-      const ratio = totalAssets > 0 ? (totalInvested / totalAssets) * 100 : 0;
-      return { totalInvestedAmount: totalInvested, positionRatio: ratio };
-  }, [players, fullData, currentDay]);
+  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "";
+  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
+  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
-  const topPlayers = players.slice(0, 10);
-  const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
-  const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
-  const currentNav = fullData[currentDay]?.nav || 0;
-  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
-  const hasRequests = tradeRequests && tradeRequests.length > 0;
+  // --- UI Render ---
 
-  if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
-
-  if (!hostUser) {
-    return (
-      <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
-          <div className="flex justify-center mb-6"><img src="/logo.jpg" alt="Logo" className="h-16 object-contain" /></div>
-          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">基金競技場</h2>
-          <p className="text-center text-slate-400 text-xs mb-6">主持人控制台登入</p>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">管理員信箱</label>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="name@example.com"/>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">密碼</label>
-              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="••••••••"/>
-            </div>
-            {loginError && <div className="p-3 bg-red-50 text-red-500 text-xs rounded-lg text-center font-bold border border-red-100">{loginError}</div>}
-            
-            {permissionError && <div className="p-3 bg-amber-50 text-amber-600 text-xs rounded-lg text-center font-bold border border-amber-200 flex flex-col gap-1"><ShieldCheck size={20} className="mx-auto"/>{permissionError}</div>}
-
-            <button type="submit" className="w-full py-3.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg flex items-center justify-center gap-2">
-                <LogIn size={18}/> 登入系統
-            </button>
-          </form>
-          <div className="mt-6 text-center text-[10px] text-slate-400">
-            v10.3 Triangle Deduction | NBS Team
-          </div>
-        </div>
+  if (status === 'input_room') return (
+      <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">
+          <Zap size={64} className="text-emerald-500 mb-6"/>
+          <h1 className="text-3xl font-bold mb-2 text-slate-800">重新加入現場對戰輸入Room ID</h1>
+          <input type="number" value={inputRoomId} onChange={e => setInputRoomId(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl p-4 text-center text-3xl font-mono text-slate-800 mb-6 tracking-widest outline-none focus:border-emerald-500 shadow-sm" placeholder="0000" />
+          <button onClick={handleConfirmRoom} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-lg transition-colors">下一步</button>
       </div>
-    );
-  }
+  );
 
-  if (!roomId) {
-      return (
-          <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
-              <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
-                  <div className="flex items-center gap-3"><img src="/logo.jpg" alt="Logo" className="h-10 object-contain" /><div className="flex flex-col"><span className="font-black text-base text-slate-800 leading-tight">Fund手遊</span><span className="text-[10px] text-slate-500 font-bold tracking-wide">基金競技場 - 賽事主控台</span></div></div>
-                  <div className="flex items-center gap-4">
-                      <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
-                      <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-600 font-bold flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-lg transition-colors"><LogOut size={16}/> 登出</button>
-                  </div>
-              </header>
-              <main className="flex-1 flex flex-col items-center justify-center p-6">
-                  <div className="text-center mb-8">
-                      <h1 className="text-4xl font-bold text-slate-800 mb-2">準備好開始一場對決了嗎？</h1>
-                      <p className="text-slate-500">點擊下方按鈕建立一個全新的戰局房間</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 w-full max-w-md">
-                      <div className="mb-6">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">預設基金</label>
-                          <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 font-bold">
-                               {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
-                          </select>
-                      </div>
-                      <button onClick={handleCreateRoom} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 group">
-                          <Zap size={24} className="group-hover:scale-110 transition-transform"/> 建立新戰局
-                      </button>
-                  </div>
-              </main>
+  if (status === 'login') return (
+      <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">
+          <div className="bg-white p-4 rounded-lg mb-8 text-center border border-slate-200 shadow-sm w-full">
+              <div className="text-xs text-slate-400 mb-1">ROOM ID</div>
+              <div className="text-2xl font-mono font-bold text-emerald-600">{roomId}</div>
           </div>
-      );
-  }
+          <h1 className="text-2xl font-bold mb-6">建立玩家檔案</h1>
+          <div className="w-full space-y-4 relative z-10">
+              <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl p-4 text-center text-xl text-slate-800 outline-none focus:border-emerald-500 shadow-sm" placeholder="您的暱稱" />
+              <div className="relative">
+                  <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
+                  <input type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} className="w-full bg-white border border-slate-300 rounded-xl p-4 pl-12 text-center text-xl text-slate-800 outline-none focus:border-emerald-500 shadow-sm" placeholder="手機號碼" />
+              </div>
+              <button onClick={handleJoinGame} disabled={isJoining} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 disabled:opacity-70">{isJoining ? <Loader2 className="animate-spin" /> : '加入房間'}</button>
+          </div>
+      </div>
+  );
+
+  if (status === 'waiting') return (
+      <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center text-slate-800 p-6">
+          <Loader2 size={48} className="text-emerald-500 animate-spin mb-4"/>
+          <h2 className="text-xl font-bold">等待主持人開始...</h2>
+          <div className="mt-8 px-6 py-2 bg-white rounded-full border border-slate-200 shadow-sm flex flex-col items-center">
+             <span className="text-xs text-slate-400 mb-1">已登入</span>
+             <span className="text-emerald-600 font-bold text-lg">{nickname}</span>
+          </div>
+      </div>
+  );
+
+  if (status === 'playing') return (
+      <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col font-sans relative overflow-hidden">
+          {totalAssets < 100000 && (
+              <div className="absolute inset-0 bg-slate-900/90 z-50 flex flex-col items-center justify-center p-8 text-center backdrop-blur-sm animate-in fade-in">
+                  <AlertTriangle size={64} className="text-red-500 mb-4 animate-bounce"/>
+                  <h2 className="text-3xl font-bold text-white mb-2">瀕臨破產！</h2>
+                  <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-8 w-full">
+                      <div className="text-xs text-slate-500 mb-1">紓困代價</div>
+                      <div className="text-red-400 font-bold text-lg">總成績扣除 50%</div>
+                  </div>
+                  <button onClick={handleBankruptcyReset} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-xl shadow-lg flex items-center justify-center gap-2"><RefreshCw size={24}/> 申請紓困重整</button>
+              </div>
+          )}
+          
+          <div className="sticky top-0 z-20 shadow-sm">
+              <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-lg font-black text-slate-700">
+                 
+                 {/* 左側：離開(小圖示) + 倒數計時 */}
+                 <div className="flex items-center gap-2 w-1/3">
+                     <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
+                         <LogOut size={16} />
+                     </button>
+                     <div className={`flex items-center gap-1 font-mono font-bold ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
+                         <Timer size={16} />
+                         {formatTime(remainingTime)}
+                     </div>
+                 </div>
+
+                 {/* 中間：基金名稱 */}
+                 <div className="w-1/3 text-center">
+                     <span className="truncate max-w-full font-bold text-xl">{fundName}</span>
+                 </div>
+
+                 {/* 右側：日期 */}
+                 <div className="w-1/3 text-right">
+                     <span className="font-mono tracking-wider text-sm">{currentDisplayDate}</span>
+                 </div>
+              </div>
+              
+              <div className="bg-white px-2 py-1.5 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
+                 <div className="flex flex-col items-center border-r border-slate-100">
+                    <div className="text-xs text-slate-400 font-bold mb-0.5">趨勢</div>
+                    <div className={`text-xl font-black leading-none h-6 flex items-center ${trendSignal.color}`}>
+                        {trendSignal.char}
+                    </div>
+                 </div>
+
+                 <div className="flex flex-col items-center border-r border-slate-100">
+                    <div className="text-xs text-slate-400 font-bold mb-0.5">報酬率</div>
+                    <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-xs ml-0.5">%</span>
+                    </div>
+                 </div>
+
+                 <div className="flex flex-col items-center">
+                    <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
+                    <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {Math.floor(totalAssets).toLocaleString()}
+                    </div>
+                 </div>
+              </div>
+          </div>
+
+          <div className="flex-1 relative bg-white min-h-0">
+             <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
+		            <XAxis dataKey="date" hide />
+                    {showIndicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                    {showIndicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                    {showIndicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
+                    {showIndicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
+			        
+                    {/* ★★★ 修正：扣抵三角形 ★★★ */}
+        	        {showIndicators.trend && showIndicators.ma20 && deduction20 && (
+           		        <ReferenceDot
+                		    x={deduction20.date}
+                		    y={deduction20.nav}
+                		    shape={renderTriangle} // 使用自定義三角形
+                		    fill="#38bdf8" 
+              		      isAnimationActive={false}
+            		    />
+        	        )}
+
+                    {showIndicators.trend && showIndicators.ma60 && deduction60 && (
+                        <ReferenceDot
+                            x={deduction60.date}
+                            y={deduction60.nav}
+                            shape={renderTriangle} // 使用自定義三角形
+                            fill="#1d4ed8" 
+                            isAnimationActive={false}
+                        />
+                    )}                    
+
+                    <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
+                    <YAxis domain={['auto', 'auto']} hide />
+                </ComposedChart>
+             </ResponsiveContainer>
+          </div>
+          
+          <div className="bg-white border-t border-slate-200 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-3 pt-1 safe-area-pb">
+              <div className="flex justify-between px-4 py-1 border-b border-slate-100 mb-1 text-xs">
+                  <div className="flex gap-1 text-slate-500 font-bold">
+                      <span>現金</span>
+                      <span className="font-mono text-emerald-600">${Math.floor(cash).toLocaleString()}</span>
+                  </div>
+                  <div className="flex gap-1 text-slate-500 font-bold">
+                      <span>單位</span>
+                      <span className="font-mono text-slate-800">{Math.floor(units).toLocaleString()}</span>
+                  </div>
+              </div>
+
+              {!isTrading ? (
+                  <div className="px-4 pb-2">
+                      {/* 按鈕狀態控制 - 時間到則 Disable */}
+                      <button 
+                          onClick={handleRequestTrade} 
+                          disabled={isTimeUp}
+                          className={`w-full py-6 transition-all text-white rounded-xl font-black text-3xl shadow-lg flex items-center justify-center gap-3 ${isTimeUp ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 active:scale-95 animate-pulse'}`}
+                      >
+                          {isTimeUp ? <Lock size={32}/> : <Hand size={32} className="text-yellow-400"/>} 
+                          {isTimeUp ? '比賽結束' : '請求交易'}
+                      </button>
+                      <p className="text-center text-xs text-slate-400 mt-2">{isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策'}</p>
+                  </div>
+              ) : (
+                  <>
+                      {/* 交易區塊 (保持原樣) */}
+                      <div className="px-2 grid grid-cols-5 gap-1 mb-1">
+                          <button 
+                            onClick={() => handleQuickAmount('buy', 1.0)} 
+                            disabled={tradeType === 'sell'} 
+                            className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-700 text-white active:scale-95'}`}
+                          >
+                             <span>買入</span><span className="text-[10px] opacity-80">All In</span>
+                          </button>
+                          
+                          <input 
+                             type="text" 
+                             value={inputAmount} 
+                             onChange={handleInputChange} 
+                             placeholder="輸入金額" 
+                             className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-2 text-xl font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"
+                          />
+                          
+                          <button 
+                             onClick={() => handleQuickAmount('sell', 1.0)} 
+                             disabled={tradeType === 'buy'} 
+                             className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-700 text-white active:scale-95'}`}
+                          >
+                             <span>賣出</span><span className="text-[10px] opacity-80">All In</span>
+                          </button>
+                      </div>
+                      
+                      <div className="px-2 grid grid-cols-4 gap-1 mb-1">
+                          <button onClick={() => handleQuickAmount('buy', 0.2)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-100 text-rose-700 active:bg-rose-200'}`}>買入 20%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.5)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-200 text-rose-800 active:bg-rose-300'}`}>買入 50%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.2)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-100 text-emerald-700 active:bg-emerald-200'}`}>賣出 20%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.5)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-200 text-emerald-800 active:bg-emerald-300'}`}>賣出 50%</button>
+                      </div>
+
+                        <div className="px-2 grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => executeTrade('buy')} 
+                                disabled={tradeType === 'sell'} 
+                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
+                            >
+                                <TrendingUp size={18} />
+                                <span>買入確認</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-1">(費{Math.round(feeRate*100)}%)</span>
+                            </button>
+                            
+                            <button 
+                                onClick={() => executeTrade('sell')} 
+                                disabled={tradeType === 'buy'} 
+                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
+                            >
+                                <TrendingDown size={18} />
+                                <span>賣出確認</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-1">(免手續費)</span>
+                            </button>
+                        </div>
+                      <div className="px-2 mt-1">
+                          <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-sm flex items-center justify-center gap-1"><X size={16}/> 取消交易 (恢復行情)</button>
+                      </div>
+                  </>
+              )}
+          </div>
+      </div>
+  );
 
   return (
-    <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
-      <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
-        <div className="flex items-center gap-3 shrink-0"><img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" /><div className="flex flex-col justify-center"><span className="font-black text-base text-slate-800 leading-none mb-0.5">Fund手遊</span><span className="text-[10px] text-slate-500 font-bold tracking-wide leading-none">基金競技場 - 賽事主控台</span></div></div>
-        <div className="flex-1 flex justify-center items-center px-4">
-            {(gameStatus === 'playing' || gameStatus === 'ended') && (
-                <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
-                    {currentTrendInfo && (<div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}><span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span></div>)}
-                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div><div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex items-baseline gap-2"><span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span><span className="text-3xl font-mono font-black text-slate-800 tracking-tight">${currentNav.toFixed(2)}</span></div>
-                    <div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex flex-col items-end"><div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase"><Wallet size={10} /> 總資金</div><div className="flex items-baseline gap-2"><span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount / 10000)}萬</span><span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>({positionRatio.toFixed(0)}%)</span></div></div>
+    <div className="h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
+        <Trophy size={64} className="text-amber-500 mb-4 animate-bounce"/>
+        <h2 className="text-3xl font-bold mb-4 text-slate-800">比賽結束</h2>
+        
+        <div className="mb-6 bg-white px-6 py-2 rounded-full shadow-sm border border-slate-200 inline-block">
+            <span className="text-xs text-slate-400 mr-2 font-bold">基金揭曉</span>
+            <span className="text-lg font-bold text-emerald-600">{fundName}</span>
+        </div>
+
+        <div className="w-full max-w-sm flex gap-2 mb-6">
+            <div className="flex-1 bg-white p-4 rounded-xl border border-slate-200 shadow-md flex flex-col justify-center items-center">
+                <div className="text-xs text-slate-400 mb-1 font-bold">您的最終成績</div>
+                <div className={`text-4xl font-black ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
+                </div>
+            </div>
+
+            {champion && (
+               <div className="w-1/3 bg-gradient-to-br from-yellow-400 to-orange-500 p-3 rounded-xl border border-amber-300 shadow-md flex flex-col justify-center items-center relative overflow-hidden text-white">
+        	<Crown size={40} className="absolute -right-2 -top-2 text-white/30"/>
+        	<Crown size={20} className="text-white mb-1" fill="currentColor"/>
+        	<div className="text-lg text-white font-black mb-0 shadow-sm">本場冠軍</div>
+        	<div className="text-sm font-bold truncate w-full text-center mb-1 drop-shadow-md">{champion.nickname}</div>
+        	<div className="text-lg font-mono font-black text-white drop-shadow-md">
+            	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(1)}%
+                    </div>
                 </div>
             )}
         </div>
-        <div className="flex items-center gap-4 justify-end shrink-0">
-            {(gameStatus === 'playing' || gameStatus === 'ended') && (<div className="flex items-center gap-2 px-4 py-1 bg-red-50 border border-red-100 rounded-lg animate-pulse"><Timer size={20} className="text-red-500"/><span className="text-2xl font-mono font-black text-red-600 tracking-wider">{formatTime(remainingTime)}</span></div>)}
-            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 hidden md:flex"><div className="text-right"><span className="block text-[10px] text-slate-400 uppercase leading-none">Room ID</span><span className="text-xl font-mono font-bold text-slate-800 tracking-widest leading-none">{roomId || '...'}</span></div><button onClick={() => setShowQrModal(true)} className="bg-white p-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"><QrCode size={18}/></button></div><button onClick={handleLogout} className="p-2 bg-white border border-slate-200 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors ml-2" title="結束控制並登出"><LogOut size={18} /></button>
-        </div>
-      </header>
 
-      <main className="flex-1 flex overflow-hidden relative">
-        {gameStatus === 'waiting' && (<div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 relative z-10"><div className="flex gap-16 items-center"><div className="text-left"><h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2><p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p><button onClick={handleCopyUrl} className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative" title="點擊複製連結"><span className="font-mono text-emerald-600 font-bold">{joinUrl}</span><span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>{copied ? <Check size={24} /> : <Copy size={24} />}</span><span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>已複製連結！</span></button><div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg"><div className="mb-4"><label className="text-xs text-slate-400 block mb-2">本場戰役目標</label><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 outline-none">{FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}</select></div><div className="mb-6"><label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2"><Clock size={18} className="text-slate-400"/><input type="number" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full bg-transparent outline-none text-slate-800 font-bold" min="1"/></div></div><button onClick={handleStartGame} disabled={players.length === 0} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-lg transition-all shadow-md flex items-center justify-center gap-2"><Play fill="currentColor"/> 開始比賽 ({players.length}人)</button></div></div><div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">{roomId && <QRCodeSVG value={joinUrl} size={350} />}</div></div></div>)}
-
-        {(gameStatus === 'playing' || gameStatus === 'ended') && (
-            <>
-                <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative"><div className="p-4 flex-1 relative"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} /><XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
-                
-                {/* ★★★ 扣抵價標註點 (改用 Triangle) ★★★ */}
-                {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
-                {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
-
-                {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}{indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}{indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}{indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}<Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" /></ComposedChart></ResponsiveContainer></div></div>
-                <div className="w-1/3 h-full bg-slate-50 flex flex-col border-l border-slate-200"><div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0"><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2></div><div className="flex-1 overflow-hidden relative flex flex-col"><div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">{topPlayers.map((p, idx) => (<div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}><div className="flex items-center gap-2"><div className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold text-xs ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div><div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[100px]">{p.nickname}</span>{idx===0 && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Crown size={8}/> 領先</span>}</div></div><div className={`font-mono font-bold text-base ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div></div>))}</div>{bottomPlayers.length > 0 && (<div className="bg-slate-100 border-t border-slate-300 p-2 shrink-0"><div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider"><TrendingDown size={12}/> 逆風追趕中</div><div className="space-y-1">{bottomPlayers.map((p, idx) => (<div key={p.id} className="flex justify-between items-center p-1.5 bg-white/50 rounded border border-slate-200 text-xs opacity-70"><div className="flex items-center gap-2"><span className="text-slate-400 w-5 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div><span className="font-mono text-green-600 font-bold">{(p.roi || 0).toFixed(1)}%</span></div>))}</div></div>)}</div></div>
-            </>
+        {fullData.length > 0 && (
+            <div className="bg-slate-100 p-4 rounded-xl w-full max-w-sm border border-slate-200 mb-6">
+                <div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-2 text-xs">
+                    <Calendar size={14}/> 真實歷史區間
+                </div>
+                <div className="text-lg font-mono font-bold text-slate-700">
+                    {getRealDate(fullData[startDay]?.date)} 
+                    <span className="text-slate-400 mx-1">~</span> 
+                    {getRealDate(fullData[currentDay]?.date)}
+                </div>
+            </div>
         )}
-      </main>
+        
+        {/* ★★★ 3. 插入戰報卡片與下載按鈕 (含預覽功能) ★★★ */}
+        <ResultCard 
+            ref={resultCardRef} 
+            data={{
+                fundName: fundName,
+                roi: displayRoi,
+                assets: Math.round(totalAssets),
+                duration: `${getRealDate(fullData[startDay]?.date)}~${getRealDate(fullData[currentDay]?.date)}`,
+                nickname: nickname || '匿名戰士',
+                gameType: '多人對戰',
+                dateRange: `${getRealDate(fullData[startDay]?.date)}~${getRealDate(fullData[currentDay]?.date)}`
+            }}
+        />
 
-      {gameStatus === 'playing' && (
-          <footer className="bg-white border-t border-slate-200 h-[72px] shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] relative flex items-center justify-center">
-              <div className="absolute left-4 flex gap-1"><button onClick={() => toggleIndicator('ma20')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma20 ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-300 text-slate-400'}`}>月線</button><button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button><button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button><button onClick={() => toggleIndicator('trend')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.trend ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-slate-300 text-slate-400'}`}>趨勢</button><div className="flex items-center ml-2 pl-2 border-l border-slate-200"><div className="relative"><Percent size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/><select value={feeRate} onChange={handleChangeFee} className="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-md text-[10px] font-bold text-slate-700 outline-none hover:border-slate-400 cursor-pointer appearance-none w-[90px]"><option value={0}>手續費 0%</option><option value={0.01}>手續費 1%</option><option value={0.02}>手續費 2%</option><option value={0.03}>手續費 3%</option></select></div></div></div>
-              <div className="absolute left-[360px] z-50 w-[480px]">
-                 {hasRequests ? (<div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100"><div className="flex items-center gap-3 overflow-hidden"><div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div><div className="flex flex-col leading-none overflow-hidden"><div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div><div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div></div></div><button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button></div>) : (<div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner w-fit"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>市場監控中...</div>)}
-              </div>
-              <div className="absolute right-4 flex gap-2 items-center">
-                  <button onClick={handleNextDay} disabled={hasRequests} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
-                  <div className="h-8 w-px bg-slate-200 mx-1"></div>
-                  <div className="flex gap-1">{[5, 4, 3, 2, 1].map(sec => (<button key={sec} onClick={() => toggleAutoPlay(sec * 1000)} disabled={hasRequests} className={`w-8 py-2 rounded font-bold text-xs flex justify-center transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===sec*1000 ? 'bg-emerald-500 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}>{sec}s</button>))} <button onClick={() => toggleAutoPlay(200)} disabled={hasRequests} className={`px-2 py-2 rounded font-bold text-xs flex gap-1 transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===200 ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}><Zap size={12}/> 極速</button></div>
-                  <button onClick={handleEndGame} className="px-3 py-2 bg-white border border-red-200 text-red-500 rounded text-xs hover:bg-red-50 font-bold ml-2">End</button>
-              </div>
-          </footer>
-      )}
+        {/* 修正後的下載按鈕：綁定 isGenerating 狀態 */}
+        <button 
+            onClick={() => handleDownloadReport(fundName)} 
+            disabled={isGenerating}
+            className={`w-full max-w-sm flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] mb-4 ${isGenerating ? 'opacity-70 cursor-wait' : ''}`}
+        >
+            {isGenerating ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18} />}
+            {isGenerating ? '戰報生成中...' : '下載對戰成績卡'}
+        </button>
+        {/* ★★★ 結束插入 ★★★ */}
 
-      {gameStatus === 'ended' && (
-          <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
-                  <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
-                  <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
-                  <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
-                  {players.length > 0 && (<div className="py-6 relative z-10 border-b border-amber-100 mb-6"><div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div><div className={`text-4xl font-mono font-bold ${players[0].roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>ROI: {players[0].roi > 0 ? '+' : ''}{players[0].roi.toFixed(2)}%</div></div>)}
-                  <div className="relative z-10 mb-4"><div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div><div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">{fundName}</div></div>
-                  {fullData.length > 0 && (<div className="relative z-10 mb-8"><div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs"><Calendar size={14}/> 真實歷史區間</div><div className="text-lg font-mono font-bold text-slate-600">{fullData[startDay]?.date} <span className="text-slate-400">~</span> {fullData[currentDay]?.date}</div></div>)}
-                  <button onClick={handleResetRoom} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg transition-all active:scale-95"><RotateCcw size={20}/> 開啟新局</button>
-              </div>
-          </div>
-      )}
+        <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-4 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
 
-      {showQrModal && (
-          <div className="absolute inset-0 bg-slate-900/80 z-[100] flex items-center justify-center backdrop-blur-sm">
-              <div className="bg-white p-8 rounded-3xl border-2 border-slate-200 text-center shadow-2xl relative">
-                  <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24}/></button>
-                  <h2 className="text-2xl font-bold text-slate-800 mb-4">掃描加入戰局</h2>
-                  <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block"><QRCodeSVG value={joinUrl} size={300} /></div>
-                  <div className="mt-6 text-xl font-mono font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">Room ID: {roomId}</div>
-              </div>
-          </div>
-      )}
+        {/* ★★★ 4. 新增預覽視窗 (Modal) ★★★ */}
+        {showImageModal && (
+            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
+                <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
+                    <div className="text-white text-center">
+                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
+                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+                    </div>
+                    
+                    {/* 顯示生成的圖片 */}
+                    {generatedImage && (
+                        <img 
+                            src={generatedImage} 
+                            alt="戰報" 
+                            className="w-full rounded-xl shadow-2xl border border-white/20"
+                        />
+                    )}
+
+                    <button 
+                        onClick={() => setShowImageModal(false)} 
+                        className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all"
+                    >
+                        關閉
+                    </button>
+                </div>
+            </div>
+        )}
+        {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
 }

@@ -1,12 +1,13 @@
-// 2025v10.10 - 單機版 (補齊遺漏 Icon，確保部署成功)
+// 2025v10.10.1 - 單機版 (修復 AlertTriangle 缺失導致的部署失敗)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：補上 AlertTriangle 與 RefreshCw，確保 Vercel 建置成功 ★★★
 import { 
-  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
+  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
-  Mail, MessageCircle, Trophy, Globe, User, CalendarClock, History, Zap 
+  Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
 } from 'lucide-react';
+
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
@@ -168,6 +169,7 @@ export default function AppRanked() {
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [detectedEnv, setDetectedEnv] = useState('Browser');
+  const [showCsvCopyToast, setShowCsvCopyToast] = useState(false);
 
   const autoPlayRef = useRef(null);
 
@@ -366,7 +368,7 @@ export default function AppRanked() {
   const handleShareAction = async (method) => {
     const durationStr = getDurationString();
     const shareText = `📊 Fund 手遊戰報\n基金: ${currentFundName}\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n交易時長: ${durationStr}\n大盤: ${benchmarkRoi.toFixed(2)}% | 定額: ${pureRspRoi.toFixed(2)}%\n`;
-    const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText); const encodedText = encodeURIComponent(shareText);
+    const encodedText = encodeURIComponent(shareText); const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
     if (method === 'line') window.open(`https://line.me/R/msg/text/?${encodedText}`, '_blank');
@@ -417,7 +419,7 @@ export default function AppRanked() {
             <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
             
             <div className="flex items-center justify-center gap-3 mb-8">
-                <img src="NBS-奈AI團隊" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
+                <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-xl text-slate-800 leading-tight">Fund 手遊</span>
                     <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
@@ -606,5 +608,4 @@ export default function AppRanked() {
         {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
-}
 }

@@ -452,26 +452,29 @@ export default function AppRanked() {
             </div>
 
             {/* ★★★ 2025v10.11.1 - 優化：停損設定與開始按鈕併列 (各佔50%) ★★★ */}
-            <div className="flex gap-1 mb-6">
-                {/* 停損設定 (50%) */}
-                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center">
-                    <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
-                    <input 
-                        type="number" 
-                        value={customStopLossInput} 
-                        onChange={(e) => setCustomStopLossInput(Number(e.target.value))} 
-                        className="w-full bg-transparent text-center text-2xl font-mono text-slate-800 font-bold outline-none"
-                    />
-                </div>
+{/* ★★★ 修改後：加入 h-[58px] 讓高度與上方按鈕一致 ★★★ */}
+<div className="flex gap-1 mb-6 h-[58px]"> 
+    {/* 停損設定 (50%) */}
+    <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-2 flex flex-col items-center justify-center">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">停損設定 (%)</span>
+        <input 
+            type="number" 
+            value={customStopLossInput} 
+            onChange={(e) => setCustomStopLossInput(Number(e.target.value))} 
+            // 將 text-2xl 改為 text-xl 以適應新高度
+            className="w-full bg-transparent text-center text-xl font-mono text-slate-800 font-bold outline-none"
+        />
+    </div>
 
-                {/* 開始按鈕 (50%) */}
-                <button 
-                    onClick={startGame} 
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-1"
-                >
-                    <Play size={18} fill="currentColor" /> 開始挑戰
-                </button>
-            </div>
+    {/* 開始按鈕 (50%) */}
+    <button 
+        onClick={startGame} 
+        // 移除 flex items-center justify-center gap-1 (因為按鈕預設行為會置中，或者保留也沒關係，重點是高度已被父層限制)
+        className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-1"
+    >
+        <Play size={18} fill="currentColor" /> 開始挑戰
+    </button>
+</div>
             
             <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 NBS Team</span></div>
         </div>

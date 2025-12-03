@@ -1,9 +1,10 @@
-// 2025v10.11 - 單機版 (移除未使用的 CSV 函式，修復部署與黑屏)
+// 2025v10.11.1 - 單機版 (Setup UI 優化 + 部署修復版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
+// ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
 import { 
-  Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
-  Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
+  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, AlertTriangle, X, Check, MousePointer2, Flag, 
+  Download, Copy, Maximize, LogOut, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
   Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
 } from 'lucide-react';
 
@@ -398,9 +399,7 @@ export default function AppRanked() {
                   <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button>
               </form>
               <div className="mt-6 pt-6 border-t border-slate-100">
-                  <button onClick={() => navigate('/battle')} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-                      <Zap size={18} className="text-yellow-400" fill="currentColor"/> 我是現場參賽者 (輸入房號)
-                  </button>
+                  <button onClick={() => navigate('/battle')} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"><Zap size={18} className="text-yellow-400" fill="currentColor"/> 我是現場參賽者 (輸入房號)</button>
               </div>
               {authError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-500 text-xs text-center">{authError}</div>}
           </div>
@@ -452,14 +451,29 @@ export default function AppRanked() {
                 </div>
             </div>
 
-            {/* 停損設定優化 */}
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8">
-                 <span className="w-1/2 text-xs font-bold text-slate-500 uppercase tracking-wider">停損設定 (%)</span>
-                 <input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="w-1/2 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"/>
-            </div>
+            {/* ★★★ 2025v10.11.1 - 優化：停損設定與開始按鈕併列 (各佔50%) ★★★ */}
+            <div className="flex gap-2 mb-6">
+                {/* 停損設定 (50%) */}
+                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
+                    <input 
+                        type="number" 
+                        value={customStopLossInput} 
+                        onChange={(e) => setCustomStopLossInput(Number(e.target.value))} 
+                        className="w-full bg-transparent text-center text-2xl font-mono text-slate-800 font-bold outline-none"
+                    />
+                </div>
 
-            <button onClick={startGame} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl text-xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Play size={24} fill="currentColor" /> 開始挑戰</button>
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v1.3 版權所有 NBS-奈AI團隊</span></div>
+                {/* 開始按鈕 (50%) */}
+                <button 
+                    onClick={startGame} 
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                    <Play size={24} fill="currentColor" /> 開始
+                </button>
+            </div>
+            
+            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 SetupUI Update | NBS Team</span></div>
         </div>
       </div>
     );
@@ -581,7 +595,7 @@ export default function AppRanked() {
                     
                     <div className="h-6"></div>
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all"><RotateCcw size={18} /> 重新開始挑戰</button>
-                    <div className="mt-4 text-center text-[9px] text-slate-400">V2025v1.3 版權所有 NBS-奈AI團隊| Environment: {detectedEnv}</div>
+                    <div className="mt-4 text-center text-[9px] text-slate-400">V2025v10.11.1 SetupUI Update | NBS Team</div>
                 </div>
             </div>
         )}

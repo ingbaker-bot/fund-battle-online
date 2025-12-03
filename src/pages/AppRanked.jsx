@@ -418,7 +418,7 @@ export default function AppRanked() {
             <div className="flex items-center justify-center gap-3 mb-8">
                 <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
-                    <span className="font-black text-xl text-slate-400 leading-tight">Fund 手遊</span>
+                    <span className="font-black text-xs text-slate-400 leading-tight">Fund 手遊</span>
                     <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
                 </div>
             </div>

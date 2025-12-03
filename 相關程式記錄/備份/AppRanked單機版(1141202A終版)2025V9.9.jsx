@@ -1,11 +1,13 @@
-// 2025v9.8 - 會員版 (潔淨部署版)
+// 2025v10.11.1 - 單機版 (Setup UI 優化：停損與開始按鈕併列)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// 移除未使用的 icon 引用，避免 Build Error
-import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap } from 'lucide-react';
+import { 
+  Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, AlertTriangle, RefreshCw, X, Check, MousePointer2, Flag, 
+  Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
+  Mail, MessageCircle, Trophy, Globe, User, Sword, CalendarClock, History, Zap 
+} from 'lucide-react';
 
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-
 import { auth } from '../config/firebase'; 
 import { FUNDS_LIBRARY } from '../config/funds';
 import { useNavigate } from 'react-router-dom'; 
@@ -63,26 +65,27 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     let units = 0;
     let totalInvested = 0;
     let lastRspMonth = -1;
-
     const startDate = new Date(data[startDay].date);
     lastRspMonth = startDate.getFullYear() * 12 + startDate.getMonth() - 1;
-
     for (let i = startDay; i <= endDay; i++) {
         const d = data[i];
         const dateObj = new Date(d.date);
         const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth();
         const dayOfMonth = dateObj.getDate();
-
         if (currentMonth > lastRspMonth && dayOfMonth >= rspDay) {
             units += rspAmount / d.nav;
             totalInvested += rspAmount;
             lastRspMonth = currentMonth;
         }
     }
-    
     if (totalInvested === 0) return 0;
     const finalValue = units * data[endDay].nav;
     return ((finalValue - totalInvested) / totalInvested) * 100;
+};
+
+// 千分位格式化工具
+const formatNumber = (num) => {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
 export default function AppRanked() {
@@ -93,7 +96,7 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // ★★★ 戰報生成邏輯 (修復版) ★★★
+  // 戰報生成邏輯
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -101,45 +104,20 @@ export default function AppRanked() {
 
   const handleDownloadReport = async () => {
       if (isGenerating) return;
-      if (!resultCardRef.current) {
-          alert("系統錯誤：找不到戰報元件");
-          return;
-      }
-      
+      if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
       setIsGenerating(true);
-
       try {
-          // 延遲以確保 UI 渲染
           await new Promise(r => setTimeout(r, 100));
-
-          const canvas = await html2canvas(resultCardRef.current, {
-              backgroundColor: null, 
-              scale: 3, 
-              useCORS: true,
-              logging: false,
-              ignoreElements: (el) => el.tagName === 'IMG' && !el.complete 
-          });
-
+          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
           canvas.toBlob((blob) => {
-              if (!blob) {
-                  alert("生成圖片失敗 (Blob is null)");
-                  setIsGenerating(false);
-                  return;
-              }
+              if (!blob) { alert("生成圖片失敗 (Blob is null)"); setIsGenerating(false); return; }
               const url = URL.createObjectURL(blob);
               setGeneratedImage(url);
               setShowImageModal(true);
               setIsGenerating(false);
           }, 'image/png');
-
-      } catch (err) {
-          console.error(err);
-          // 顯示詳細錯誤，不再是 undefined
-          alert(`發生錯誤：${err?.message || '未知錯誤'}`);
-          setIsGenerating(false);
-      }
+      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
   };
-  // ★★★ 結束 ★★★
 
   const [myNickname, setMyNickname] = useState(null); 
   const [leaderboardData, setLeaderboardData] = useState([]); 
@@ -193,49 +171,32 @@ export default function AppRanked() {
 
   const autoPlayRef = useRef(null);
 
-  // ... (Firebase Auth & Data Loading Effects 省略，保持原樣)
+  // --- Effects ---
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
-          setUser(u); 
-          setAuthLoading(false);
-          if (u) {
-             const nick = await checkUserNickname(u.uid);
-             if (nick) setMyNickname(nick);
-          }
+          setUser(u); setAuthLoading(false);
+          if (u) { const nick = await checkUserNickname(u.uid); if (nick) setMyNickname(nick); }
       });
       return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    const fetchTicker = async () => { const data = await getTickerData(); if (data) setTickerData(data); };
-    fetchTicker();
-  }, []);
+  useEffect(() => { const fetchTicker = async () => { const data = await getTickerData(); if (data) setTickerData(data); }; fetchTicker(); }, []);
 
   useEffect(() => {
-    const data = generateRandomData(30);
-    setFullData(data);
-    setCurrentDay(260);
-    setIsReady(true);
+    const data = generateRandomData(30); setFullData(data); setCurrentDay(260); setIsReady(true);
     const ua = (navigator.userAgent || navigator.vendor || window.opera || "").toLowerCase();
-    if (ua.indexOf('line') > -1) setDetectedEnv('Line');
-    else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook');
-    else setDetectedEnv('Browser');
+    if (ua.indexOf('line') > -1) setDetectedEnv('Line'); else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook'); else setDetectedEnv('Browser');
   }, []);
 
-  // ... (Game Logic Effects: RSP, End Game check 省略，保持原樣)
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
           if (!currentData) return;
-          const dateObj = new Date(currentData.date);
-          const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth();
-          const dayOfMonth = dateObj.getDate();
+          const dateObj = new Date(currentData.date); const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth(); const dayOfMonth = dateObj.getDate();
           if (currentMonth > lastRspMonth && dayOfMonth >= rspConfig.day) {
               if (cash >= rspConfig.amount) {
-                  const buyUnits = rspConfig.amount / currentData.nav;
-                  const newTotalUnits = units + buyUnits;
-                  const newAvgCost = (units * avgCost + rspConfig.amount) / newTotalUnits;
+                  const buyUnits = rspConfig.amount / currentData.nav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + rspConfig.amount) / newTotalUnits;
                   setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - rspConfig.amount);
                   setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'RSP', price: currentData.nav, units: buyUnits, amount: rspConfig.amount, balance: cash - rspConfig.amount }, ...prev]);
                   setLastRspMonth(currentMonth);
@@ -258,7 +219,7 @@ export default function AppRanked() {
       }
   }, [currentDay, fullData, gameStatus, isAutoPlaying]);
 
-  // ... (Calculations: currentNav, getDisplayDate, ROI, ChartData ... 省略，保持原樣)
+  // --- Calculations ---
   const currentNav = fullData[currentDay]?.nav || 10;
   const getDisplayDate = (dateStr) => {
       if (!dateStr || dataSourceType === 'random') return dateStr;
@@ -320,10 +281,16 @@ export default function AppRanked() {
     } else { setHighestNavSinceBuy(0); setWarningActive(false); }
   }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
 
-  // ... (Game Actions: login, logout, start, trade ... 省略，保持原樣)
+  // --- Handlers ---
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
   const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
+  const handleCapitalChange = (e) => {
+      const val = e.target.value.replace(/,/g, '');
+      if (!isNaN(val) && val !== '') {
+          setInitialCapital(Number(val));
+      }
+  };
 
   const startGame = async () => {
     let data; let startDay = 0; let fundName = "模擬基金";
@@ -350,7 +317,6 @@ export default function AppRanked() {
   const executeReset = () => { setConfirmModal({ show: false, type: null }); setShowShareMenu(false); clearInterval(autoPlayRef.current); setIsAutoPlaying(false); setTradeMode(null); setShowRiver(false); setUnits(0); setAvgCost(0); setTransactions([]); setHighestNavSinceBuy(0); setBenchmarkStartNav(null); setRealStartDay(0); setTimeOffset(0); setGameStatus('setup'); };
   const executeEndGame = () => { setConfirmModal({ show: false, type: null }); setGameStatus('ended'); };
   const executeExit = () => { setConfirmModal({ show: false, type: null }); setGameStatus('shutdown'); };
-  
   const handleConfirmClick = () => { if (confirmModal.type === 'exit') executeExit(); else if (confirmModal.type === 'reset') executeReset(); else executeEndGame(); };
   const triggerReset = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setConfirmModal({ show: true, type: 'reset' }); };
   const triggerEndGame = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setConfirmModal({ show: true, type: 'end' }); };
@@ -368,12 +334,7 @@ export default function AppRanked() {
       let durationStr = "0年 0個月";
       if (transactions.length > 0) {
           const firstTx = transactions[transactions.length - 1]; const startData = fullData[firstTx.day]; const endData = fullData[currentDay];
-          if (startData && endData) {
-              const s = new Date(startData.date); const e = new Date(endData.date);
-              let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth());
-              const years = Math.floor(months / 12); const remainingMonths = months % 12;
-              durationStr = `${years}年 ${remainingMonths}個月`;
-          }
+          if (startData && endData) { const s = new Date(startData.date); const e = new Date(endData.date); let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()); const years = Math.floor(months / 12); const remainingMonths = months % 12; durationStr = `${years}年 ${remainingMonths}個月`; }
       }
       return durationStr;
   };
@@ -448,43 +409,72 @@ export default function AppRanked() {
 
   if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-300 rounded hover:bg-white hover:text-slate-800 transition-colors">重啟電源</button></div> );
   
+  // ★★★ Setup UI (優化版) ★★★
   if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
         <div className="w-full max-w-sm bg-white rounded-xl p-6 shadow-xl border border-slate-200 relative">
             <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
-            <div className="flex justify-center mb-4 text-emerald-500"><Activity size={56} strokeWidth={1.5} /></div>
-            <h1 className="text-3xl font-bold text-center mb-2 tracking-tight text-slate-800">Fund 手遊</h1>
-            <div className="mb-6 mt-4"><button onClick={() => window.location.href = '/competition'} className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"><Sword size={20} className="group-hover:rotate-12 transition-transform"/> 前往 S1 賽季競技場</button><p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p></div>
             
-            {tickerData.length > 0 && (<div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
-
-            <div className="flex items-center justify-center gap-2 mb-4"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
-            
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">初始資金</label>
-            <input type="number" value={initialCapital} onChange={(e) => setInitialCapital(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-xl p-4 mb-4 text-2xl font-mono text-slate-800 focus:border-emerald-500 outline-none shadow-inner" />
-            
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                <div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>
-                {rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}
+            <div className="flex items-center justify-center gap-3 mb-8">
+                <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
+                <div className="flex flex-col">
+                    <span className="font-black text-xl text-slate-800 leading-tight">Fund 手遊</span>
+                    <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
+                </div>
             </div>
-
-            <label className="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">選擇挑戰項目</label>
-            <div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
-
+            
+            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+            
+            <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
+            
+            {/* 初始資金優化 */}
+            <div className="flex items-center gap-3 mb-4 bg-slate-50 border border-slate-300 rounded-xl p-3">
+                <div className="w-1/3 text-xs font-bold text-slate-500 uppercase tracking-wider">初始資金</div>
+                <input type="text" value={formatNumber(initialCapital)} onChange={handleCapitalChange} className="w-2/3 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"/>
+            </div>
+            
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4"><div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>{rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}</div>
+            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">選擇挑戰項目</label><div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
             {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
             
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6">
-                <div className="flex items-center justify-between mb-3 text-blue-600"><div className="flex items-center gap-2"><Waves size={18} /><span className="text-sm font-bold uppercase tracking-wider">河流圖參數</span></div><span className="text-xs bg-blue-100 px-2 py-0.5 rounded text-blue-600 border border-blue-200">N=60 (季線)</span></div>
-                <div className="flex gap-2 mb-3"><button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>固定 %</button><button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'}`}>動態標準差</button></div>
-                <div className="flex items-center bg-white border border-slate-300 rounded-lg px-4 py-2 shadow-sm">{riverMode === 'fixed' ? (<><span className="text-sm text-slate-500 mr-3 font-bold">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">%</span></>) : (<><span className="text-sm text-slate-500 mr-3 font-bold" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-lg"/><span className="text-sm text-slate-500 ml-3 font-bold">SD</span></>)}</div>
+            {/* 河流圖參數優化 */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
+                <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
+                <div className="flex gap-2">
+                    <div className="flex w-1/2 gap-1">
+                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
+                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
+                    </div>
+                    <div className="flex items-center w-1/2 bg-white border border-slate-300 rounded px-2">
+                        {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono"/></>)}
+                    </div>
+                </div>
             </div>
 
-            <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">停損設定 (%)</label>
-            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl p-3 mb-8 shadow-inner"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="flex-1 bg-transparent text-2xl font-mono text-center text-slate-800 focus:outline-none"/><span className="text-slate-500 font-bold px-4 text-lg">%</span></div>
+            {/* ★★★ 2025v10.11.1 - 優化：停損設定與開始按鈕併列 (各佔50%) ★★★ */}
+            <div className="flex gap-2 mb-6">
+                {/* 停損設定 (50%) */}
+                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
+                    <input 
+                        type="number" 
+                        value={customStopLossInput} 
+                        onChange={(e) => setCustomStopLossInput(Number(e.target.value))} 
+                        className="w-full bg-transparent text-center text-2xl font-mono text-slate-800 font-bold outline-none"
+                    />
+                </div>
 
-            <button onClick={startGame} className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl text-xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Play size={24} fill="currentColor" /> 開始挑戰</button>
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v1.3 版權所有 NBS-奈AI團隊</span></div>
+                {/* 開始按鈕 (50%) */}
+                <button 
+                    onClick={startGame} 
+                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                    <Play size={24} fill="currentColor" /> 開始
+                </button>
+            </div>
+            
+            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 SetupUI Update | NBS Team</span></div>
         </div>
       </div>
     );
@@ -492,10 +482,11 @@ export default function AppRanked() {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
 
-  // Game Playing Screen
+  // Game Playing Screen (緊湊型 UI)
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
-        <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-14 z-30 relative shadow-sm">
+        {/* Header: h-12 (48px) */}
+        <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">
             <button onClick={triggerExit} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200 active:scale-95 transition-all font-bold"><LogOut size={14} /> 離開</button>
             <div className="flex flex-col items-center"><span className="text-[10px] text-slate-400 max-w-[140px] truncate font-bold">{currentFundName}</span><span className={`text-base font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span></div>
             <div className="flex gap-2"><button onClick={toggleFullscreen} className="p-2 rounded hover:bg-slate-100 text-slate-500"><Maximize size={18} /></button><button onClick={triggerEndGame} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm hover:bg-emerald-100 active:scale-95 transition-all font-bold"><Flag size={14} /> 結算</button></div>
@@ -529,17 +520,18 @@ export default function AppRanked() {
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
         </div>
 
+        {/* Control Panel (Compact: py-1.5, text-[10px]) */}
         <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
-            <div className="flex justify-between px-5 py-2 bg-slate-50 border-b border-slate-200 text-xs">
-                <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-base ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
-                <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={14} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-base">${Math.round(cash).toLocaleString()}</span></div>
+            <div className="flex justify-between px-5 py-1.5 bg-slate-50 border-b border-slate-200 text-[10px]">
+                <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-xs ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
+                <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={12} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-xs">${Math.round(cash).toLocaleString()}</span></div>
             </div>
             
-            <div className="grid grid-cols-4 gap-2 p-3 bg-white">
-                <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={20} className="text-slate-400"/> 觀望</button>
-                <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={20} /> 買進</button>
-                <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-3 rounded-xl font-bold text-sm flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={20} /> 賣出</button>
-                <button onClick={toggleAutoPlay} disabled={tradeMode} className={`flex flex-col items-center justify-center gap-1 rounded-xl font-bold text-sm border-b-4 active:border-b-0 active:translate-y-[2px] transition-all shadow-sm py-3 ${isAutoPlaying ? 'bg-amber-500 border-amber-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:text-slate-400'}`}>{isAutoPlaying ? <Pause size={20} /> : <Play size={20} />} {isAutoPlaying ? '暫停' : '自動'}</button>
+            <div className="grid grid-cols-4 gap-1 p-1.5 bg-white">
+                <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={16} className="text-slate-400"/> 觀望</button>
+                <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={16} /> 買進</button>
+                <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={16} /> 賣出</button>
+                <button onClick={toggleAutoPlay} disabled={tradeMode} className={`flex flex-col items-center justify-center gap-1 rounded-xl font-bold text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all shadow-sm py-2 ${isAutoPlaying ? 'bg-amber-500 border-amber-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:text-slate-400'}`}>{isAutoPlaying ? <Pause size={16} /> : <Play size={16} />} {isAutoPlaying ? '暫停' : '自動'}</button>
             </div>
         </div>
 
@@ -564,7 +556,7 @@ export default function AppRanked() {
         
         {showRankModal && (<div className="absolute inset-0 bg-slate-900/50 z-[70] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"><div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Trophy size={18} className="text-amber-500"/> 排行榜</h3><button onClick={() => setShowRankModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">{rankUploadStatus === 'asking_nick' && (<div className="text-center py-6"><User size={48} className="mx-auto text-emerald-500 mb-4"/><h4 className="text-xl font-bold text-slate-800 mb-2">初次見面！</h4><p className="text-slate-500 text-sm mb-6">請輸入您在江湖上的稱號 (日後將無法修改)</p><input type="text" value={inputNickname} onChange={e => setInputNickname(e.target.value)} placeholder="例如：股海小童" className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4" maxLength={12} /><button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">確認並上傳成績</button></div>)}{rankUploadStatus === 'uploading' && (<div className="flex flex-col items-center justify-center py-10"><Loader2 size={40} className="animate-spin text-emerald-500 mb-4"/><p className="text-slate-500">正在將您的戰績刻入石碑...</p></div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length > 0 && (<div className="space-y-2"><div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1"><span>排名 / 玩家</span><span>報酬率</span></div>{leaderboardData.map((entry, idx) => { const years = Math.floor(entry.durationMonths / 12); const months = entry.durationMonths % 12; const durationStr = years > 0 ? `${years}年${months}月` : `${months}個月`; return (<div key={entry.id} className={`flex justify-between items-center p-3 rounded-lg border ${entry.uid === user.uid ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>{idx + 1}</div><div className="flex flex-col"><span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>{entry.displayName}</span><span className="text-[10px] text-slate-400">{entry.fundName.substring(0, 10)}</span></div></div><div className="text-right"><div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{entry.roi > 0 ? '+' : ''}{entry.roi}%</div><div className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><span>${(entry.finalAssets/10000).toFixed(0)}萬</span><span className="text-slate-300">|</span><span className="text-slate-400">{durationStr}</span></div></div></div>); })}</div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && <div className="text-center py-10 text-slate-500">暫無排名資料，快來搶頭香！</div>}</div></div></div>)}
 
-        {/* 結算畫面 (Final Modal) */}
+        {/* 結算畫面 (Final Modal) - 含預覽下載 */}
         {gameStatus === 'ended' && (
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100"><Activity size={56} className="text-emerald-500" /></div>
@@ -592,7 +584,7 @@ export default function AppRanked() {
                         }}
                     />
 
-                    {/* ★★★ 修正後的下載按鈕：綁定 isGenerating ★★★ */}
+                    {/* ★★★ 修正後的下載按鈕：預覽模式 ★★★ */}
                     <button 
                         onClick={handleDownloadReport} 
                         disabled={isGenerating}
@@ -613,17 +605,22 @@ export default function AppRanked() {
 
         {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
 
-        {/* ★★★ 圖片預覽 Modal (黑屏修復版) ★★★ */}
+        {/* ★★★ 圖片預覽 Modal (修正版：黑色背景彈窗 + 修復CSS衝突) ★★★ */}
         {showImageModal && (
-            <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+            <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
-                    <div className="text-white text-center"><h3 className="text-xl font-bold mb-1">戰報已生成！</h3><p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p></div>
+                    <div className="text-white text-center">
+                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
+                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+                    </div>
                     {/* 這裡確保 src 有值才會顯示 */}
                     {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
                     <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>
             </div>
         )}
+        {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
+}
 }

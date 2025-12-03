@@ -1,4 +1,4 @@
-// 2025v10.3 - 玩家端 (扣抵三角形優化版)
+// 2025v10.4 - 玩家端 (UI 高度縮減緊湊版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -28,7 +28,7 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// ★★★ 新增：自定義三角形繪製函數 (與主持人端一致) ★★★
+// 自定義三角形繪製函數
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     return (
@@ -433,49 +433,50 @@ export default function AppBattle() {
               </div>
           )}
           
+          {/* Header: h-12 (48px) */}
           <div className="sticky top-0 z-20 shadow-sm">
-              <div className="bg-slate-100 border-b border-slate-200 px-4 py-2 flex justify-between items-center text-lg font-black text-slate-700">
-                 
-                 {/* 左側：離開(小圖示) + 倒數計時 */}
+              <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-lg font-black text-slate-700 h-12">
+                 {/* 左側：離開 + 倒數 */}
                  <div className="flex items-center gap-2 w-1/3">
                      <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
                          <LogOut size={16} />
                      </button>
-                     <div className={`flex items-center gap-1 font-mono font-bold ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
-                         <Timer size={16} />
+                     <div className={`flex items-center gap-1 font-mono font-bold text-sm ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
+                         <Timer size={14} />
                          {formatTime(remainingTime)}
                      </div>
                  </div>
 
                  {/* 中間：基金名稱 */}
                  <div className="w-1/3 text-center">
-                     <span className="truncate max-w-full font-bold text-xl">{fundName}</span>
+                     <span className="truncate max-w-full font-bold text-base">{fundName}</span>
                  </div>
 
                  {/* 右側：日期 */}
                  <div className="w-1/3 text-right">
-                     <span className="font-mono tracking-wider text-sm">{currentDisplayDate}</span>
+                     <span className="font-mono tracking-wider text-xs text-slate-500">{currentDisplayDate}</span>
                  </div>
               </div>
               
-              <div className="bg-white px-2 py-1.5 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
+              {/* 資訊列 (Trend/ROI/Assets) */}
+              <div className="bg-white px-2 py-1 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
                  <div className="flex flex-col items-center border-r border-slate-100">
-                    <div className="text-xs text-slate-400 font-bold mb-0.5">趨勢</div>
-                    <div className={`text-xl font-black leading-none h-6 flex items-center ${trendSignal.color}`}>
+                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
+                    <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
                         {trendSignal.char}
                     </div>
                  </div>
 
                  <div className="flex flex-col items-center border-r border-slate-100">
-                    <div className="text-xs text-slate-400 font-bold mb-0.5">報酬率</div>
-                    <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-xs ml-0.5">%</span>
+                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
+                    <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                        {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
                     </div>
                  </div>
 
                  <div className="flex flex-col items-center">
-                    <div className="text-xs text-slate-400 font-bold mb-0.5">總資產</div>
-                    <div className={`text-xl font-mono font-black leading-none flex items-center h-6 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
+                    <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                         {Math.floor(totalAssets).toLocaleString()}
                     </div>
                  </div>
@@ -487,17 +488,17 @@ export default function AppBattle() {
                 <ComposedChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
 		            <XAxis dataKey="date" hide />
-                    {showIndicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
-                    {showIndicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                    {showIndicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={1} dot={false} isAnimationActive={false} opacity={0.3} />}
+                    {showIndicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={1} dot={false} isAnimationActive={false} opacity={0.3} />}
                     {showIndicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showIndicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
 			        
-                    {/* ★★★ 修正：扣抵三角形 ★★★ */}
+                    {/* 扣抵三角形 */}
         	        {showIndicators.trend && showIndicators.ma20 && deduction20 && (
            		        <ReferenceDot
                 		    x={deduction20.date}
                 		    y={deduction20.nav}
-                		    shape={renderTriangle} // 使用自定義三角形
+                		    shape={renderTriangle} 
                 		    fill="#38bdf8" 
               		      isAnimationActive={false}
             		    />
@@ -507,7 +508,7 @@ export default function AppBattle() {
                         <ReferenceDot
                             x={deduction60.date}
                             y={deduction60.nav}
-                            shape={renderTriangle} // 使用自定義三角形
+                            shape={renderTriangle}
                             fill="#1d4ed8" 
                             isAnimationActive={false}
                         />
@@ -519,8 +520,10 @@ export default function AppBattle() {
              </ResponsiveContainer>
           </div>
           
-          <div className="bg-white border-t border-slate-200 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] pb-3 pt-1 safe-area-pb">
-              <div className="flex justify-between px-4 py-1 border-b border-slate-100 mb-1 text-xs">
+          {/* Control Panel (Compact) */}
+          <div className="bg-white shrink-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] border-t border-slate-200 pb-2 safe-area-pb">
+              {/* Assets Row: py-1.5, text-[10px] */}
+              <div className="flex justify-between px-4 py-1.5 border-b border-slate-100 mb-1 text-[10px]">
                   <div className="flex gap-1 text-slate-500 font-bold">
                       <span>現金</span>
                       <span className="font-mono text-emerald-600">${Math.floor(cash).toLocaleString()}</span>
@@ -532,28 +535,27 @@ export default function AppBattle() {
               </div>
 
               {!isTrading ? (
-                  <div className="px-4 pb-2">
-                      {/* 按鈕狀態控制 - 時間到則 Disable */}
+                  <div className="px-4 pb-1">
                       <button 
                           onClick={handleRequestTrade} 
                           disabled={isTimeUp}
-                          className={`w-full py-6 transition-all text-white rounded-xl font-black text-3xl shadow-lg flex items-center justify-center gap-3 ${isTimeUp ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 active:scale-95 animate-pulse'}`}
+                          className={`w-full py-4 transition-all text-white rounded-xl font-black text-2xl shadow-lg flex items-center justify-center gap-2 ${isTimeUp ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 active:scale-95 animate-pulse'}`}
                       >
-                          {isTimeUp ? <Lock size={32}/> : <Hand size={32} className="text-yellow-400"/>} 
+                          {isTimeUp ? <Lock size={24}/> : <Hand size={24} className="text-yellow-400"/>} 
                           {isTimeUp ? '比賽結束' : '請求交易'}
                       </button>
-                      <p className="text-center text-xs text-slate-400 mt-2">{isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策'}</p>
+                      <p className="text-center text-[10px] text-slate-400 mt-1">{isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策'}</p>
                   </div>
               ) : (
                   <>
-                      {/* 交易區塊 (保持原樣) */}
+                      {/* Compact Trade Controls */}
                       <div className="px-2 grid grid-cols-5 gap-1 mb-1">
                           <button 
                             onClick={() => handleQuickAmount('buy', 1.0)} 
                             disabled={tradeType === 'sell'} 
-                            className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-700 text-white active:scale-95'}`}
+                            className={`col-span-1 rounded-md font-bold text-[10px] flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-700 text-white active:scale-95'}`}
                           >
-                             <span>買入</span><span className="text-[10px] opacity-80">All In</span>
+                             <span>買入</span><span className="opacity-80">All In</span>
                           </button>
                           
                           <input 
@@ -561,48 +563,48 @@ export default function AppBattle() {
                              value={inputAmount} 
                              onChange={handleInputChange} 
                              placeholder="輸入金額" 
-                             className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-2 text-xl font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"
+                             className="col-span-3 bg-slate-100 border border-slate-300 rounded-md px-1 py-1 text-lg font-bold text-slate-800 outline-none focus:border-slate-500 text-center placeholder:text-slate-300"
                           />
                           
                           <button 
                              onClick={() => handleQuickAmount('sell', 1.0)} 
                              disabled={tradeType === 'buy'} 
-                             className={`col-span-1 rounded-md font-bold text-xs flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-700 text-white active:scale-95'}`}
+                             className={`col-span-1 rounded-md font-bold text-[10px] flex flex-col items-center justify-center py-2 shadow-sm leading-tight ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-700 text-white active:scale-95'}`}
                           >
-                             <span>賣出</span><span className="text-[10px] opacity-80">All In</span>
+                             <span>賣出</span><span className="opacity-80">All In</span>
                           </button>
                       </div>
                       
                       <div className="px-2 grid grid-cols-4 gap-1 mb-1">
-                          <button onClick={() => handleQuickAmount('buy', 0.2)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-100 text-rose-700 active:bg-rose-200'}`}>買入 20%</button>
-                          <button onClick={() => handleQuickAmount('buy', 0.5)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-200 text-rose-800 active:bg-rose-300'}`}>買入 50%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.2)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-100 text-emerald-700 active:bg-emerald-200'}`}>賣出 20%</button>
-                          <button onClick={() => handleQuickAmount('sell', 0.5)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-xs py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-200 text-emerald-800 active:bg-emerald-300'}`}>賣出 50%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.2)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-[10px] py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-100 text-rose-700 active:bg-rose-200'}`}>買入 20%</button>
+                          <button onClick={() => handleQuickAmount('buy', 0.5)} disabled={tradeType === 'sell'} className={`rounded-md font-bold text-[10px] py-2 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-300' : 'bg-rose-200 text-rose-800 active:bg-rose-300'}`}>買入 50%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.2)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-[10px] py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-100 text-emerald-700 active:bg-emerald-200'}`}>賣出 20%</button>
+                          <button onClick={() => handleQuickAmount('sell', 0.5)} disabled={tradeType === 'buy'} className={`rounded-md font-bold text-[10px] py-2 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-300' : 'bg-emerald-200 text-emerald-800 active:bg-emerald-300'}`}>賣出 50%</button>
                       </div>
 
                         <div className="px-2 grid grid-cols-2 gap-2">
                             <button 
                                 onClick={() => executeTrade('buy')} 
                                 disabled={tradeType === 'sell'} 
-                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
+                                className={`py-2 rounded-lg font-bold text-base shadow-md flex items-center justify-center gap-1 ${tradeType === 'sell' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-rose-500 active:bg-rose-600 text-white active:scale-95'}`}
                             >
-                                <TrendingUp size={18} />
+                                <TrendingUp size={16} />
                                 <span>買入確認</span>
-                                <span className="text-[10px] opacity-80 font-normal pt-1">(費{Math.round(feeRate*100)}%)</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-0.5">(費{Math.round(feeRate*100)}%)</span>
                             </button>
                             
                             <button 
                                 onClick={() => executeTrade('sell')} 
                                 disabled={tradeType === 'buy'} 
-                                className={`py-2 rounded-lg font-bold text-lg shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
+                                className={`py-2 rounded-lg font-bold text-base shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
                             >
-                                <TrendingDown size={18} />
+                                <TrendingDown size={16} />
                                 <span>賣出確認</span>
-                                <span className="text-[10px] opacity-80 font-normal pt-1">(免手續費)</span>
+                                <span className="text-[10px] opacity-80 font-normal pt-0.5">(免費)</span>
                             </button>
                         </div>
                       <div className="px-2 mt-1">
-                          <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-sm flex items-center justify-center gap-1"><X size={16}/> 取消交易 (恢復行情)</button>
+                          <button onClick={handleCancelTrade} className="w-full py-2 bg-slate-200 text-slate-500 rounded-lg font-bold text-xs flex items-center justify-center gap-1"><X size={14}/> 取消交易 (恢復行情)</button>
                       </div>
                   </>
               )}

@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. CORS 設定
+  // 1. CORS 設定 (維持不變)
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -15,38 +15,24 @@ export default async function handler(req, res) {
     return;
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
   try {
     const { fundName, roi, transactions, nickname } = req.body;
-
-    // --- 🕵️ 診斷開始：檢查金鑰狀態 ---
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-    
-    console.log("🔍 [診斷日誌] 正在檢查 API Key...");
-    
-    if (!apiKey) {
-      console.error("❌ [嚴重錯誤] API Key 是 undefined 或空值！");
-      throw new Error("Server Error: API Key is missing in environment variables.");
-    }
 
-    // 印出前 5 碼確認是否正確 (不要印全部，會外洩)
-    console.log(`✅ [診斷日誌] API Key 讀取成功，長度: ${apiKey.length}，前5碼: ${apiKey.substring(0, 5)}...`);
-    
-    // 檢查是否有隱藏的雙引號或空白
-    if (apiKey.startsWith('"') || apiKey.endsWith('"')) {
-       console.error("❌ [格式錯誤] API Key 被雙引號包住了！請去 Vercel 移除雙引號。");
-    }
-    if (apiKey.trim() !== apiKey) {
-       console.error("❌ [格式錯誤] API Key 前後有多餘的空白鍵！");
-    }
-    // --- 🕵️ 診斷結束 ---
+    if (!apiKey) throw new Error("API Key 環境變數未設定");
 
-    // 2. 初始化 Google Gemini (使用穩定版 1.5-flash)
-    const genAI = new GoogleGenerativeAI(apiKey.trim()); // 加 trim() 做最後防呆
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // 2. 初始化 SDK
+    // 注意：這裡直接使用 trim() 去除可能存在的空白
+    const genAI = new GoogleGenerativeAI(apiKey.trim());
+
+    // ★★★ 關鍵修改：定義模型候補清單 (根據您的 check-models.js 結果) ★★★
+    // 系統會依序嘗試，直到有一個成功為止
+    const CANDIDATE_MODELS = [
+        "gemini-2.5-flash",      // 首選：最新、最快
+        "gemini-2.0-flash",      // 備選 1
+        "gemini-pro",            // 備選 2：最舊但最穩
+        "gemini-1.5-flash-latest" // 最後防線
+    ];
 
     const prompt = `
       你是一位說話犀利、幽默且專業的華爾街基金經理人導師。
@@ -63,22 +49,46 @@ export default async function handler(req, res) {
       3. 給他一個未來的投資建議。
       4. 最後給出一個 0-100 的「操作智商評分」。
 
-      請用繁體中文回答，語氣要生動有趣，字數控制在 200 字以內。
+      請用繁體中文回答，語氣生動有趣，200字內。
     `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    // 3. 自動輪詢機制 (Auto-Retry Logic)
+    let responseText = null;
+    let lastError = null;
 
+    for (const modelName of CANDIDATE_MODELS) {
+        try {
+            console.log(`🔄 正在嘗試模型: ${modelName}...`);
+            const model = genAI.getGenerativeModel({ model: modelName });
+            const result = await model.generateContent(prompt);
+            responseText = result.response.text();
+            
+            console.log(`✅ 模型 ${modelName} 調用成功！`);
+            break; // 成功就跳出迴圈
+        } catch (err) {
+            console.warn(`⚠️ 模型 ${modelName} 失敗: ${err.message}`);
+            lastError = err;
+            // 繼續嘗試下一個...
+        }
+    }
+
+    if (!responseText) {
+        // 如果全部都失敗，才拋出最後一個錯誤
+        console.error("❌ 所有模型皆嘗試失敗");
+        throw lastError;
+    }
+
+    // 4. 回傳成功結果
     return res.status(200).json({ 
       success: true, 
       analysis: responseText 
     });
 
   } catch (error) {
-    console.error("🔥 [API 崩潰日誌] 詳細錯誤:", error);
+    console.error("🔥 API 最終崩潰:", error);
     return res.status(500).json({ 
       success: false, 
-      error: error.message || "AI 分析服務暫時無法使用" 
+      error: `AI 服務暫時無法使用 (${error.message})` 
     });
   }
 }

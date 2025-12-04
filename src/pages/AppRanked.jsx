@@ -8,7 +8,7 @@ import {
   Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
   Mail, MessageCircle, Trophy, Globe, User, CalendarClock, History, Zap,
-  Activity, Power // <--- 補回這兩個遺失的 Icon
+  Activity, Power,Sword // <--- 補回這兩個遺失的 Icon
 } from 'lucide-react';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from '../config/firebase'; 

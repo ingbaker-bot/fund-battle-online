@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     // 2. 初始化 Google Gemini (使用穩定版 1.5-flash)
     const genAI = new GoogleGenerativeAI(apiKey.trim()); // 加 trim() 做最後防呆
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `
       你是一位說話犀利、幽默且專業的華爾街基金經理人導師。

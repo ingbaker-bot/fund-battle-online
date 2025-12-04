@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     // 3. 初始化 Google Gemini
     // 注意：這裡使用環境變數，絕對不要把 Key 寫死在這裡！
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     // 4. 設定 AI 的人設與提示詞 (Prompt)
     const prompt = `

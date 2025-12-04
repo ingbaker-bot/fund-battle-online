@@ -1,4 +1,4 @@
-// 2025v10.11.3 - 單機版 (修復S1賽季競技場)
+// 2025v10.11.2 - 單機版 (修復黑屏)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
@@ -425,18 +425,6 @@ export default function AppRanked() {
                 </div>
             </div>
             
-{/* ★★★ 新增：S1 賽季競技場入口 ★★★ */}
-<div className="mb-6">
-    <button 
-        onClick={() => navigate('/competition')} 
-        className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
-    >
-        <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 
-        前往 S1 賽季競技場
-    </button>
-    <p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p>
-</div>
-
             {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
             
             <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>

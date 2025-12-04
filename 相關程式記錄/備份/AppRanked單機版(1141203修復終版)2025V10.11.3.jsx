@@ -17,11 +17,6 @@ import { useNavigate } from 'react-router-dom';
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
-// --- 新增：AI 分析模組引用 ---
-import AIAnalysisModal from '../components/AIAnalysisModal';
-import { useAIAnalyst } from '../hooks/useAIAnalyst';
-import { Sparkles } from 'lucide-react'; // 用於按鈕圖示
-
 import { 
   checkUserNickname, 
   registerNickname, 
@@ -103,19 +98,6 @@ export default function AppRanked() {
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
-
-// --- 新增：AI 分析邏輯掛勾 ---
-  const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
-
-  const handleAIAnalysis = () => {
-      // 準備要送給 AI 的資料
-      analyzeGame({
-          fundName: currentFundName,
-          roi: roi,
-          transactions: transactions, // 這是您原本就有的交易紀錄變數
-          nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家')
-      });
-  };
 
   // 戰報生成邏輯
   const resultCardRef = useRef(null);
@@ -598,16 +580,7 @@ export default function AppRanked() {
                 
                 <div className="flex flex-col w-full max-w-xs gap-3">
                     <button onClick={handleInitiateUpload} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all mb-2 animate-pulse"><Globe size={18} /> {rankUploadStatus === 'uploaded' ? '查看目前排名' : '上傳戰績 / 爭奪排名'}</button>
-                    <button onClick={() => setShowShareMenu(true)} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm"><Share2 size={16} className="text-blue-500"/> 匯出 Excel / 分享</button>{/* --- 新增：AI 分析按鈕 --- */}
-                    <button 
-                        onClick={handleAIAnalysis}
-                        disabled={isAnalyzing}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all mb-2 border border-violet-400/30 relative overflow-hidden group"
-                    >
-                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                        <Sparkles size={20} className="text-yellow-300 animate-pulse" /> 
-                        {isAnalyzing ? 'AI 正在讀取數據...' : '召喚 AI 導師復盤'}
-                    </button>
+                    <button onClick={() => setShowShareMenu(true)} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm"><Share2 size={16} className="text-blue-500"/> 匯出 Excel / 分享</button>
                     <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm">{showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}</button>
 
                     {/* ★★★ 戰報卡片 (隱藏) ★★★ */}
@@ -660,13 +633,6 @@ export default function AppRanked() {
             </div>
         )}
         {/* ★★★ 結束 Modal ★★★ */}
-    {/* --- 新增：AI 分析結果彈窗 --- */}
-        <AIAnalysisModal 
-            isOpen={showModal}
-            onClose={closeModal}
-            isLoading={isAnalyzing}
-            analysisResult={analysisResult}
-            error={aiError}
-        /></div>
+    </div>
   );
 }

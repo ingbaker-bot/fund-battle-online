@@ -1,52 +1,23 @@
-// 2025v11.0 - 單機版 (新增趨勢)
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
-// [Source: AppRanked.jsx] Line 6-9
-// ★★★ 最佳修正：補回 Activity (結算用) 與 Power (關機用)，移除 AlertTriangle (會崩潰) ★★★
+// 2025v11.3.1 - 主持人端 (修復黑屏 Bug 版)
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { QRCodeSVG } from 'qrcode.react'; 
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
-  Play, Pause, TrendingUp, TrendingDown, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
-  Download, Copy, Maximize, LogOut, Lock, Database, UserCheck, Loader2, Waves, Info, Share2, 
-  Mail, MessageCircle, Trophy, Globe, User, CalendarClock, History, Zap,
-  Activity, Power,Sword // <--- 補回這兩個遺失的 Icon
+  Trophy, Users, Play, Pause, FastForward, RotateCcw, 
+  Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
+  DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
+  Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
+  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
 } from 'lucide-react';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from '../config/firebase'; 
-import { FUNDS_LIBRARY } from '../config/funds';
-import { useNavigate } from 'react-router-dom'; 
-import html2canvas from 'html2canvas';
-import ResultCard from '../components/ResultCard'; 
 
-// --- 新增：AI 分析模組引用 ---
-import AIAnalysisModal from '../components/AIAnalysisModal';
-import { useAIAnalyst } from '../hooks/useAIAnalyst';
-import { Sparkles } from 'lucide-react'; // 用於按鈕圖示
-
+import { db, auth } from './config/firebase'; 
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { 
-  checkUserNickname, 
-  registerNickname, 
-  saveGameResult, 
-  getLeaderboard, 
-  getTickerData 
-} from '../services/firestoreService';
+  doc, setDoc, onSnapshot, updateDoc, collection, 
+  serverTimestamp, increment, deleteDoc, getDocs, getDoc 
+} from 'firebase/firestore';
 
-// --- Helper Functions ---
-const generateRandomData = (years = 30) => {
-  const data = [];
-  let price = 100.0; 
-  const startDate = new Date('1995-01-01');
-  const totalDays = years * 250;
-  let trend = 0; let volatility = 0.015; 
-  for (let i = 0; i < totalDays; i++) {
-    const change = (Math.random() - 0.48 + trend) * volatility; 
-    price = price * (1 + change);
-    if (price < 5) price = 5 + Math.random(); 
-    if (i % 200 === 0) { trend = (Math.random() - 0.5) * 0.003; volatility = 0.01 + Math.random() * 0.02; }
-    const date = new Date(startDate); date.setDate(startDate.getDate() + (i * 1.4));
-    data.push({ id: i, date: date.toISOString().split('T')[0], nav: parseFloat(price.toFixed(2)) });
-  }
-  return data;
-};
+import { FUNDS_LIBRARY } from './config/funds';
 
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
@@ -62,45 +33,17 @@ const calculateIndicators = (data, days, currentIndex) => {
       if (val && !isNaN(val)) { sum += val; values.push(val); }
   }
   const ma = sum / days;
-  let sumDiffSq = 0;
-  values.forEach(v => { const diff = v - ma; sumDiffSq += diff * diff; });
-  const stdDev = Math.sqrt(sumDiffSq / days);
-  return { ma: parseFloat(ma.toFixed(2)), stdDev: parseFloat(stdDev.toFixed(2)) };
+  return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
-    if (!data || startDay >= endDay) return 0;
-    let units = 0;
-    let totalInvested = 0;
-    let lastRspMonth = -1;
-    const startDate = new Date(data[startDay].date);
-    lastRspMonth = startDate.getFullYear() * 12 + startDate.getMonth() - 1;
-    for (let i = startDay; i <= endDay; i++) {
-        const d = data[i];
-        const dateObj = new Date(d.date);
-        const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth();
-        const dayOfMonth = dateObj.getDate();
-        if (currentMonth > lastRspMonth && dayOfMonth >= rspDay) {
-            units += rspAmount / d.nav;
-            totalInvested += rspAmount;
-            lastRspMonth = currentMonth;
-        }
-    }
-    if (totalInvested === 0) return 0;
-    const finalValue = units * data[endDay].nav;
-    return ((finalValue - totalInvested) / totalInvested) * 100;
-};
-
-// 千分位格式化工具
-const formatNumber = (num) => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-};
-
-// --- 新增：繪圖輔助函式 ---
+// --- 視覺輔助繪圖函數 ---
 
 // 1. 扣抵值三角形 (藍色/深藍色)
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
+    // 防呆：如果座標無效，不繪製
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    
     return (
         <polygon 
             points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
@@ -116,12 +59,16 @@ const renderTriangle = (props) => {
 const renderCrossTriangle = (props) => {
     const { cx, cy, direction, type } = props;
     
+    // ★★★ 關鍵修復：防呆檢查 ★★★
+    // 如果座標不是數字，或者缺少必要參數，直接不畫，防止崩潰
+    if (!Number.isFinite(cx) || !Number.isFinite(cy) || !direction) return null;
+
     const isSolid = type === 'solid';
     const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
     const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
     
     if (direction === 'gold') {
-        // 黃金交叉：紅色向上
+        // 黃金交叉：紅色向上三角形
         return (
             <polygon 
                 points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
@@ -131,7 +78,7 @@ const renderCrossTriangle = (props) => {
             />
         );
     } else {
-        // 死亡交叉：綠色向下
+        // 死亡交叉：綠色向下三角形
         return (
             <polygon 
                 points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
@@ -143,156 +90,352 @@ const renderCrossTriangle = (props) => {
     }
 };
 
-export default function AppRanked() {
-  const [user, setUser] = useState(null); 
+export default function SpectatorView() {
+  const [hostUser, setHostUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authLoading, setAuthLoading] = useState(true); 
-  const navigate = useNavigate();
+  const [loginError, setLoginError] = useState('');
+  const [permissionError, setPermissionError] = useState(''); 
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-// --- 新增：AI 分析邏輯掛勾 ---
-  const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
-
-  const handleAIAnalysis = () => {
-      // 準備要送給 AI 的資料
-      analyzeGame({
-          fundName: currentFundName,
-          roi: roi,
-          transactions: transactions, // 這是您原本就有的交易紀錄變數
-          nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家')
-      });
-  };
-
-  // 戰報生成邏輯
-  const resultCardRef = useRef(null);
-  const [generatedImage, setGeneratedImage] = useState(null);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleDownloadReport = async () => {
-      if (isGenerating) return;
-      if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
-      setIsGenerating(true);
-      try {
-          await new Promise(r => setTimeout(r, 100));
-          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
-          canvas.toBlob((blob) => {
-              if (!blob) { alert("生成圖片失敗 (Blob is null)"); setIsGenerating(false); return; }
-              const url = URL.createObjectURL(blob);
-              setGeneratedImage(url);
-              setShowImageModal(true);
-              setIsGenerating(false);
-          }, 'image/png');
-      } catch (err) { console.error(err); alert(`發生錯誤：${err?.message || '未知錯誤'}`); setIsGenerating(false); }
-  };
-
-  const [myNickname, setMyNickname] = useState(null); 
-  const [leaderboardData, setLeaderboardData] = useState([]); 
-  const [tickerData, setTickerData] = useState([]); 
-  const [showRankModal, setShowRankModal] = useState(false); 
-  const [rankUploadStatus, setRankUploadStatus] = useState('idle'); 
-  const [inputNickname, setInputNickname] = useState(''); 
-
-  const [fullData, setFullData] = useState([]);
-  const [currentDay, setCurrentDay] = useState(0);
-  const [gameStatus, setGameStatus] = useState('setup'); 
-  const [isReady, setIsReady] = useState(false);
-  const [currentFundName, setCurrentFundName] = useState('');
-
-  const [initialCapital, setInitialCapital] = useState(1000000);
-  const [cash, setCash] = useState(1000000);
-  const [units, setUnits] = useState(0);
-  const [avgCost, setAvgCost] = useState(0);
-  const [transactions, setTransactions] = useState([]);
+  const [roomId, setRoomId] = useState(null);
+  const [gameStatus, setGameStatus] = useState('waiting'); 
+  const [players, setPlayers] = useState([]);
   
-  const [benchmarkStartNav, setBenchmarkStartNav] = useState(null);
+  const [currentDay, setCurrentDay] = useState(400);
+  const [startDay, setStartDay] = useState(400); 
   const [timeOffset, setTimeOffset] = useState(0); 
-  const [realStartDay, setRealStartDay] = useState(0);
+
+  const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
+  const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
   
-  const [rspConfig, setRspConfig] = useState({ enabled: false, amount: 5000, day: 6 });
-  const [lastRspMonth, setLastRspMonth] = useState(-1);
-  const [showRspAlert, setShowRspAlert] = useState(false);
-
-  const [showMA20, setShowMA20] = useState(true);
-  const [showMA60, setShowMA60] = useState(true);
-  const [showRiver, setShowRiver] = useState(false);
-  const [showTrend, setShowTrend] = useState(false); // 新增趨勢功能開關
-
-  const [customStopLossInput, setCustomStopLossInput] = useState(10);
-  const [chartPeriod, setChartPeriod] = useState(250);
-  const [dataSourceType, setDataSourceType] = useState('random');
-  const [selectedFundId, setSelectedFundId] = useState('fund_1');
+  const [gameDuration, setGameDuration] = useState(60);
+  const [gameEndTime, setGameEndTime] = useState(null);
+  const [remainingTime, setRemainingTime] = useState(0);
   
-  const [riverMode, setRiverMode] = useState('fixed'); 
-  const [riverWidthInput, setRiverWidthInput] = useState(10); 
-  const [riverSDMultiplier, setRiverSDMultiplier] = useState(2);
+  const [indicators, setIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
+  const [fullData, setFullData] = useState([]);
+  const [fundName, setFundName] = useState('');
+  const [feeRate, setFeeRate] = useState(0.01);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [tradeRequests, setTradeRequests] = useState([]);
+  const [countdown, setCountdown] = useState(15); 
+  const [copied, setCopied] = useState(false);
 
-  const [tradeMode, setTradeMode] = useState(null); 
-  const [inputAmount, setInputAmount] = useState(''); 
-  const [highestNavSinceBuy, setHighestNavSinceBuy] = useState(0);
-  const [warningActive, setWarningActive] = useState(false);
-  const [isAutoPlaying, setIsAutoPlaying] = useState(false);
-  const [showCopyToast, setShowCopyToast] = useState(false);
-  const [isCssFullscreen, setIsCssFullscreen] = useState(false);
-  const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [detectedEnv, setDetectedEnv] = useState('Browser');
-
+  const roomIdRef = useRef(null);
   const autoPlayRef = useRef(null);
 
-  // --- Effects ---
+  // 權限檢查
   useEffect(() => {
-      if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
-      const unsubscribe = onAuthStateChanged(auth, async (u) => { 
-          setUser(u); setAuthLoading(false);
-          if (u) { const nick = await checkUserNickname(u.uid); if (nick) setMyNickname(nick); }
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsAuthChecking(true);
+        setPermissionError('');
+        try {
+            const userDocRef = doc(db, "users", user.uid);
+            const userSnap = await getDoc(userDocRef);
+
+            if (userSnap.exists()) {
+                const role = userSnap.data().role;
+                if (['admin', 'host', 'vip'].includes(role)) {
+                    setHostUser(user);
+                } else {
+                    await signOut(auth);
+                    setHostUser(null);
+                    setPermissionError('您的帳號沒有主持人權限');
+                }
+            } else {
+                await signOut(auth);
+                setHostUser(null);
+                setPermissionError('查無會員資料');
+            }
+        } catch (error) {
+            console.error("權限檢查失敗", error);
+            setPermissionError('系統錯誤');
+            await signOut(auth);
+        }
+        setIsAuthChecking(false);
+      } else {
+        setHostUser(null);
+        setIsAuthChecking(false);
+        setRoomId(null);
+        roomIdRef.current = null;
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleCreateRoom = async () => {
+    if (!hostUser) return;
+    const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
+    roomIdRef.current = newRoomId;
+    setRoomId(newRoomId);
+    setFeeRate(0.01);
+    const randomTimeOffset = Math.floor(Math.random() * 50) + 10;
+    setTimeOffset(randomTimeOffset);
+    
+    try {
+      await setDoc(doc(db, "battle_rooms", newRoomId), {
+        ownerId: hostUser.uid, 
+        status: 'waiting',
+        currentDay: 400,
+        startDay: 400,
+        fundId: selectedFundId,
+        timeOffset: randomTimeOffset,
+        indicators: { ma20: false, ma60: false, river: false, trend: false }, 
+        feeRate: 0.01,
+        createdAt: serverTimestamp(),
+        gameEndTime: null
+      });
+      setGameStatus('waiting');
+    } catch (error) { 
+      console.error("開房失敗:", error); 
+      alert("開房失敗");
+      setRoomId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!roomId) return;
+    const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
+      const livePlayers = [];
+      snapshot.forEach((doc) => livePlayers.push({ id: doc.id, ...doc.data() }));
+      livePlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
+      setPlayers(livePlayers);
+    });
+    return () => unsubscribe();
+  }, [roomId]);
+
+  useEffect(() => {
+      if (!roomId) return;
+      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
+          const reqs = [];
+          snapshot.forEach(doc => reqs.push(doc.data()));
+          setTradeRequests(reqs);
+          if (reqs.length > 0) {
+              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
+              setAutoPlaySpeed(null); 
+          }
       });
       return () => unsubscribe();
-  }, []);
-
-  useEffect(() => { const fetchTicker = async () => { const data = await getTickerData(); if (data) setTickerData(data); }; fetchTicker(); }, []);
+  }, [roomId]);
 
   useEffect(() => {
-    const data = generateRandomData(30); setFullData(data); setCurrentDay(260); setIsReady(true);
-    const ua = (navigator.userAgent || navigator.vendor || window.opera || "").toLowerCase();
-    if (ua.indexOf('line') > -1) setDetectedEnv('Line'); else if (ua.indexOf('fban') > -1) setDetectedEnv('Facebook'); else setDetectedEnv('Browser');
-  }, []);
+      let timer;
+      if (tradeRequests.length > 0 && countdown > 0) {
+          timer = setInterval(() => { setCountdown((prev) => prev - 1); }, 1000);
+      } else if (tradeRequests.length === 0) {
+          setCountdown(15); 
+      }
+      return () => clearInterval(timer);
+  }, [tradeRequests.length, countdown]);
 
   useEffect(() => {
-      if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
-          const currentData = fullData[currentDay];
-          if (!currentData) return;
-          const dateObj = new Date(currentData.date); const currentMonth = dateObj.getFullYear() * 12 + dateObj.getMonth(); const dayOfMonth = dateObj.getDate();
-          if (currentMonth > lastRspMonth && dayOfMonth >= rspConfig.day) {
-              if (cash >= rspConfig.amount) {
-                  const buyUnits = rspConfig.amount / currentData.nav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + rspConfig.amount) / newTotalUnits;
-                  setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - rspConfig.amount);
-                  setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'RSP', price: currentData.nav, units: buyUnits, amount: rspConfig.amount, balance: cash - rspConfig.amount }, ...prev]);
-                  setLastRspMonth(currentMonth);
-                  if (units === 0) setHighestNavSinceBuy(currentData.nav);
+      const loadData = async () => {
+          const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
+          if (!targetFund) return;
+          setFundName(targetFund.name);
+          try {
+              const res = await fetch(targetFund.file);
+              setFullData(processRealData(await res.json()));
+          } catch (err) { console.error(err); }
+      };
+      loadData();
+  }, [selectedFundId]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
+      if (!docSnap.exists()) { localStorage.clear(); return; }
+      const roomData = docSnap.data();
+      
+      if (roomData.status) setGameStatus(roomData.status);
+      if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
+      if (roomData.startDay) setStartDay(roomData.startDay);
+      if (roomData.indicators) setIndicators(roomData.indicators);
+      if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
+      if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
+      
+      if (roomData.gameEndTime) {
+          const t = roomData.gameEndTime;
+          const millis = typeof t.toMillis === 'function' ? t.toMillis() : Number(t);
+          setGameEndTime(millis);
+      } else {
+          setGameEndTime(null);
+      }
+
+      if (fullData.length === 0 && roomData.fundId) {
+         const targetFund = FUNDS_LIBRARY.find(f => f.id === roomData.fundId);
+         if (targetFund) {
+             setFundName(targetFund.name);
+             const res = await fetch(targetFund.file);
+             setFullData(processRealData(await res.json()));
+         }
+      }
+    });
+    return () => unsubscribe();
+  }, [roomId, fullData.length]);
+
+  useEffect(() => {
+      let interval = null;
+      const tick = () => {
+          if (gameStatus === 'playing' && gameEndTime) {
+              const now = Date.now();
+              const diff = gameEndTime - now;
+              if (diff <= 0) {
+                  setRemainingTime(0);
+                  if (gameStatus === 'playing') handleEndGame();
               } else {
-                  setRspConfig(prev => ({ ...prev, enabled: false }));
-                  setShowRspAlert(true); setTimeout(() => setShowRspAlert(false), 3000);
-                  if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); }
+                  setRemainingTime(diff);
               }
+          } else {
+              setRemainingTime(0);
           }
+      };
+      tick();
+      if (gameStatus === 'playing' && gameEndTime) {
+          interval = setInterval(tick, 1000);
       }
-  }, [currentDay, gameStatus, fullData, rspConfig, cash, units, avgCost, lastRspMonth, isAutoPlaying]);
+      return () => { if(interval) clearInterval(interval); };
+  }, [gameStatus, gameEndTime]);
 
-  useEffect(() => {
-      if (gameStatus === 'playing' && fullData.length > 0) {
-          if (currentDay >= fullData.length - 1) {
-              if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); }
-              setGameStatus('ended');
-          }
-      }
-  }, [currentDay, fullData, gameStatus, isAutoPlaying]);
+  const formatTime = (ms) => {
+      if (ms <= 0) return "00:00";
+      const totalSeconds = Math.ceil(ms / 1000);
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
-  // --- Calculations ---
-  const currentNav = fullData[currentDay]?.nav || 10;
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setPermissionError('');
+    try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setLoginError("登入失敗：帳號或密碼錯誤"); }
+  };
+
+  const handleLogout = () => {
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    signOut(auth);
+  };
+
+  const handleStartGame = async () => {
+    if (!roomId || fullData.length === 0) return;
+    const minBuffer = 100;
+    const maxStart = Math.max(minBuffer, fullData.length - 1250);
+    const randomStartDay = Math.floor(Math.random() * (maxStart - minBuffer)) + minBuffer;
+    const randomOffset = Math.floor(Math.random() * 50) + 10;
+
+    const duration = Number(gameDuration) || 60;
+    const calculatedEndTime = Date.now() + (duration * 60 * 1000);
+
+    setGameEndTime(calculatedEndTime);
+    setGameStatus('playing');
+
+    await updateDoc(doc(db, "battle_rooms", roomId), { 
+        status: 'playing', 
+        fundId: selectedFundId,
+        currentDay: randomStartDay, 
+        startDay: randomStartDay,   
+        timeOffset: randomOffset,
+        gameEndTime: calculatedEndTime,
+        gameDuration: duration
+    });
+  };
+
+  const handleNextDay = async () => {
+    if (tradeRequests.length > 0) return; 
+    if (!roomId) return;
+    await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
+    setCurrentDay(prev => prev + 1);
+  };
+
+  const toggleIndicator = async (key) => {
+      const newIndicators = { ...indicators, [key]: !indicators[key] };
+      setIndicators(newIndicators); 
+      if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { indicators: newIndicators }); 
+  };
+
+  const handleChangeFee = async (e) => {
+      const rate = parseFloat(e.target.value);
+      setFeeRate(rate);
+      if (roomId) await updateDoc(doc(db, "battle_rooms", roomId), { feeRate: rate });
+  };
+
+  const toggleAutoPlay = (speed) => {
+    if (tradeRequests.length > 0) return;
+    if (autoPlaySpeed === speed) {
+      clearInterval(autoPlayRef.current);
+      setAutoPlaySpeed(null);
+    } else {
+      clearInterval(autoPlayRef.current);
+      setAutoPlaySpeed(speed);
+      autoPlayRef.current = setInterval(async () => {
+        if (roomIdRef.current) {
+           await updateDoc(doc(db, "battle_rooms", roomIdRef.current), { currentDay: increment(1) });
+           setCurrentDay(prev => prev + 1);
+        }
+      }, speed);
+    }
+  };
+
+  const handleEndGame = async () => {
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    setAutoPlaySpeed(null);
+    let winnerInfo = null;
+    if (players.length > 0) {
+        const champion = players[0];
+        winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
+    }
+    if (roomId) {
+        await updateDoc(doc(db, "battle_rooms", roomId), { status: 'ended', finalWinner: winnerInfo });
+    }
+    setGameStatus('ended');
+  };
+
+  const handleResetRoom = async () => {
+    if (!roomId || !window.confirm("確定重置？")) return;
+    setGameStatus('waiting');
+    setCurrentDay(400); setStartDay(400);
+    setIndicators({ ma20: false, ma60: false, river: false, trend: false });
+    setFeeRate(0.01);
+    if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    setAutoPlaySpeed(null);
+    setTradeRequests([]); setCountdown(15); 
+    setGameEndTime(null); 
+
+    await updateDoc(doc(db, "battle_rooms", roomId), { 
+        status: 'waiting', 
+        currentDay: 400, 
+        startDay: 400,
+        indicators: { ma20: false, ma60: false, river: false, trend: false },
+        feeRate: 0.01,
+        finalWinner: null,
+        gameEndTime: null
+    });
+    
+    const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
+    snapshot.forEach(async (d) => await deleteDoc(doc(db, "battle_rooms", roomId, "players", d.id)));
+    const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
+    reqSnap.forEach(async (d) => await deleteDoc(d.ref));
+  };
+
+  const handleForceClearRequests = async () => {
+      if (!roomId) return;
+      const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
+      reqSnap.forEach(async (d) => await deleteDoc(d.ref));
+      setTradeRequests([]); setCountdown(15);
+  };
+
+  const handleCopyUrl = () => {
+      if (!joinUrl) return;
+      navigator.clipboard.writeText(joinUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); 
+  };
+
   const getDisplayDate = (dateStr) => {
-      if (!dateStr || dataSourceType === 'random') return dateStr;
+      if (!dateStr) return 'Loading...';
       const dateObj = new Date(dateStr);
       if (isNaN(dateObj.getTime())) return dateStr;
       const newYear = dateObj.getFullYear() + timeOffset;
@@ -300,513 +443,286 @@ export default function AppRanked() {
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
   };
-  const benchmarkRoi = useMemo(() => {
-      if (!benchmarkStartNav || benchmarkStartNav === 0) return 0;
-      return ((currentNav - benchmarkStartNav) / benchmarkStartNav) * 100;
-  }, [currentNav, benchmarkStartNav]);
-  const pureRspRoi = useMemo(() => {
-      if (gameStatus !== 'ended') return 0;
-      return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
-  }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
-  
-// ★★★ V11.3 核心升級：計算交叉訊號 (含順勢/逆勢判斷) ★★★
-  const chartDataInfo = useMemo(() => {
-    if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
-    
-    const start = Math.max(0, currentDay - chartPeriod);
-    const end = currentDay + 1;
-    
-    const slice = fullData.slice(start, end).map((d, idx) => {
-        const realIdx = start + idx;
-        
-        // 1. 當日指標
-        const ind20 = calculateIndicators(fullData, 20, realIdx);
-        const ind60 = calculateIndicators(fullData, 60, realIdx);
-        const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev;
 
-        // 2. 前一日指標 (用於比對交叉)
-        const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
-        const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
-        const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
+  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
+  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
-        // 3. 前五日指標 (用於比對季線趨勢)
-        const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
-        const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+  const currentTrendInfo = useMemo(() => {
+      if (!fullData[currentDay] || !indicators.trend) return null;
+      const realIdx = currentDay;
+      const curNav = fullData[realIdx].nav;
+      const ind20 = calculateIndicators(fullData, 20, realIdx);
+      const ind60 = calculateIndicators(fullData, 60, realIdx);
+      const ma20 = ind20.ma; const ma60 = ind60.ma;
+      if (!ma20 || !ma60) return null;
+      if (curNav > ma20 && ma20 > ma60) return { text: '多頭排列 🔥', color: 'text-red-500', bg: 'bg-red-50' };
+      else if (curNav < ma20 && ma20 < ma60) return { text: '空頭排列 🧊', color: 'text-green-600', bg: 'bg-green-50' };
+      return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
+  }, [fullData, currentDay, indicators.trend]);
 
-        let riverTop = null; 
-        let riverBottom = null;
-        if (ma60) {
-            if (riverMode === 'fixed') { 
-                const ratio = riverWidthInput / 100; 
-                riverTop = ma60 * (1 + ratio); 
-                riverBottom = ma60 * (1 - ratio); 
-            } else { 
-                if (stdDev60) { 
-                    riverTop = ma60 + (stdDev60 * riverSDMultiplier); 
-                    riverBottom = ma60 - (stdDev60 * riverSDMultiplier); 
-                } 
-            }
-        }
+  // ★★★ V11.3 核心升級：雙重邏輯 (順勢實心 + 逆勢空心) ★★★
+  const chartData = useMemo(() => {
+      if (!fullData || fullData.length === 0) return [];
 
-        // 4. 訊號判斷：雙重邏輯 (順勢實心 / 逆勢空心)
-        let crossSignal = null;
-        
-        if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
-            const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
-            const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
+      const start = Math.max(0, currentDay - 330); 
+      const end = currentDay + 1;
+      
+      return fullData.slice(start, end).map((d, idx) => {
+          const realIdx = start + idx;
+          const ind20 = calculateIndicators(fullData, 20, realIdx);
+          const ind60 = calculateIndicators(fullData, 60, realIdx);
 
-            // 季線趨勢 (今日 vs 5天前)
-            const isTrendUp = ma60 >= refInd60.ma;
-            const isTrendDown = ma60 < refInd60.ma;
+          const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
+          const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
+          const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-            if (isGoldCross) {
-                // 順勢(季線向上) -> 實心；逆勢(季線向下) -> 空心
-                crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
-            } else if (isDeathCross) {
-                // 順勢(季線向下) -> 實心；逆勢(季線向上) -> 空心
-                crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
-            }
-        }
+          // 5日斜率參考
+          const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
+          const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+          
+          let riverTop = null; 
+          let riverBottom = null;
+          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
 
-        return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom, crossSignal };
-    });
+          // 訊號判斷結構：{ type: 'gold'|'death', style: 'solid'|'hollow' }
+          let crossSignal = null; 
+          
+          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
+              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
 
-    // 計算 Y 軸範圍 (維持原版邏輯)
-    let min = Infinity, max = -Infinity;
-    slice.forEach(d => {
-        const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null];
-        values.forEach(v => { if (v !== null && !isNaN(v)) { if (v < min) min = v; if (v > max) max = v; } });
-    });
-    if (min === Infinity) min = 0;
-    const stopLossPrice = (units > 0 && highestNavSinceBuy > 0) ? highestNavSinceBuy * (1 - (customStopLossInput / 100)) : null;
-    let finalMin = min, finalMax = max;
-    if (stopLossPrice !== null) { if (stopLossPrice < finalMin) finalMin = stopLossPrice; if (highestNavSinceBuy > finalMax) finalMax = highestNavSinceBuy; }
-    const padding = (finalMax - finalMin) * 0.1; 
-    const domainMin = Math.max(0, Math.floor(finalMin - padding));
-    const domainMax = Math.ceil(finalMax + padding);
-    
-    return { data: slice, domain: [domainMin, domainMax], stopLossPrice };
-  }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset, showTrend]);
-  const totalAssets = cash + (units * currentNav);
-  const roi = initialCapital > 0 ? ((totalAssets - initialCapital) / initialCapital) * 100 : 0;
+              // 季線趨勢 (Current > 5 days ago)
+              const isTrendUp = ind60.ma >= refInd60.ma;
+              const isTrendDown = ind60.ma < refInd60.ma;
 
-  useEffect(() => {
-    if (units > 0) {
-      if (currentNav > highestNavSinceBuy) setHighestNavSinceBuy(currentNav);
-      const stopPrice = highestNavSinceBuy * (1 - (customStopLossInput / 100));
-      setWarningActive(highestNavSinceBuy > 0 && currentNav < stopPrice);
-    } else { setHighestNavSinceBuy(0); setWarningActive(false); }
-  }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
+              if (isGoldCross) {
+                  if (isTrendUp) {
+                      // 順勢黃金交叉 -> 實心
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  } else {
+                      // 逆勢黃金交叉 (搶反彈/V轉) -> 空心
+                      crossSignal = { type: 'gold', style: 'hollow' };
+                  }
+              } else if (isDeathCross) {
+                  if (isTrendDown) {
+                      // 順勢死亡交叉 -> 實心
+                      crossSignal = { type: 'death', style: 'solid' };
+                  } else {
+                      // 逆勢死亡交叉 (漲多拉回/V轉向下) -> 空心
+                      crossSignal = { type: 'death', style: 'hollow' };
+                  }
+              }
+          }
 
-  // --- Handlers ---
-  const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
-  const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
-  const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
-  const handleCapitalChange = (e) => {
-      const val = e.target.value.replace(/,/g, '');
-      if (!isNaN(val) && val !== '') {
-          setInitialCapital(Number(val));
-      }
-  };
+          return { 
+              ...d, 
+              ma20: ind20.ma, 
+              ma60: ind60.ma, 
+              riverTop, 
+              riverBottom, 
+              crossSignal
+          };
+      });
+  }, [fullData, currentDay]);
 
-  const startGame = async () => {
-    let data; let startDay = 0; let fundName = "模擬基金";
-    const randomTimeOffset = Math.floor(Math.random() * 51) + 50; setTimeOffset(randomTimeOffset);
-    if (dataSourceType === 'real') {
-        const selectedFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId); setGameStatus('loading_data');
-        try {
-            const response = await fetch(selectedFund.file);
-            if (!response.ok) throw new Error("找不到數據檔案");
-            const rawData = await response.json();
-            if (rawData && rawData.length > 5) {
-                 data = processRealData(rawData); fundName = selectedFund.name;
-                 const minStart = 60; const maxStart = Math.max(minStart, data.length - 250);
-                 startDay = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart;
-            } else { throw new Error("數據過少"); }
-        } catch (error) { alert(`讀取失敗：${error.message}`); data = generateRandomData(30); startDay = 260; fundName = "隨機模擬基金"; }
-    } else { data = generateRandomData(30); startDay = 260; fundName = "隨機模擬基金"; }
-    setRankUploadStatus('idle'); setFullData(data); setCash(initialCapital); setCurrentDay(startDay); 
-    setRealStartDay(startDay);
-    if (data && data[startDay]) { setBenchmarkStartNav(data[startDay].nav); const sd = new Date(data[startDay].date); setLastRspMonth(sd.getFullYear() * 12 + sd.getMonth() - 1); }
-    setCurrentFundName(fundName); setGameStatus('playing');
-  };
+  const { totalInvestedAmount, positionRatio } = useMemo(() => {
+      let totalAssets = 0; let totalInvested = 0;
+      players.forEach(p => {
+          const pAssets = p.assets || 1000000; totalAssets += pAssets;
+          const pUnits = p.units || 0; const currentNav = fullData[currentDay]?.nav || 0;
+          let marketValue = pUnits * currentNav; if (marketValue > pAssets) marketValue = pAssets;
+          totalInvested += marketValue;
+      });
+      const ratio = totalAssets > 0 ? (totalInvested / totalAssets) * 100 : 0;
+      return { totalInvestedAmount: totalInvested, positionRatio: ratio };
+  }, [players, fullData, currentDay]);
 
-  const executeReset = () => { setConfirmModal({ show: false, type: null }); setShowShareMenu(false); clearInterval(autoPlayRef.current); setIsAutoPlaying(false); setTradeMode(null); setShowRiver(false); setUnits(0); setAvgCost(0); setTransactions([]); setHighestNavSinceBuy(0); setBenchmarkStartNav(null); setRealStartDay(0); setTimeOffset(0); setGameStatus('setup'); };
-  const executeEndGame = () => { setConfirmModal({ show: false, type: null }); setGameStatus('ended'); };
-  const executeExit = () => { setConfirmModal({ show: false, type: null }); setGameStatus('shutdown'); };
-  const handleConfirmClick = () => { if (confirmModal.type === 'exit') executeExit(); else if (confirmModal.type === 'reset') executeReset(); else executeEndGame(); };
-  const triggerReset = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setConfirmModal({ show: true, type: 'reset' }); };
-  const triggerEndGame = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setConfirmModal({ show: true, type: 'end' }); };
-  const triggerExit = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } setConfirmModal({ show: true, type: 'exit' }); };
-  
-  const advanceDay = () => { if (currentDay >= fullData.length - 1) { setGameStatus('ended'); return; } setCurrentDay(prev => prev + 1); };
-  const openTrade = (mode) => { if (isAutoPlaying) toggleAutoPlay(); setTradeMode(mode); setInputAmount(''); };
-  const closeTrade = () => { setTradeMode(null); setInputAmount(''); };
-  const executeBuy = () => { const amount = parseFloat(inputAmount); if (!amount || amount <= 0 || amount > cash) return; const buyUnits = amount / currentNav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + amount) / newTotalUnits; setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - amount); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'BUY', price: currentNav, units: buyUnits, amount: amount, balance: cash - amount }, ...prev]); if (units === 0) setHighestNavSinceBuy(currentNav); closeTrade(); advanceDay(); };
-  const executeSell = () => { let unitsToSell = parseFloat(inputAmount); if (!unitsToSell || unitsToSell <= 0) return; if (unitsToSell > units) { if (unitsToSell - units < 0.1) unitsToSell = units; else return; } const sellAmount = unitsToSell * currentNav; const costOfSoldUnits = unitsToSell * avgCost; const pnl = sellAmount - costOfSoldUnits; setCash(prev => prev + sellAmount); setUnits(prev => { const remaining = prev - unitsToSell; return remaining < 0.0001 ? 0 : remaining; }); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'SELL', price: currentNav, units: unitsToSell, amount: sellAmount, balance: cash + sellAmount, pnl }, ...prev]); if (Math.abs(units - unitsToSell) < 0.0001) { setHighestNavSinceBuy(0); setWarningActive(false); setAvgCost(0); setUnits(0); } closeTrade(); advanceDay(); };
-  const toggleAutoPlay = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } else { setTradeMode(null); setIsAutoPlaying(true); autoPlayRef.current = setInterval(() => { setCurrentDay(prev => prev + 1); }, 100); } };
-  
-  const fmt = (val, dec) => { if (val === null || isNaN(val)) return '-'; return `"${val.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec })}"`; };
-  const getDurationString = () => {
-      let durationStr = "0年 0個月";
-      if (transactions.length > 0) {
-          const firstTx = transactions[transactions.length - 1]; const startData = fullData[firstTx.day]; const endData = fullData[currentDay];
-          if (startData && endData) { const s = new Date(startData.date); const e = new Date(endData.date); let months = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()); const years = Math.floor(months / 12); const remainingMonths = months % 12; durationStr = `${years}年 ${remainingMonths}個月`; }
-      }
-      return durationStr;
-  };
-  const getSafeDate = (dayIndex) => { if (dataSourceType === 'random') return `D${dayIndex}`; if (fullData && fullData[dayIndex]) return fullData[dayIndex].date; return 'N/A'; };
-  const getCSVContent = () => {
-    let durationStr = getDurationString();
-    let csvContent = `基金名稱,${currentFundName}\n總報酬率,${roi > 0 ? '+' : ''}${roi.toFixed(2)}%\n總交易時間,${durationStr}\n最終資產,${fmt(totalAssets, 0)}\n\n交易日期,天數,類型,單價,單位數,交易金額,帳戶餘額,損益\n`;
-    transactions.forEach(t => {
-        const dateStr = getDisplayDate(getSafeDate(t.day));
-        const typeStr = t.type === 'BUY' ? '買入' : (t.type === 'RSP' ? '定額' : '賣出');
-        const row = `${dateStr},${fmt(t.day, 2)},${typeStr},${fmt(t.price, 2)},${fmt(t.units, 2)},${fmt(t.amount, 0)},${fmt(t.balance, 0)},${t.type === 'SELL' ? fmt(t.pnl, 0) : '-'}`;
-        csvContent += row + "\n";
-    });
-    return csvContent;
-  };
+  const topPlayers = players.slice(0, 10);
+  const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
+  const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
+  const currentNav = fullData[currentDay]?.nav || 0;
+  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
+  const hasRequests = tradeRequests && tradeRequests.length > 0;
 
-  const handleInitiateUpload = async () => { if (rankUploadStatus === 'uploaded') fetchAndShowLeaderboard(); else if (!myNickname) { setRankUploadStatus('asking_nick'); setShowRankModal(true); } else executeUpload(myNickname); };
-  const handleRegisterAndUpload = async () => { if (!inputNickname || inputNickname.trim().length < 2) { alert("請輸入暱稱"); return; } setRankUploadStatus('uploading'); try { await registerNickname(user.uid, inputNickname); setMyNickname(inputNickname); await executeUpload(inputNickname); } catch (err) { alert("設定失敗"); setRankUploadStatus('asking_nick'); } };
-  const executeUpload = async (nickname) => {
-      setRankUploadStatus('uploading'); setShowRankModal(true);
-      try {
-        let durationMonths = 0; if (transactions.length > 0) { const firstTx = transactions[transactions.length - 1]; const startData = fullData[firstTx.day]; const endData = fullData[currentDay]; if (startData && endData) { const s = new Date(startData.date); const e = new Date(endData.date); durationMonths = (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()); } }
-        const gameResult = { uid: user.uid, displayName: nickname, fundId: dataSourceType === 'real' ? selectedFundId : 'random', fundName: currentFundName, roi: parseFloat(roi.toFixed(2)), finalAssets: Math.round(totalAssets), durationMonths: durationMonths, version: '2025v1.3' };
-        await saveGameResult(gameResult); setRankUploadStatus('uploaded'); fetchAndShowLeaderboard();
-      } catch (err) { console.error(err); setRankUploadStatus('error'); }
-  };
-  const fetchAndShowLeaderboard = async () => { const targetFundId = dataSourceType === 'real' ? selectedFundId : 'random'; const data = await getLeaderboard(targetFundId); setLeaderboardData(data); setShowRankModal(true); };
+  if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
 
-  const handleShareAction = async (method) => {
-    const durationStr = getDurationString();
-    const shareText = `📊 Fund 手遊戰報\n基金: ${currentFundName}\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n交易時長: ${durationStr}\n大盤: ${benchmarkRoi.toFixed(2)}% | 定額: ${pureRspRoi.toFixed(2)}%\n`;
-    const subject = encodeURIComponent(`[Fund 手遊戰報] ${currentFundName}`); const body = encodeURIComponent(shareText); const encodedText = encodeURIComponent(shareText);
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-    if (method === 'line') window.open(`https://line.me/R/msg/text/?${encodedText}`, '_blank');
-    else if (method === 'gmail') {
-        const csvContent = getCSVContent(); const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `fund_game_${currentFundName}.csv`; document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        if (isMobile) window.location.href = `mailto:?subject=${subject}&body=${body}`;
-        else { alert('檔案下載中... 請將下載的 Excel 檔案拖曳至 Gmail 附件區。'); setTimeout(() => window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank'), 500); }
-    } else if (method === 'download') {
-        const csvContent = getCSVContent(); const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `fund_game_${currentFundName}.csv`; link.click();
-    }
-  };
-  const copyToClipboard = () => { let text = `📊 Fund 手遊戰報\n基金: ${currentFundName}\n最終資產: $${Math.round(totalAssets).toLocaleString()}\n報酬率: ${roi.toFixed(2)}%\n`; navigator.clipboard.writeText(text).then(() => { setShowCopyToast(true); setTimeout(() => setShowCopyToast(false), 2000); }); };
-  const setBuyPercent = (pct) => setInputAmount(Math.floor(cash * pct).toString());
-  const setSellPercent = (pct) => { if (pct === 1) setInputAmount(units.toString()); else setInputAmount((units * pct).toFixed(2)); };
-  
-  const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
-
-  // --- UI ---
-  if (authLoading) return <div className="h-screen bg-slate-50 flex items-center justify-center text-slate-500">系統啟動中...</div>;
-  if (!user) return ( 
-      <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center font-sans p-6">
-          <div className="w-full max-w-sm bg-white p-8 rounded-2xl border border-slate-200 shadow-xl">
-              <div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div>
-              <h2 className="text-2xl font-bold text-slate-800 text-center mb-2">Fund 手遊 V32</h2>
-              <p className="text-slate-500 text-center text-sm mb-6">社群爭霸版 - 登入</p>
-              <form onSubmit={handleLogin} className="space-y-4">
-                  <div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div>
-                  <div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div>
-                  <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button>
-              </form>
-              <div className="mt-6 pt-6 border-t border-slate-100">
-                  <button onClick={() => navigate('/battle')} className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"><Zap size={18} className="text-yellow-400" fill="currentColor"/> 我是現場參賽者 (輸入房號)</button>
-              </div>
-              {authError && <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-500 text-xs text-center">{authError}</div>}
-          </div>
-      </div>
-  );
-
-  if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-300 rounded hover:bg-white hover:text-slate-800 transition-colors">重啟電源</button></div> );
-  
-  // ★★★ Setup UI (優化版) ★★★
-  if (gameStatus === 'setup') {
+  if (!hostUser) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
-        <div className="w-full max-w-sm bg-white rounded-xl p-6 shadow-xl border border-slate-200 relative">
-            <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
-            
-            <div className="flex items-center justify-center gap-3 mb-8">
-                <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
-                <div className="flex flex-col">
-                    <span className="font-black text-xl text-slate-800 leading-tight">Fund 手遊</span>
-                    <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
-                </div>
+      <div className="h-screen bg-slate-50 flex flex-col items-center justify-center p-6 font-sans">
+        <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-slate-200">
+          <div className="flex justify-center mb-6"><img src="/logo.jpg" alt="Logo" className="h-16 object-contain" /></div>
+          <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">基金競技場</h2>
+          <p className="text-center text-slate-400 text-xs mb-6">主持人控制台登入</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">管理員信箱</label>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="name@example.com"/>
             </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 ml-1 mb-1 block">密碼</label>
+              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="••••••••"/>
+            </div>
+            {loginError && <div className="p-3 bg-red-50 text-red-500 text-xs rounded-lg text-center font-bold border border-red-100">{loginError}</div>}
             
-{/* ★★★ 新增：S1 賽季競技場入口 ★★★ */}
-<div className="mb-6">
-    <button 
-        onClick={() => navigate('/competition')} 
-        className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
-    >
-        <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 
-        前往 S1 賽季競技場
-    </button>
-    <p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p>
-</div>
+            {permissionError && <div className="p-3 bg-amber-50 text-amber-600 text-xs rounded-lg text-center font-bold border border-amber-200 flex flex-col gap-1"><ShieldCheck size={20} className="mx-auto"/>{permissionError}</div>}
 
-            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
-            
-            <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
-            
-            {/* 初始資金優化 */}
-            <div className="flex items-center gap-3 mb-4 bg-slate-50 border border-slate-300 rounded-xl p-3">
-                <div className="w-1/3 text-xs font-bold text-slate-500 uppercase tracking-wider">初始資金</div>
-                <input type="text" value={formatNumber(initialCapital)} onChange={handleCapitalChange} className="w-2/3 bg-transparent text-right text-xl font-mono text-slate-800 font-bold outline-none"/>
-            </div>
-            
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4"><div className="flex items-center justify-between mb-3 text-indigo-600"><div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div><div className="flex items-center"><input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" /><span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span></div></div>{rspConfig.enabled && (<div className="flex gap-3 animate-in fade-in slide-in-from-top-1"><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div><div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div></div>)}</div>
-            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">選擇挑戰項目</label><div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200"><button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button><button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button></div>
-            {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
-            
-            {/* 河流圖參數優化 */}
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-4">
-                <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
-                <div className="flex gap-2">
-                    <div className="flex w-1/2 gap-1">
-                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
-                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
-                    </div>
-                    <div className="flex items-center w-1/2 bg-white border border-slate-300 rounded px-2">
-                        {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono"/></>)}
-                    </div>
-                </div>
-            </div>
-
-            {/* ★★★ 2025v10.11.1 - 優化：停損設定與開始按鈕併列 (各佔50%) ★★★ */}
-            <div className="flex gap-2 mb-6">
-                {/* 停損設定 (50%) */}
-                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">停損設定 (%)</span>
-                    <input 
-                        type="number" 
-                        value={customStopLossInput} 
-                        onChange={(e) => setCustomStopLossInput(Number(e.target.value))} 
-                        className="w-full bg-transparent text-center text-2xl font-mono text-slate-800 font-bold outline-none"
-                    />
-                </div>
-
-                {/* 開始按鈕 (50%) */}
-                <button 
-                    onClick={startGame} 
-                    className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                >
-                    <Play size={24} fill="currentColor" /> 開始
-                </button>
-            </div>
-            
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v10.11.1 SetupUI Update | NBS Team</span></div>
+            <button type="submit" className="w-full py-3.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg flex items-center justify-center gap-2">
+                <LogIn size={18}/> 登入系統
+            </button>
+          </form>
+          <div className="mt-6 text-center text-[10px] text-slate-400">
+            v11.3.1 Crash Fix | NBS Team
+          </div>
         </div>
       </div>
     );
   }
 
-  if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
+  if (!roomId) {
+      return (
+          <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col">
+              <header className="bg-white border-b border-slate-200 p-4 flex justify-between items-center shadow-sm">
+                  <div className="flex items-center gap-3"><img src="/logo.jpg" alt="Logo" className="h-10 object-contain" /><div className="flex flex-col"><span className="font-black text-base text-slate-800 leading-tight">Fund手遊</span><span className="text-[10px] text-slate-500 font-bold tracking-wide">基金競技場 - 賽事主控台</span></div></div>
+                  <div className="flex items-center gap-4">
+                      <span className="text-sm text-slate-500 hidden md:block">{hostUser.email}</span>
+                      <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-600 font-bold flex items-center gap-1 bg-red-50 px-3 py-1.5 rounded-lg transition-colors"><LogOut size={16}/> 登出</button>
+                  </div>
+              </header>
+              <main className="flex-1 flex flex-col items-center justify-center p-6">
+                  <div className="text-center mb-8">
+                      <h1 className="text-4xl font-bold text-slate-800 mb-2">準備好開始一場對決了嗎？</h1>
+                      <p className="text-slate-500">點擊下方按鈕建立一個全新的戰局房間</p>
+                  </div>
+                  <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 w-full max-w-md">
+                      <div className="mb-6">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">預設基金</label>
+                          <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 font-bold">
+                               {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
+                          </select>
+                      </div>
+                      <button onClick={handleCreateRoom} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 group">
+                          <Zap size={24} className="group-hover:scale-110 transition-transform"/> 建立新戰局
+                      </button>
+                  </div>
+              </main>
+          </div>
+      );
+  }
 
-  // Game Playing Screen (緊湊型 UI)
   return (
-    <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
-        {/* Header: h-12 (48px) */}
-        <header className="bg-white px-4 py-2 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">
-            <button onClick={triggerExit} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-sm hover:bg-red-50 hover:text-red-600 hover:border-red-200 active:scale-95 transition-all font-bold"><LogOut size={14} /> 離開</button>
-            <div className="flex flex-col items-center"><span className="text-[10px] text-slate-400 max-w-[140px] truncate font-bold">{currentFundName}</span><span className={`text-base font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span></div>
-            <div className="flex gap-2"><button onClick={toggleFullscreen} className="p-2 rounded hover:bg-slate-100 text-slate-500"><Maximize size={18} /></button><button onClick={triggerEndGame} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-sm hover:bg-emerald-100 active:scale-95 transition-all font-bold"><Flag size={14} /> 結算</button></div>
-        </header>
+    <div className="h-screen bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden relative">
+      <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
+        <div className="flex items-center gap-3 shrink-0"><img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" /><div className="flex flex-col justify-center"><span className="font-black text-base text-slate-800 leading-none mb-0.5">Fund手遊</span><span className="text-[10px] text-slate-500 font-bold tracking-wide leading-none">基金競技場 - 賽事主控台</span></div></div>
+        <div className="flex-1 flex justify-center items-center px-4">
+            {(gameStatus === 'playing' || gameStatus === 'ended') && (
+                <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
+                    {currentTrendInfo && (<div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}><span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span></div>)}
+                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div><div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex items-baseline gap-2"><span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span><span className="text-3xl font-mono font-black text-slate-800 tracking-tight">${currentNav.toFixed(2)}</span></div>
+                    <div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex flex-col items-end"><div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase"><Wallet size={10} /> 總資金</div><div className="flex items-baseline gap-2"><span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount / 10000)}萬</span><span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>({positionRatio.toFixed(0)}%)</span></div></div>
+                </div>
+            )}
+        </div>
+        <div className="flex items-center gap-4 justify-end shrink-0">
+            {(gameStatus === 'playing' || gameStatus === 'ended') && (<div className="flex items-center gap-2 px-4 py-1 bg-red-50 border border-red-100 rounded-lg animate-pulse"><Timer size={20} className="text-red-500"/><span className="text-2xl font-mono font-black text-red-600 tracking-wider">{formatTime(remainingTime)}</span></div>)}
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 hidden md:flex"><div className="text-right"><span className="block text-[10px] text-slate-400 uppercase leading-none">Room ID</span><span className="text-xl font-mono font-bold text-slate-800 tracking-widest leading-none">{roomId || '...'}</span></div><button onClick={() => setShowQrModal(true)} className="bg-white p-1.5 rounded-md border border-slate-300 hover:bg-slate-50 text-slate-600 transition-colors shadow-sm"><QrCode size={18}/></button></div><button onClick={handleLogout} className="p-2 bg-white border border-slate-200 text-red-400 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors ml-2" title="結束控制並登出"><LogOut size={18} /></button>
+        </div>
+      </header>
 
-        <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
-            <div className="absolute top-3 left-4 z-0 pointer-events-none">
-                <div className="flex items-baseline gap-3"><span className="text-4xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">${currentNav.toFixed(2)}</span><span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">{getDisplayDate(getSafeDate(currentDay))}{timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span></div>
-                {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
-            </div>
-            <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-                <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm"><button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button><button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button><button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button></div><button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
-                <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">{[125, 250, 500].map(days => (<button key={days} onClick={() => setChartPeriod(days)} className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${chartPeriod === days ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{days === 125 ? '半年' : (days === 250 ? '1年' : '2年')}</button>))}</div>
-            </div>
-            <button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>
-            {showRspAlert && (<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-bounce flex flex-col items-center gap-2"><AlertCircle size={32} /><span className="font-bold text-lg">餘額不足！</span><span className="text-xs">定期定額已自動暫停</span></div>)}
-            {warningActive && gameStatus === 'playing' && (<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 bg-red-500 text-white px-4 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-2 backdrop-blur-sm border-2 border-red-200"><AlertCircle size={16} strokeWidth={2.5} /><span className="text-sm font-extrabold tracking-wide">觸及停損 ({customStopLossInput}%)</span></div>)}
-            {isReady && chartDataInfo.data.length > 0 ? (
-<ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartDataInfo.data} margin={{ top: 80, right: 5, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
-                        <XAxis dataKey="displayDate" hide />
-                        <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} width={40} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
-                        
-                        {/* 1. 扣抵值 (只在 showTrend 開啟時顯示) */}
-                        {showTrend && showMA20 && fullData[currentDay - 20] && (
-                            <ReferenceDot 
-                                x={getDisplayDate(fullData[currentDay - 20].date)} 
-                                y={fullData[currentDay - 20].nav} 
-                                shape={renderTriangle} 
-                                fill="#38bdf8" 
-                                isAnimationActive={false} 
-                            />
-                        )}
-                        {showTrend && showMA60 && fullData[currentDay - 60] && (
-                            <ReferenceDot 
-                                x={getDisplayDate(fullData[currentDay - 60].date)} 
-                                y={fullData[currentDay - 60].nav} 
-                                shape={renderTriangle} 
-                                fill="#1d4ed8" 
-                                isAnimationActive={false} 
-                            />
-                        )}
+      <main className="flex-1 flex overflow-hidden relative">
+        {gameStatus === 'waiting' && (<div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 relative z-10"><div className="flex gap-16 items-center"><div className="text-left"><h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2><p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p><button onClick={handleCopyUrl} className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative" title="點擊複製連結"><span className="font-mono text-emerald-600 font-bold">{joinUrl}</span><span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>{copied ? <Check size={24} /> : <Copy size={24} />}</span><span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>已複製連結！</span></button><div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg"><div className="mb-4"><label className="text-xs text-slate-400 block mb-2">本場戰役目標</label><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 outline-none">{FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}</select></div><div className="mb-6"><label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2"><Clock size={18} className="text-slate-400"/><input type="number" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full bg-transparent outline-none text-slate-800 font-bold" min="1"/></div></div><button onClick={handleStartGame} disabled={players.length === 0} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-lg transition-all shadow-md flex items-center justify-center gap-2"><Play fill="currentColor"/> 開始比賽 ({players.length}人)</button></div></div><div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">{roomId && <QRCodeSVG value={joinUrl} size={350} />}</div></div></div>)}
 
-                        {/* 2. 均線與淨值線 */}
-                        {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
-                        {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
-                        {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
-                        <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
-                        
-                        {/* 3. 停損線 */}
-                        {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={2} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 11, fontWeight: 'bold', dy: -8 }} />)}
+        {(gameStatus === 'playing' || gameStatus === 'ended') && (
+            <>
+                <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
+                    <div className="p-4 flex-1 relative">
+                        <ResponsiveContainer width="100%" height="100%">
+    <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+        {/* 1. 網格與軸線 */}
+        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
+        <XAxis dataKey="date" hide />
+        <YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
+        
+        {/* 2. 扣抵值標註 */}
+        {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
+        {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
 
-                        {/* 4. 交叉訊號 (放在最下面，確保不被遮擋) */}
-                        {showTrend && chartDataInfo.data.map((entry, index) => {
-                            if (entry.crossSignal) {
-                                return (
-                                    <ReferenceDot
-                                        key={`cross-${index}`}
-                                        x={entry.displayDate}
-                                        y={entry.ma60} 
-                                        shape={(props) => renderCrossTriangle({ 
-                                            ...props, 
-                                            direction: entry.crossSignal.type, 
-                                            type: entry.crossSignal.style 
-                                        })}
-                                        isAnimationActive={false}
-                                    />
-                                );
-                            }
-                            return null;
+        {/* 3. 均線 */}
+        {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+        {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+        {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+        {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+        <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
+
+        {/* 4. 訊號 - 修正：根據 crossSignal 的物件屬性繪製 */}
+        {indicators.trend && chartData.map((entry, index) => {
+            if (entry.crossSignal) {
+                return (
+                    <ReferenceDot
+                        key={`cross-${index}`}
+                        x={entry.date}
+                        y={entry.ma60} 
+                        shape={(props) => renderCrossTriangle({ 
+                            ...props, 
+                            direction: entry.crossSignal.type, 
+                            type: entry.crossSignal.style 
                         })}
-                    </ComposedChart>
-                </ResponsiveContainer>
-            ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
-        </div>
-
-        {/* Control Panel (Compact: py-1.5, text-[10px]) */}
-        <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
-            <div className="flex justify-between px-5 py-1.5 bg-slate-50 border-b border-slate-200 text-[10px]">
-                <div className="flex gap-2 items-center"><span className="text-slate-500">總資產</span><span className={`font-mono font-bold text-xs ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
-                <div className="flex items-center gap-2"><button onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${rspConfig.enabled ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-300 hover:bg-slate-50 hover:border-slate-400'}`}><CalendarClock size={12} className={rspConfig.enabled ? "animate-pulse" : ""} /> <span>定期定額: {rspConfig.enabled ? '扣款中' : '已暫停'}</span></button><span className="text-slate-500">現金</span><span className="text-emerald-600 font-mono font-bold text-xs">${Math.round(cash).toLocaleString()}</span></div>
-            </div>
-            
-            <div className="grid grid-cols-4 gap-1 p-1.5 bg-white">
-                <button onClick={advanceDay} disabled={isAutoPlaying || tradeMode} className="bg-white active:bg-slate-100 text-slate-600 py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-slate-200 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:text-slate-400 transition-all shadow-sm hover:bg-slate-50"><MousePointer2 size={16} className="text-slate-400"/> 觀望</button>
-                <button onClick={() => openTrade('buy')} disabled={isAutoPlaying || cash < 10 || tradeMode} className="bg-rose-600 active:bg-rose-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-rose-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-rose-100"><TrendingUp size={16} /> 買進</button>
-                <button onClick={() => openTrade('sell')} disabled={isAutoPlaying || units <= 0 || tradeMode} className="bg-emerald-600 active:bg-emerald-700 text-white py-2 rounded-xl font-bold text-xs flex flex-col items-center gap-1 border-b-4 border-emerald-800 active:border-b-0 active:translate-y-[2px] disabled:opacity-40 disabled:bg-slate-200 disabled:text-slate-400 disabled:border-slate-300 transition-all shadow-md shadow-emerald-100"><TrendingDown size={16} /> 賣出</button>
-                <button onClick={toggleAutoPlay} disabled={tradeMode} className={`flex flex-col items-center justify-center gap-1 rounded-xl font-bold text-xs border-b-4 active:border-b-0 active:translate-y-[2px] transition-all shadow-sm py-2 ${isAutoPlaying ? 'bg-amber-500 border-amber-700 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:text-slate-400'}`}>{isAutoPlaying ? <Pause size={16} /> : <Play size={16} />} {isAutoPlaying ? '暫停' : '自動'}</button>
-            </div>
-        </div>
-
-        <div className="flex-1 bg-slate-50 overflow-y-auto p-2 custom-scrollbar">
-            {transactions.length === 0 && <div className="text-center text-slate-400 text-sm mt-12 flex flex-col items-center gap-2"><Info size={32} opacity={0.5}/>尚未進行任何交易</div>}
-            {transactions.map(t => (
-                <div key={t.id} className="flex justify-between items-center p-3 mb-2 bg-white rounded-xl border border-slate-200 text-xs shadow-sm">
-                    <div className="flex items-center gap-3"><span className={`w-10 text-center py-1 rounded-md font-bold text-xs ${t.type === 'BUY' ? 'bg-red-50 text-red-500' : (t.type === 'RSP' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600')}`}>{t.type === 'BUY' ? '買進' : (t.type === 'RSP' ? '定額' : '賣出')}</span><div className="flex flex-col"><span className="text-slate-700 font-mono font-bold">{getDisplayDate(getSafeDate(t.day))}</span><span className="text-slate-400 text-[10px]">{t.type !== 'SELL' ? `$${t.amount.toLocaleString()}` : `${parseFloat(t.units).toFixed(2)} 單位`}</span></div></div>
-                    <div className="text-right"><div className="text-slate-800 font-mono text-sm font-bold">${t.price.toFixed(2)}</div>{t.type === 'SELL' && (<span className={`font-bold font-mono ${t.pnl >= 0 ? 'text-red-500' : 'text-green-600'}`}>{t.pnl >= 0 ? '+' : ''}{Math.round(t.pnl)}</span>)}</div>
-                </div>
-            ))}
-        </div>
-
-        {tradeMode && (
-            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-5 pb-8 shadow-[0_-10px_50px_rgba(0,0,0,0.1)] z-50 animate-in slide-in-from-bottom duration-200 rounded-t-3xl">
-                <div className="flex justify-between items-center mb-6"><h3 className={`text-2xl font-bold flex items-center gap-2 ${tradeMode === 'buy' ? 'text-red-500' : 'text-green-600'}`}>{tradeMode === 'buy' ? <TrendingUp size={28} /> : <TrendingDown size={28} />} {tradeMode === 'buy' ? '買進資金' : '賣出單位'}</h3><button onClick={closeTrade} className="bg-slate-100 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors"><X size={24} /></button></div>
-                <div className="space-y-5"><div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex items-center shadow-inner"><span className="text-slate-400 font-mono mr-3 text-2xl font-bold">{tradeMode === 'buy' ? '$' : 'U'}</span><input type="number" value={inputAmount} onChange={(e) => setInputAmount(e.target.value)} placeholder={tradeMode === 'buy' ? "輸入金額" : "輸入單位"} className="w-full bg-transparent text-3xl font-mono text-slate-800 outline-none font-bold" autoFocus /></div>
-                <div className="flex gap-3">{[0.25, 0.5, 1].map((pct) => (<button key={pct} onClick={() => tradeMode === 'buy' ? setBuyPercent(pct) : setSellPercent(pct)} className="flex-1 py-4 bg-white hover:bg-slate-50 rounded-xl text-sm font-mono font-bold text-slate-500 border border-slate-300 transition-colors shadow-sm">{pct === 1 ? '全部 (All In)' : `${pct*100}%`}</button>))}</div>
-                <button onClick={tradeMode === 'buy' ? executeBuy : executeSell} className={`w-full py-5 rounded-2xl font-bold text-xl flex items-center justify-center gap-3 shadow-lg active:scale-[0.98] transition-all ${tradeMode === 'buy' ? 'bg-red-500 hover:bg-red-600 text-white shadow-red-100' : 'bg-green-500 hover:bg-green-600 text-white shadow-green-100'}`}><Check size={24} strokeWidth={3} /> 確認交易</button></div>
-            </div>
-        )}
-        
-        {showRankModal && (<div className="absolute inset-0 bg-slate-900/50 z-[70] flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"><div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]"><div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Trophy size={18} className="text-amber-500"/> 排行榜</h3><button onClick={() => setShowRankModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button></div><div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-white">{rankUploadStatus === 'asking_nick' && (<div className="text-center py-6"><User size={48} className="mx-auto text-emerald-500 mb-4"/><h4 className="text-xl font-bold text-slate-800 mb-2">初次見面！</h4><p className="text-slate-500 text-sm mb-6">請輸入您在江湖上的稱號 (日後將無法修改)</p><input type="text" value={inputNickname} onChange={e => setInputNickname(e.target.value)} placeholder="例如：股海小童" className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-slate-800 text-center focus:border-emerald-500 outline-none mb-4" maxLength={12} /><button onClick={handleRegisterAndUpload} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold">確認並上傳成績</button></div>)}{rankUploadStatus === 'uploading' && (<div className="flex flex-col items-center justify-center py-10"><Loader2 size={40} className="animate-spin text-emerald-500 mb-4"/><p className="text-slate-500">正在將您的戰績刻入石碑...</p></div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length > 0 && (<div className="space-y-2"><div className="flex justify-between text-[10px] text-slate-500 px-2 uppercase tracking-wider mb-1"><span>排名 / 玩家</span><span>報酬率</span></div>{leaderboardData.map((entry, idx) => { const years = Math.floor(entry.durationMonths / 12); const months = entry.durationMonths % 12; const durationStr = years > 0 ? `${years}年${months}月` : `${months}個月`; return (<div key={entry.id} className={`flex justify-between items-center p-3 rounded-lg border ${entry.uid === user.uid ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-100'}`}><div className="flex items-center gap-3"><div className={`w-6 h-6 flex items-center justify-center rounded-full font-bold text-xs ${idx===0 ? 'bg-amber-400 text-white' : (idx===1 ? 'bg-slate-400 text-white' : (idx===2 ? 'bg-orange-700 text-white' : 'bg-slate-200 text-slate-600'))}`}>{idx + 1}</div><div className="flex flex-col"><span className={`text-sm font-bold ${entry.uid === user.uid ? 'text-emerald-600' : 'text-slate-700'}`}>{entry.displayName}</span><span className="text-[10px] text-slate-400">{entry.fundName.substring(0, 10)}</span></div></div><div className="text-right"><div className={`font-mono font-bold ${entry.roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{entry.roi > 0 ? '+' : ''}{entry.roi}%</div><div className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><span>${(entry.finalAssets/10000).toFixed(0)}萬</span><span className="text-slate-300">|</span><span className="text-slate-400">{durationStr}</span></div></div></div>); })}</div>)}{(rankUploadStatus === 'uploaded' || rankUploadStatus === 'idle') && leaderboardData.length === 0 && <div className="text-center py-10 text-slate-500">暫無排名資料，快來搶頭香！</div>}</div></div></div>)}
-
-        {/* 結算畫面 (Final Modal) - 含預覽下載 */}
-        {gameStatus === 'ended' && (
-            <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
-                <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100"><Activity size={56} className="text-emerald-500" /></div>
-                <h2 className="text-3xl font-bold text-slate-800 mb-8 tracking-tight">結算成績單</h2>
-                <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8"><div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-lg"><div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">你的 ROI</div><div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</div></div><div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 shadow-inner"><div className="text-xs text-slate-500 mb-1 uppercase tracking-wider font-bold">大盤 (Buy&Hold)</div><div className={`text-xl font-mono font-bold ${benchmarkRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%</div></div></div>
-                <div className="w-full max-w-xs bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-6 flex justify-between items-center shadow-sm"><span className="text-indigo-800 font-bold text-sm flex items-center gap-1"><CalendarClock size={16}/> 純定期定額績效</span><span className={`font-mono font-bold text-lg ${pureRspRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{pureRspRoi > 0 ? '+' : ''}{pureRspRoi.toFixed(2)}%</span></div>
-                {dataSourceType === 'real' && fullData[realStartDay] && fullData[currentDay] && (<div className="bg-amber-50 border border-amber-200 p-4 rounded-xl w-full max-w-xs mb-6 text-left"><div className="flex items-center gap-2 mb-2 text-amber-700 font-bold"><History size={16} /> 時空解密</div><div className="text-xs text-slate-600 space-y-1"><p>真實區間：<span className="font-mono font-bold">{fullData[realStartDay].date} ~ {fullData[currentDay].date}</span></p><p>表現評語：<span className="font-bold text-slate-800">{roi > benchmarkRoi ? '🏆 你戰勝了大盤！' : '📚 下次試試長期持有？'}</span></p></div></div>)}
-                
-                <div className="flex flex-col w-full max-w-xs gap-3">
-                    <button onClick={handleInitiateUpload} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all mb-2 animate-pulse"><Globe size={18} /> {rankUploadStatus === 'uploaded' ? '查看目前排名' : '上傳戰績 / 爭奪排名'}</button>
-                    <button onClick={() => setShowShareMenu(true)} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm"><Share2 size={16} className="text-blue-500"/> 匯出 Excel / 分享</button>{/* --- 新增：AI 分析按鈕 --- */}
-                    <button 
-                        onClick={handleAIAnalysis}
-                        disabled={isAnalyzing}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white py-4 rounded-xl font-bold shadow-lg active:scale-[0.98] transition-all mb-2 border border-violet-400/30 relative overflow-hidden group"
-                    >
-                        <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                        <Sparkles size={20} className="text-yellow-300 animate-pulse" /> 
-                        {isAnalyzing ? 'AI 正在讀取數據...' : '召喚 AI 導師復盤'}
-                    </button>
-                    <button onClick={copyToClipboard} className="flex items-center justify-center gap-2 bg-white hover:bg-slate-50 text-slate-600 py-3.5 rounded-xl font-bold border border-slate-200 transition-colors text-sm shadow-sm">{showCopyToast ? <Check size={16} className="text-green-500"/> : <Copy size={16} />} {showCopyToast ? '已複製' : '複製純文字戰報'}</button>
-
-                    {/* ★★★ 戰報卡片 (隱藏) ★★★ */}
-                    <ResultCard 
-                        ref={resultCardRef} 
-                        data={{
-                            fundName: currentFundName,
-                            roi: roi,
-                            assets: Math.round(totalAssets),
-                            duration: getDurationString(),
-                            nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家'),
-                            gameType: '個人挑戰賽 S1',
-                            dateRange: fullData[realStartDay] && fullData[currentDay] ? `${getDisplayDate(fullData[realStartDay]?.date)} ~ ${getDisplayDate(fullData[currentDay]?.date)}` : 'N/A'
-                        }}
+                        isAnimationActive={false}
                     />
+                );
+            }
+            return null;
+        })}
 
-                    {/* ★★★ 修正後的下載按鈕：預覽模式 ★★★ */}
-                    <button 
-                        onClick={handleDownloadReport} 
-                        disabled={isGenerating}
-                        className={`flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white py-3.5 rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] ${isGenerating ? 'opacity-70 cursor-wait' : ''}`}
-                    >
-                        {isGenerating ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18} />}
-                        {isGenerating ? '戰報生成中...' : '下載戰績圖卡'}
-                    </button>
-                    
-                    <div className="h-6"></div>
-                    <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all"><RotateCcw size={18} /> 重新開始挑戰</button>
-                    <div className="mt-4 text-center text-[9px] text-slate-400">V2025v10.11.1 SetupUI Update | NBS Team</div>
-                </div>
-            </div>
-        )}
-        
-        {confirmModal.show && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-xs text-center"><div className="flex justify-center mb-4">{confirmModal.type === 'exit' ? <LogOut size={48} className="text-slate-400"/> : confirmModal.type === 'reset' ? <RotateCcw size={48} className="text-slate-400"/> : <Flag size={48} className="text-emerald-500"/>}</div><h3 className="text-xl font-bold text-slate-800 mb-2">{confirmModal.type === 'exit' ? '離開遊戲' : (confirmModal.type === 'reset' ? '重置遊戲' : '結算遊戲')}</h3><div className="flex gap-3 justify-center mt-6"><button onClick={() => setConfirmModal({show:false, type:null})} className="flex-1 py-3 rounded-xl bg-white text-slate-500 font-bold hover:bg-slate-50 border border-slate-200">取消</button><button onClick={handleConfirmClick} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-md ${confirmModal.type === 'exit' ? 'bg-red-500 hover:bg-red-600' : (confirmModal.type === 'reset' ? 'bg-slate-500 hover:bg-slate-600' : 'bg-emerald-500 hover:bg-emerald-600')}`}>確定</button></div></div></div>)}
-
-        {showShareMenu && (<div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200"><div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-2xl w-full max-w-sm text-center relative"><button onClick={() => setShowShareMenu(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-2"><X size={24}/></button><h3 className="text-xl font-bold text-slate-800 mb-2">分享戰報</h3><div className="flex flex-col gap-3 mt-4"><button onClick={() => handleShareAction('line')} className="flex items-center justify-center gap-3 bg-[#06C755] hover:bg-[#05b54d] text-white py-3 rounded-xl font-bold transition-colors shadow-sm"><MessageCircle size={20} /> Line</button><button onClick={() => handleShareAction('gmail')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-red-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Mail size={20} /> Gmail</button><button onClick={() => handleShareAction('download')} className="flex items-center justify-center gap-3 bg-white hover:bg-slate-50 text-slate-600 py-3 rounded-xl font-bold transition-colors border border-slate-200 shadow-sm"><Download size={20} /> 下載 Excel</button></div></div></div>)}
-
-        {/* ★★★ 圖片預覽 Modal (修正版：fixed + z-9999) ★★★ */}
-        {showImageModal && (
-            <div className="fixed inset-0 z-[9999] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-                <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
-                    <div className="text-white text-center">
-                        <h3 className="text-xl font-bold mb-1">戰報已生成！</h3>
-                        <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
+    </ComposedChart>
+</ResponsiveContainer>
                     </div>
-                    {/* 這裡確保 src 有值才會顯示 */}
-                    {generatedImage && (<img src={generatedImage} alt="戰報" className="w-full rounded-xl shadow-2xl border border-white/20"/>)}
-                    <button onClick={() => setShowImageModal(false)} className="mt-4 bg-white text-slate-900 px-8 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-all">關閉</button>
                 </div>
-            </div>
+                <div className="w-1/3 h-full bg-slate-50 flex flex-col border-l border-slate-200"><div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0"><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2></div><div className="flex-1 overflow-hidden relative flex flex-col"><div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">{topPlayers.map((p, idx) => (<div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}><div className="flex items-center gap-2"><div className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold text-xs ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div><div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[100px]">{p.nickname}</span>{idx===0 && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Crown size={8}/> 領先</span>}</div></div><div className={`font-mono font-bold text-base ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div></div>))}</div>{bottomPlayers.length > 0 && (<div className="bg-slate-100 border-t border-slate-300 p-2 shrink-0"><div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider"><TrendingDown size={12}/> 逆風追趕中</div><div className="space-y-1">{bottomPlayers.map((p, idx) => (<div key={p.id} className="flex justify-between items-center p-1.5 bg-white/50 rounded border border-slate-200 text-xs opacity-70"><div className="flex items-center gap-2"><span className="text-slate-400 w-5 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div><span className="font-mono text-green-600 font-bold">{(p.roi || 0).toFixed(1)}%</span></div>))}</div></div>)}</div></div>
+            </>
         )}
-        {/* ★★★ 結束 Modal ★★★ */}
-    {/* --- 新增：AI 分析結果彈窗 --- */}
-        <AIAnalysisModal 
-            isOpen={showModal}
-            onClose={closeModal}
-            isLoading={isAnalyzing}
-            analysisResult={analysisResult}
-            error={aiError}
-        /></div>
+      </main>
+
+      {gameStatus === 'playing' && (
+          <footer className="bg-white border-t border-slate-200 h-[72px] shrink-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] relative flex items-center justify-center">
+              <div className="absolute left-4 flex gap-1"><button onClick={() => toggleIndicator('ma20')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma20 ? 'bg-sky-50 border-sky-200 text-sky-600' : 'bg-white border-slate-300 text-slate-400'}`}>月線</button><button onClick={() => toggleIndicator('ma60')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.ma60 ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-300 text-slate-400'}`}>季線</button><button onClick={() => toggleIndicator('river')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.river ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-300 text-slate-400'}`}>河流</button><button onClick={() => toggleIndicator('trend')} className={`px-2 py-1.5 rounded text-[10px] font-bold border transition-colors ${indicators.trend ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-white border-slate-300 text-slate-400'}`}>趨勢</button><div className="flex items-center ml-2 pl-2 border-l border-slate-200"><div className="relative"><Percent size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400"/><select value={feeRate} onChange={handleChangeFee} className="pl-7 pr-2 py-1 bg-white border border-slate-300 rounded-md text-[10px] font-bold text-slate-700 outline-none hover:border-slate-400 cursor-pointer appearance-none w-[90px]"><option value={0}>手續費 0%</option><option value={0.01}>手續費 1%</option><option value={0.02}>手續費 2%</option><option value={0.03}>手續費 3%</option></select></div></div></div>
+              <div className="absolute left-[360px] z-50 w-[480px]">
+                 {hasRequests ? (<div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100"><div className="flex items-center gap-3 overflow-hidden"><div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div><div className="flex flex-col leading-none overflow-hidden"><div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div><div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div></div></div><button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button></div>) : (<div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner w-fit"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>市場監控中...</div>)}
+              </div>
+              <div className="absolute right-4 flex gap-2 items-center">
+                  <button onClick={handleNextDay} disabled={hasRequests} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
+                  <div className="h-8 w-px bg-slate-200 mx-1"></div>
+                  <div className="flex gap-1">{[5, 4, 3, 2, 1].map(sec => (<button key={sec} onClick={() => toggleAutoPlay(sec * 1000)} disabled={hasRequests} className={`w-8 py-2 rounded font-bold text-xs flex justify-center transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===sec*1000 ? 'bg-emerald-500 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}>{sec}s</button>))} <button onClick={() => toggleAutoPlay(200)} disabled={hasRequests} className={`px-2 py-2 rounded font-bold text-xs flex gap-1 transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===200 ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}><Zap size={12}/> 極速</button></div>
+                  <button onClick={handleEndGame} className="px-3 py-2 bg-white border border-red-200 text-red-500 rounded text-xs hover:bg-red-50 font-bold ml-2">End</button>
+              </div>
+          </footer>
+      )}
+
+      {gameStatus === 'ended' && (
+          <div className="absolute inset-0 bg-slate-900/50 z-50 flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center max-w-lg shadow-2xl relative overflow-hidden w-full mx-4">
+                  <div className="absolute inset-0 bg-yellow-50/50 animate-pulse"></div>
+                  <Crown size={80} className="text-amber-400 mx-auto mb-4 drop-shadow-sm relative z-10"/>
+                  <h2 className="text-4xl font-bold text-slate-800 mb-2 relative z-10">WINNER</h2>
+                  {players.length > 0 && (<div className="py-6 relative z-10 border-b border-amber-100 mb-6"><div className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600 mb-4">{players[0].nickname}</div><div className={`text-4xl font-mono font-bold ${players[0].roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>ROI: {players[0].roi > 0 ? '+' : ''}{players[0].roi.toFixed(2)}%</div></div>)}
+                  <div className="relative z-10 mb-4"><div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">本次挑戰基金</div><div className="text-2xl font-bold text-slate-800 bg-slate-100 px-4 py-2 rounded-xl inline-block shadow-sm border border-slate-200">{fundName}</div></div>
+                  {fullData.length > 0 && (<div className="relative z-10 mb-8"><div className="flex items-center justify-center gap-2 text-slate-500 font-bold mb-1 text-xs"><Calendar size={14}/> 真實歷史區間</div><div className="text-lg font-mono font-bold text-slate-600">{fullData[startDay]?.date} <span className="text-slate-400">~</span> {fullData[currentDay]?.date}</div></div>)}
+                  <button onClick={handleResetRoom} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 mx-auto relative z-10 shadow-lg transition-all active:scale-95"><RotateCcw size={20}/> 開啟新局</button>
+              </div>
+          </div>
+      )}
+
+      {showQrModal && (
+          <div className="absolute inset-0 bg-slate-900/80 z-[100] flex items-center justify-center backdrop-blur-sm">
+              <div className="bg-white p-8 rounded-3xl border-2 border-slate-200 text-center shadow-2xl relative">
+                  <button onClick={() => setShowQrModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X size={24}/></button>
+                  <h2 className="text-2xl font-bold text-slate-800 mb-4">掃描加入戰局</h2>
+                  <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block"><QRCodeSVG value={joinUrl} size={300} /></div>
+                  <div className="mt-6 text-xl font-mono font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">Room ID: {roomId}</div>
+              </div>
+          </div>
+      )}
+    </div>
   );
 }
+}
+v11.3.1 - 主持人端 已解決黑屏問題，且正常運作，現在繼續修正玩家端程式碼，請依序將第一步到第五步修改部分整理出來

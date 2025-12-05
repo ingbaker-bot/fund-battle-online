@@ -73,25 +73,6 @@ export default async function handler(req, res) {
       (請不要在回應中顯示你是用了哪種模式，直接用該語氣回答即可)
     `;    
 
-
-// const prompt = `
-      你是一位說話犀利、幽默且專業的華爾街基金經理人導師。
-      玩家暱稱：${nickname || '匿名玩家'}
-      挑戰基金：${fundName}
-      最終報酬率 (ROI)：${roi}%
-      
-      以下是玩家的交易紀錄 (JSON格式)：
-      ${JSON.stringify(transactions)}
-
-      請根據以上數據，完成以下任務：
-      1. 用一句話毒舌點評他的操作風格。
-      2. 分析他最關鍵的一次成功操作或失敗操作。
-      3. 給他一個未來的投資建議。
-      4. 最後給出一個 0-100 的「操作智商評分」。
-
-      請用繁體中文回答，語氣生動有趣，200字內。
-    `;
-
     // 3. 自動輪詢機制 (Auto-Retry Logic)
     let responseText = null;
     let lastError = null;

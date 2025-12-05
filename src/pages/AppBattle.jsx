@@ -1,4 +1,4 @@
-// 2025v11.3 - 玩家端 (移植雙重訊號：順勢實心/逆勢空心)
+// 2025v10.4 - 玩家端 (UI 高度縮減緊湊版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -28,7 +28,7 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// 1. 扣抵值三角形 (藍色/深藍色)
+// 自定義三角形繪製函數
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     return (
@@ -41,37 +41,6 @@ const renderTriangle = (props) => {
     );
 };
 
-// 2. ★★★ 新增：交叉訊號繪製器 (支援 實心/空心) ★★★
-// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
-const renderCrossTriangle = (props) => {
-    const { cx, cy, direction, type } = props;
-    
-    const isSolid = type === 'solid';
-    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
-    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
-    
-    if (direction === 'gold') {
-        // 黃金交叉：紅色向上
-        return (
-            <polygon 
-                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
-                fill={fillColor} 
-                stroke={strokeColor}
-                strokeWidth={2}
-            />
-        );
-    } else {
-        // 死亡交叉：綠色向下
-        return (
-            <polygon 
-                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth={2}
-            />
-        );
-    }
-};
 export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -135,7 +104,7 @@ export default function AppBattle() {
   const [startDay, setStartDay] = useState(0); 
   const [timeOffset, setTimeOffset] = useState(0);
   const [fundName, setFundName] = useState('');
-  const [showIndicators, setShowIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
+  const [showIndicators, setShowIndicators] = useState({ ma20: false, ma60: false, river: false });
   
   const [cash, setCash] = useState(() => getSavedState('battle_cash', 1000000));
   const [units, setUnits] = useState(() => getSavedState('battle_units', 0));
@@ -396,46 +365,17 @@ export default function AppBattle() {
       return `${year}-${month}-${day}`;
   };
 
-  // ★★★ V11.3 核心升級：玩家端同步導入雙重訊號判斷 ★★★
   const chartData = useMemo(() => {
       const start = Math.max(0, currentDay - 330); const end = currentDay + 1;
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
           const ind20 = calculateIndicators(fullData, 20, realIdx); const ind60 = calculateIndicators(fullData, 60, realIdx);
-          
-          const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
-          const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
-          const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
-
-          const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
-          const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
-
           let riverTop = null; let riverBottom = null; if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
-
-          // 訊號判斷
-          let crossSignal = null; 
-          
-          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
-              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
-              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
-
-              // 季線趨勢 (Current > 5 days ago)
-              const isTrendUp = ind60.ma >= refInd60.ma;
-              const isTrendDown = ind60.ma < refInd60.ma;
-
-              if (isGoldCross) {
-                  // 順勢實心，逆勢空心
-                  crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
-              } else if (isDeathCross) {
-                  // 順勢實心，逆勢空心
-                  crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
-              }
-          }
-
-          return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom, crossSignal };
+          return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom };
       });
   }, [fullData, currentDay]);
 
+  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "";
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
@@ -493,9 +433,10 @@ export default function AppBattle() {
               </div>
           )}
           
-          {/* Header */}
+          {/* Header: h-12 (48px) */}
           <div className="sticky top-0 z-20 shadow-sm">
               <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-lg font-black text-slate-700 h-12">
+                 {/* 左側：離開 + 倒數 */}
                  <div className="flex items-center gap-2 w-1/3">
                      <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
                          <LogOut size={16} />
@@ -505,14 +446,19 @@ export default function AppBattle() {
                          {formatTime(remainingTime)}
                      </div>
                  </div>
+
+                 {/* 中間：基金名稱 */}
                  <div className="w-1/3 text-center">
                      <span className="truncate max-w-full font-bold text-base">{fundName}</span>
                  </div>
+
+                 {/* 右側：日期 */}
                  <div className="w-1/3 text-right">
                      <span className="font-mono tracking-wider text-xs text-slate-500">{currentDisplayDate}</span>
                  </div>
               </div>
               
+              {/* 資訊列 (Trend/ROI/Assets) */}
               <div className="bg-white px-2 py-1 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
                  <div className="flex flex-col items-center border-r border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
@@ -520,12 +466,14 @@ export default function AppBattle() {
                         {trendSignal.char}
                     </div>
                  </div>
+
                  <div className="flex flex-col items-center border-r border-slate-100">
                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
                     <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                         {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
                     </div>
                  </div>
+
                  <div className="flex flex-col items-center">
                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
                     <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -545,42 +493,36 @@ export default function AppBattle() {
                     {showIndicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showIndicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
 			        
-                    {showIndicators.trend && showIndicators.ma20 && deduction20 && (
-           		        <ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />
+                    {/* 扣抵三角形 */}
+        	        {showIndicators.trend && showIndicators.ma20 && deduction20 && (
+           		        <ReferenceDot
+                		    x={deduction20.date}
+                		    y={deduction20.nav}
+                		    shape={renderTriangle} 
+                		    fill="#38bdf8" 
+              		      isAnimationActive={false}
+            		    />
         	        )}
+
                     {showIndicators.trend && showIndicators.ma60 && deduction60 && (
-                        <ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />
+                        <ReferenceDot
+                            x={deduction60.date}
+                            y={deduction60.nav}
+                            shape={renderTriangle}
+                            fill="#1d4ed8" 
+                            isAnimationActive={false}
+                        />
                     )}                    
 
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
                     <YAxis domain={['auto', 'auto']} hide />
-
-                    {/* ★★★ 4. 玩家端新增：交叉訊號繪製 ★★★ */}
-                    {showIndicators.trend && chartData.map((entry, index) => {
-                        if (entry.crossSignal) {
-                            return (
-                                <ReferenceDot
-                                    key={`cross-${index}`}
-                                    x={entry.date}
-                                    y={entry.ma60} 
-                                    shape={(props) => renderCrossTriangle({ 
-                                        ...props, 
-                                        direction: entry.crossSignal.type, 
-                                        type: entry.crossSignal.style 
-                                    })}
-                                    isAnimationActive={false}
-                                />
-                            );
-                        }
-                        return null;
-                    })}
-
                 </ComposedChart>
              </ResponsiveContainer>
           </div>
           
-          {/* Control Panel */}
+          {/* Control Panel (Compact) */}
           <div className="bg-white shrink-0 z-20 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] border-t border-slate-200 pb-2 safe-area-pb">
+              {/* Assets Row: py-1.5, text-[10px] */}
               <div className="flex justify-between px-4 py-1.5 border-b border-slate-100 mb-1 text-[10px]">
                   <div className="flex gap-1 text-slate-500 font-bold">
                       <span>現金</span>
@@ -606,6 +548,7 @@ export default function AppBattle() {
                   </div>
               ) : (
                   <>
+                      {/* Compact Trade Controls */}
                       <div className="px-2 grid grid-cols-5 gap-1 mb-1">
                           <button 
                             onClick={() => handleQuickAmount('buy', 1.0)} 
@@ -713,6 +656,7 @@ export default function AppBattle() {
             </div>
         )}
         
+        {/* ★★★ 3. 插入戰報卡片與下載按鈕 (含預覽功能) ★★★ */}
         <ResultCard 
             ref={resultCardRef} 
             data={{
@@ -726,6 +670,7 @@ export default function AppBattle() {
             }}
         />
 
+        {/* 修正後的下載按鈕：綁定 isGenerating 狀態 */}
         <button 
             onClick={() => handleDownloadReport(fundName)} 
             disabled={isGenerating}
@@ -734,9 +679,11 @@ export default function AppBattle() {
             {isGenerating ? <Loader2 size={18} className="animate-spin"/> : <Share2 size={18} />}
             {isGenerating ? '戰報生成中...' : '下載對戰成績卡'}
         </button>
+        {/* ★★★ 結束插入 ★★★ */}
 
         <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="mt-4 text-slate-400 underline hover:text-slate-600 mb-8">離開房間</button>
 
+        {/* ★★★ 4. 新增預覽視窗 (Modal) ★★★ */}
         {showImageModal && (
             <div className="absolute inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in fixed">
                 <div className="w-full max-w-sm bg-transparent flex flex-col items-center gap-4">
@@ -745,6 +692,7 @@ export default function AppBattle() {
                         <p className="text-sm text-slate-300">請長按下方圖片進行儲存或分享</p>
                     </div>
                     
+                    {/* 顯示生成的圖片 */}
                     {generatedImage && (
                         <img 
                             src={generatedImage} 
@@ -762,6 +710,7 @@ export default function AppBattle() {
                 </div>
             </div>
         )}
+        {/* ★★★ 結束 Modal ★★★ */}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// 2025v10.3 - 主持人端 (扣抵三角形優化版)
+// 2025v11.0 - 主持人端 (新增黃金/死亡交叉訊號)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -36,11 +36,12 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// ★★★ 新增：自定義三角形繪製函數 ★★★
+// --- 視覺輔助繪圖函數 ---
+
+// 1. 扣抵值三角形 (藍色/深藍色)
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     // 繪製一個向上指的實心三角形 (▲)
-    // 尖端位於 (cx, cy-6)，底部寬度為 12px
     return (
         <polygon 
             points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
@@ -49,6 +50,33 @@ const renderTriangle = (props) => {
             strokeWidth={2}
         />
     );
+};
+
+// 2. 交叉訊號三角形 (紅色多頭 / 綠色空頭)
+const renderCrossTriangle = (props) => {
+    const { cx, cy, direction } = props;
+    
+    if (direction === 'gold') {
+        // 黃金交叉：紅色向上三角形 (▲) - 標示在點的下方，指向上方
+        return (
+            <polygon 
+                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
+                fill="#ef4444" // Tailwind red-500
+                stroke="white" 
+                strokeWidth={1}
+            />
+        );
+    } else {
+        // 死亡交叉：綠色向下三角形 (▼) - 標示在點的上方，指向下方
+        return (
+            <polygon 
+                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
+                fill="#16a34a" // Tailwind green-600
+                stroke="white" 
+                strokeWidth={1}
+            />
+        );
+    }
 };
 
 export default function SpectatorView() {
@@ -213,7 +241,7 @@ export default function SpectatorView() {
       if (roomData.status) setGameStatus(roomData.status);
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
       if (roomData.startDay) setStartDay(roomData.startDay);
-      if (roomData.indicators) setShowIndicators(roomData.indicators);
+      if (roomData.indicators) setIndicators(roomData.indicators); // FIX: 修正這裡的變數名稱 setShowIndicators -> setIndicators
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
       if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
       
@@ -421,15 +449,48 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
+  // ★★★ V11.0 核心升級：計算交叉訊號 ★★★
   const chartData = useMemo(() => {
-      const start = Math.max(0, currentDay - 330); const end = currentDay + 1;
+      if (!fullData || fullData.length === 0) return [];
+
+      const start = Math.max(0, currentDay - 330); 
+      const end = currentDay + 1;
+      
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
           const ind20 = calculateIndicators(fullData, 20, realIdx);
           const ind60 = calculateIndicators(fullData, 60, realIdx);
-          let riverTop = null; let riverBottom = null;
+
+          // 計算前一日指標 (用於比對交叉)
+          const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
+          const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
+          const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
+          
+          let riverTop = null; 
+          let riverBottom = null;
           if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
-          return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom };
+
+          // 判斷交叉訊號
+          let crossSignal = null; // 'gold' | 'death' | null
+          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && realIdx > 0) {
+              // 黃金交叉：昨天 20 <= 60，今天 20 > 60
+              if (prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma) {
+                  crossSignal = 'gold';
+              }
+              // 死亡交叉：昨天 20 >= 60，今天 20 < 60
+              else if (prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma) {
+                  crossSignal = 'death';
+              }
+          }
+
+          return { 
+              ...d, 
+              ma20: ind20.ma, 
+              ma60: ind60.ma, 
+              riverTop, 
+              riverBottom,
+              crossSignal
+          };
       });
   }, [fullData, currentDay]);
 
@@ -479,7 +540,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v10.3 Triangle Deduction | NBS Team
+            v11.0 Cross Signals | NBS Team
           </div>
         </div>
       </div>
@@ -541,13 +602,54 @@ export default function SpectatorView() {
 
         {(gameStatus === 'playing' || gameStatus === 'ended') && (
             <>
-                <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative"><div className="p-4 flex-1 relative"><ResponsiveContainer width="100%" height="100%"><ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} /><XAxis dataKey="date" hide /><YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
-                
-                {/* ★★★ 扣抵價標註點 (改用 Triangle) ★★★ */}
-                {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
-                {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
+                <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
+                    <div className="p-4 flex-1 relative">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
+                                <XAxis dataKey="date" hide />
+                                <YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
+                                
+                                {/* 扣抵價標註點 (藍色) */}
+                                {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
+                                {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
 
-                {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}{indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}{indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}{indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}<Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" /></ComposedChart></ResponsiveContainer></div></div>
+                                {/* ★★★ 新增：黃金/死亡交叉訊號 (紅/綠三角形) ★★★ */}
+                                {indicators.trend && chartData.map((entry, index) => {
+                                    if (entry.crossSignal === 'gold') {
+                                        return (
+                                            <ReferenceDot
+                                                key={`gold-${index}`}
+                                                x={entry.date}
+                                                y={entry.ma60} // 標示在季線
+                                                shape={(props) => renderCrossTriangle({ ...props, direction: 'gold' })}
+                                                isAnimationActive={false}
+                                            />
+                                        );
+                                    }
+                                    if (entry.crossSignal === 'death') {
+                                        return (
+                                            <ReferenceDot
+                                                key={`death-${index}`}
+                                                x={entry.date}
+                                                y={entry.ma60} // 標示在季線
+                                                shape={(props) => renderCrossTriangle({ ...props, direction: 'death' })}
+                                                isAnimationActive={false}
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })}
+
+                                {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                                {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                                {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+                                {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+                                <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
                 <div className="w-1/3 h-full bg-slate-50 flex flex-col border-l border-slate-200"><div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0"><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2></div><div className="flex-1 overflow-hidden relative flex flex-col"><div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">{topPlayers.map((p, idx) => (<div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}><div className="flex items-center gap-2"><div className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold text-xs ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div><div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[100px]">{p.nickname}</span>{idx===0 && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Crown size={8}/> 領先</span>}</div></div><div className={`font-mono font-bold text-base ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div></div>))}</div>{bottomPlayers.length > 0 && (<div className="bg-slate-100 border-t border-slate-300 p-2 shrink-0"><div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider"><TrendingDown size={12}/> 逆風追趕中</div><div className="space-y-1">{bottomPlayers.map((p, idx) => (<div key={p.id} className="flex justify-between items-center p-1.5 bg-white/50 rounded border border-slate-200 text-xs opacity-70"><div className="flex items-center gap-2"><span className="text-slate-400 w-5 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div><span className="font-mono text-green-600 font-bold">{(p.roi || 0).toFixed(1)}%</span></div>))}</div></div>)}</div></div>
             </>
         )}

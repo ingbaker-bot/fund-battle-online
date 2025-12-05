@@ -34,8 +34,6 @@ export default async function handler(req, res) {
         "gemini-1.5-flash-latest" // 最後防線
     ];
 
-    // ... 前面的程式碼 ...
-
     // ★★★ 提示詞工程核心區 ★★★
     const prompt = `
       你現在是「Fund手遊」的專屬投資導師。
@@ -73,8 +71,8 @@ export default async function handler(req, res) {
       2. **關鍵復盤**：指出他這局最關鍵的一個決策（哪一筆買賣做對或做錯了）。
       3. **導師建議**：給他下一局的具體建議。
       4. **操作評分**： 最後給出一個 0-100 的「操作智商評分」。
-;
-
+    `;
+。
     // 3. 自動輪詢機制 (Auto-Retry Logic)
     let responseText = null;
     let lastError = null;

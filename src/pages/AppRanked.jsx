@@ -553,41 +553,41 @@ export default function AppRanked() {
   
 if (gameStatus === 'setup') {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
-        <div className="w-full max-w-sm bg-white rounded-xl p-6 shadow-xl border border-slate-200 relative">
-            {/* 右上角登出按鈕 */}
-            <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
+      <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center font-sans">
+        {/* 調整 p-6 為 p-5，讓卡片內距也稍微縮小 */}
+        <div className="w-full max-w-sm bg-white rounded-xl p-5 shadow-xl border border-slate-200 relative">
+            <button onClick={handleLogout} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={18} /></button>
             
-            {/* Logo 區域 */}
-            <div className="flex items-center justify-center gap-3 mb-8">
-                <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
+            {/* Logo 區域：mb-8 改為 mb-5 */}
+            <div className="flex items-center justify-center gap-3 mb-5">
+                <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
-                    <span className="font-black text-xl text-slate-800 leading-tight">Fund 手遊</span>
+                    <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
                     <span className="text-[10px] text-slate-500 font-bold tracking-wide">RANKED CHALLENGE</span>
                 </div>
             </div>
             
-            {/* S1 賽季競技場按鈕 (左 2/3, 右 1/3) */}
-            <div className="mb-6 flex items-center gap-3">
+            {/* S1 賽季按鈕：mb-6 改為 mb-4 */}
+            <div className="mb-4 flex items-center gap-2">
                 <button 
                     onClick={() => navigate('/competition')} 
-                    className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
+                    className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
                 >
-                    <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 
+                    <Sword size={18} className="group-hover:rotate-12 transition-transform"/> 
                     S1 賽季競技場
                 </button>
-                <p className="w-1/3 text-xs text-slate-500 leading-tight text-left">
+                <p className="w-1/3 text-xs text-slate-500 leading-tight text-left pl-1">
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
 
-            {/* 跑馬燈 (如果有 Ticker 資料) */}
-            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+            {/* 跑馬燈：mb-6 改為 mb-4 */}
+            {tickerData.length > 0 && (<div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-1.5"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
             
             {/* --- 設定區域 Start --- */}
 
-            {/* Row 1: 初始資金 (2/3) + 停損設定 (1/3) */}
-            <div className="flex gap-3 mb-4">
+            {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}
+            <div className="flex gap-2 mb-3">
                 <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
                     <input 
@@ -609,51 +609,50 @@ if (gameStatus === 'setup') {
                 </div>
             </div>
             
-            {/* Row 2: 定期定額 (RSP) */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shadow-sm">
-                <div className="flex items-center justify-between mb-3 text-indigo-600">
-                    <div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
+            {/* Row 2: 定期定額 (RSP)：mb-4 改為 mb-3 */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 shadow-sm">
+                <div className="flex items-center justify-between mb-2 text-indigo-600">
+                    <div className="flex items-center gap-2"><CalendarClock size={16} /><span className="text-xs font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
                     <div className="flex items-center">
-                        <input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" />
-                        <span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
+                        <input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" />
+                        <span className={`text-xs font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
                     </div>
                 </div>
                 {rspConfig.enabled && (
-                    <div className="flex gap-3 animate-in fade-in slide-in-from-top-1">
-                        <div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/></div>
-                        <div className="flex-1"><label className="text-xs text-slate-400 mb-1 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div>
+                    <div className="flex gap-2 animate-in fade-in slide-in-from-top-1">
+                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono"/></div>
+                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div>
                     </div>
                 )}
             </div>
 
-            {/* Row 3: 挑戰項目選擇 */}
-            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">選擇挑戰項目</label>
-            <div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
-                <button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button>
-                <button onClick={() => setDataSourceType('real')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button>
+            {/* Row 3: 挑戰項目：mb-2 改為 mb-1, mb-4 改為 mb-3 */}
+            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
+            <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button onClick={() => setDataSourceType('random')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button>
+                <button onClick={() => setDataSourceType('real')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button>
             </div>
-            {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
+            {dataSourceType === 'real' && (<div className="mb-3 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm"><Database size={18} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-xs font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
             
-            {/* Row 4: 河流圖參數 */}
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-6 shadow-sm">
-                <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
+            {/* Row 4: 河流圖參數：mb-6 改為 mb-4 */}
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
+                <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
                 <div className="flex gap-2">
                     <div className="flex w-1/2 gap-1">
-                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
-                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-2 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
+                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
+                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
                     </div>
                     <div className="flex items-center w-1/2 bg-white border border-slate-300 rounded px-2">
-                        {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono"/></>)}
+                        {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold text-sm"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-sm"/></>)}
                     </div>
                 </div>
             </div>
 
-            {/* Row 5: 玩家資訊 + 開始按鈕 */}
-            <div className="flex gap-2 mb-6">
-                {/* 玩家資訊 (從上方移至此，取代原本停損的位置) */}
-                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-2 flex flex-col items-center justify-center gap-1 overflow-hidden shadow-sm">
+            {/* Row 5: 玩家資訊 + 開始按鈕：mb-6 改為 mb-4 */}
+            <div className="flex gap-2 mb-4">
+                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-1 text-emerald-600">
-                        <UserCheck size={14} />
+                        <UserCheck size={12} />
                         <span className="text-[10px] font-bold">玩家</span>
                     </div>
                     <div className="flex flex-col items-center w-full">
@@ -664,17 +663,17 @@ if (gameStatus === 'setup') {
                     </div>
                 </div>
 
-                {/* 開始按鈕 (設為 flex-[2] 讓它比左邊寬兩倍) */}
-                <button onClick={startGame} className="flex-[2] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                    <Play size={24} fill="currentColor" /> 開始
+                <button onClick={startGame} className="flex-[2] bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 py-2">
+                    <Play size={22} fill="currentColor" /> 開始
                 </button>
             </div>
             
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v11.7 SetupUI Fixed | NBS Team</span></div>
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 Compact UI</span></div>
         </div>
       </div>
     );
   }
+
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
 
   return (

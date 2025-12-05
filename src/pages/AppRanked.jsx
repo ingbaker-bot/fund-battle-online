@@ -1,4 +1,4 @@
-// 2025v10.11.3 - 單機版 (修復S1賽季競技場)
+// 2025v11.0 - 單機版 (新增趨勢)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // ★★★ 修正：移除未使用的 Icon (如 Power, AlertCircle, RefreshCw 等) ★★★
@@ -96,6 +96,53 @@ const formatNumber = (num) => {
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 };
 
+// --- 新增：繪圖輔助函式 ---
+
+// 1. 扣抵值三角形 (藍色/深藍色)
+const renderTriangle = (props) => {
+    const { cx, cy, fill } = props;
+    return (
+        <polygon 
+            points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
+            fill={fill} 
+            stroke="white" 
+            strokeWidth={2}
+        />
+    );
+};
+
+// 2. 交叉訊號繪製器 (支援 實心/空心)
+// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
+const renderCrossTriangle = (props) => {
+    const { cx, cy, direction, type } = props;
+    
+    const isSolid = type === 'solid';
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
+    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
+    
+    if (direction === 'gold') {
+        // 黃金交叉：紅色向上
+        return (
+            <polygon 
+                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
+                fill={fillColor} 
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    } else {
+        // 死亡交叉：綠色向下
+        return (
+            <polygon 
+                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    }
+};
+
 export default function AppRanked() {
   const [user, setUser] = useState(null); 
   const [email, setEmail] = useState('');
@@ -170,6 +217,8 @@ export default function AppRanked() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
+  const [showTrend, setShowTrend] = useState(false); // 新增趨勢功能開關
+
   const [customStopLossInput, setCustomStopLossInput] = useState(10);
   const [chartPeriod, setChartPeriod] = useState(250);
   const [dataSourceType, setDataSourceType] = useState('random');
@@ -260,22 +309,69 @@ export default function AppRanked() {
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
   
+// ★★★ V11.3 核心升級：計算交叉訊號 (含順勢/逆勢判斷) ★★★
   const chartDataInfo = useMemo(() => {
     if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
+    
     const start = Math.max(0, currentDay - chartPeriod);
     const end = currentDay + 1;
+    
     const slice = fullData.slice(start, end).map((d, idx) => {
         const realIdx = start + idx;
+        
+        // 1. 當日指標
         const ind20 = calculateIndicators(fullData, 20, realIdx);
         const ind60 = calculateIndicators(fullData, 60, realIdx);
         const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev;
-        let riverTop = null; let riverBottom = null;
+
+        // 2. 前一日指標 (用於比對交叉)
+        const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
+        const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
+        const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
+
+        // 3. 前五日指標 (用於比對季線趨勢)
+        const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
+        const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+
+        let riverTop = null; 
+        let riverBottom = null;
         if (ma60) {
-            if (riverMode === 'fixed') { const ratio = riverWidthInput / 100; riverTop = ma60 * (1 + ratio); riverBottom = ma60 * (1 - ratio); } 
-            else { if (stdDev60) { riverTop = ma60 + (stdDev60 * riverSDMultiplier); riverBottom = ma60 - (stdDev60 * riverSDMultiplier); } }
+            if (riverMode === 'fixed') { 
+                const ratio = riverWidthInput / 100; 
+                riverTop = ma60 * (1 + ratio); 
+                riverBottom = ma60 * (1 - ratio); 
+            } else { 
+                if (stdDev60) { 
+                    riverTop = ma60 + (stdDev60 * riverSDMultiplier); 
+                    riverBottom = ma60 - (stdDev60 * riverSDMultiplier); 
+                } 
+            }
         }
-        return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom };
+
+        // 4. 訊號判斷：雙重邏輯 (順勢實心 / 逆勢空心)
+        let crossSignal = null;
+        
+        if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+            const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
+            const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
+
+            // 季線趨勢 (今日 vs 5天前)
+            const isTrendUp = ma60 >= refInd60.ma;
+            const isTrendDown = ma60 < refInd60.ma;
+
+            if (isGoldCross) {
+                // 順勢(季線向上) -> 實心；逆勢(季線向下) -> 空心
+                crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
+            } else if (isDeathCross) {
+                // 順勢(季線向下) -> 實心；逆勢(季線向上) -> 空心
+                crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
+            }
+        }
+
+        return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom, crossSignal };
     });
+
+    // 計算 Y 軸範圍 (維持原版邏輯)
     let min = Infinity, max = -Infinity;
     slice.forEach(d => {
         const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null];
@@ -288,9 +384,9 @@ export default function AppRanked() {
     const padding = (finalMax - finalMin) * 0.1; 
     const domainMin = Math.max(0, Math.floor(finalMin - padding));
     const domainMax = Math.ceil(finalMax + padding);
+    
     return { data: slice, domain: [domainMin, domainMax], stopLossPrice };
-  }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset]);
-
+  }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset, showTrend]);
   const totalAssets = cash + (units * currentNav);
   const roi = initialCapital > 0 ? ((totalAssets - initialCapital) / initialCapital) * 100 : 0;
 
@@ -529,23 +625,67 @@ export default function AppRanked() {
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
             </div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-                <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm"><button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button><button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button><button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button></div>
+                <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm"><button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button><button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button><button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button></div><button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">{[125, 250, 500].map(days => (<button key={days} onClick={() => setChartPeriod(days)} className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${chartPeriod === days ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{days === 125 ? '半年' : (days === 250 ? '1年' : '2年')}</button>))}</div>
             </div>
             <button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>
             {showRspAlert && (<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-bounce flex flex-col items-center gap-2"><AlertCircle size={32} /><span className="font-bold text-lg">餘額不足！</span><span className="text-xs">定期定額已自動暫停</span></div>)}
             {warningActive && gameStatus === 'playing' && (<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 bg-red-500 text-white px-4 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-2 backdrop-blur-sm border-2 border-red-200"><AlertCircle size={16} strokeWidth={2.5} /><span className="text-sm font-extrabold tracking-wide">觸及停損 ({customStopLossInput}%)</span></div>)}
             {isReady && chartDataInfo.data.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+<ResponsiveContainer width="100%" height="100%">
                     <ComposedChart data={chartDataInfo.data} margin={{ top: 80, right: 5, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
                         <XAxis dataKey="displayDate" hide />
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} width={40} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
+                        
+                        {/* 1. 扣抵值 (只在 showTrend 開啟時顯示) */}
+                        {showTrend && showMA20 && fullData[currentDay - 20] && (
+                            <ReferenceDot 
+                                x={getDisplayDate(fullData[currentDay - 20].date)} 
+                                y={fullData[currentDay - 20].nav} 
+                                shape={renderTriangle} 
+                                fill="#38bdf8" 
+                                isAnimationActive={false} 
+                            />
+                        )}
+                        {showTrend && showMA60 && fullData[currentDay - 60] && (
+                            <ReferenceDot 
+                                x={getDisplayDate(fullData[currentDay - 60].date)} 
+                                y={fullData[currentDay - 60].nav} 
+                                shape={renderTriangle} 
+                                fill="#1d4ed8" 
+                                isAnimationActive={false} 
+                            />
+                        )}
+
+                        {/* 2. 均線與淨值線 */}
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
+                        
+                        {/* 3. 停損線 */}
                         {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={2} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 11, fontWeight: 'bold', dy: -8 }} />)}
+
+                        {/* 4. 交叉訊號 (放在最下面，確保不被遮擋) */}
+                        {showTrend && chartDataInfo.data.map((entry, index) => {
+                            if (entry.crossSignal) {
+                                return (
+                                    <ReferenceDot
+                                        key={`cross-${index}`}
+                                        x={entry.displayDate}
+                                        y={entry.ma60} 
+                                        shape={(props) => renderCrossTriangle({ 
+                                            ...props, 
+                                            direction: entry.crossSignal.type, 
+                                            type: entry.crossSignal.style 
+                                        })}
+                                        isAnimationActive={false}
+                                    />
+                                );
+                            }
+                            return null;
+                        })}
                     </ComposedChart>
                 </ResponsiveContainer>
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}

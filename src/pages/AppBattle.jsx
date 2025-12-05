@@ -72,7 +72,6 @@ const renderCrossTriangle = (props) => {
         );
     }
 };
-
 export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

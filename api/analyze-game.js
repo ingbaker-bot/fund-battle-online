@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. CORS 設定 (維持不變)
+  // 1. CORS 設定
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -17,28 +17,30 @@ export default async function handler(req, res) {
 
   try {
     const { fundName, roi, transactions, nickname } = req.body;
+    
+    // --- 診斷：檢查金鑰 ---
     const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error("❌ [嚴重錯誤] 環境變數 GOOGLE_GEMINI_API_KEY 未設定");
+        throw new Error("API Key 環境變數未設定");
+    }
+    
+    // 去除可能的多餘空白
+    const cleanKey = apiKey.trim();
+    const genAI = new GoogleGenerativeAI(cleanKey);
 
-    if (!apiKey) throw new Error("API Key 環境變數未設定");
-
-    // 2. 初始化 SDK
-    // 注意：這裡直接使用 trim() 去除可能存在的空白
-    const genAI = new GoogleGenerativeAI(apiKey.trim());
-
-    // ★★★ 關鍵修改：定義模型候補清單 (根據您的 check-models.js 結果) ★★★
-    // 系統會依序嘗試，直到有一個成功為止
+    // ★★★ 模型清單 ★★★
     const CANDIDATE_MODELS = [
-        "gemini-2.5-flash",      // 首選：最新、最快
-        "gemini-2.0-flash",      // 備選 1
-        "gemini-pro",            // 備選 2：最舊但最穩
-        "gemini-1.5-flash-latest" // 最後防線
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-pro"
     ];
 
-    // ★★★ 提示詞工程核心區 ★★★
+    // ★★★ 優化後的 Prompt (分級回應策略) ★★★
+    // 注意：這裡使用反引號 (`) 包裹，請勿刪除頭尾的引號
     const prompt = `
-      你現在是「Fund手遊」的專屬投資導師。
-      你的角色設定是：一位在華爾街打滾 20 年、見過大風大浪、既專業又幽默，且非常懂得因材施教的資深經理人。
-      
+      你現在是「Fund手遊」的專屬投資導師。你的角色設定是：一位見過大風大浪、既專業又幽默，且非常懂得因材施教的資深經理人。
+
       【玩家資料】
       暱稱：${nickname || '匿名玩家'}
       挑戰基金：${fundName}
@@ -67,39 +69,35 @@ export default async function handler(req, res) {
 
       【回應格式要求】
       請用繁體中文，總字數控制在 200 字以內，必須包含：
-      1. **風格點評**：用一句話給他貼標籤（例如：佛系躺平型、殺進殺出型）。
-      2. **關鍵復盤**：指出他這局最關鍵的一個決策（哪一筆買賣做對或做錯了）。
+      1. **風格點評**：用一句話給他貼標籤。
+      2. **關鍵復盤**：指出他這局最關鍵的一個決策。
       3. **導師建議**：給他下一局的具體建議。
-      4. **操作評分**： 最後給出一個 0-100 的「操作智商評分」。
     `;
-。
-    // 3. 自動輪詢機制 (Auto-Retry Logic)
+
+    // 3. 自動輪詢機制
     let responseText = null;
     let lastError = null;
 
     for (const modelName of CANDIDATE_MODELS) {
         try {
-            console.log(`🔄 正在嘗試模型: ${modelName}...`);
+            console.log(`🔄 嘗試模型: ${modelName}...`);
             const model = genAI.getGenerativeModel({ model: modelName });
             const result = await model.generateContent(prompt);
             responseText = result.response.text();
             
-            console.log(`✅ 模型 ${modelName} 調用成功！`);
-            break; // 成功就跳出迴圈
+            console.log(`✅ 模型 ${modelName} 成功回應！`);
+            break; 
         } catch (err) {
             console.warn(`⚠️ 模型 ${modelName} 失敗: ${err.message}`);
             lastError = err;
-            // 繼續嘗試下一個...
         }
     }
 
     if (!responseText) {
-        // 如果全部都失敗，才拋出最後一個錯誤
-        console.error("❌ 所有模型皆嘗試失敗");
+        console.error("❌ 所有模型皆失敗");
         throw lastError;
     }
 
-    // 4. 回傳成功結果
     return res.status(200).json({ 
       success: true, 
       analysis: responseText 
@@ -107,6 +105,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("🔥 API 最終崩潰:", error);
+    // 這裡回傳 500 JSON，讓前端可以優雅地顯示錯誤，而不是崩潰
     return res.status(500).json({ 
       success: false, 
       error: `AI 服務暫時無法使用 (${error.message})` 

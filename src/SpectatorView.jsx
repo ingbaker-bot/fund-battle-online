@@ -1,4 +1,4 @@
-// 2025v11.2 - 主持人端 (修復：採用 N-5 強力趨勢過濾，剔除季線向上時的死亡交叉)
+// 2025v11.3 - 主持人端 (分級顯示：實心=順勢訊號，空心=逆勢轉折訊號)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -51,28 +51,33 @@ const renderTriangle = (props) => {
     );
 };
 
-// 2. 交叉訊號三角形 (紅色多頭 / 綠色空頭)
+// 2. 交叉訊號繪製器 (支援 實心/空心)
+// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
 const renderCrossTriangle = (props) => {
-    const { cx, cy, direction } = props;
+    const { cx, cy, direction, type } = props;
+    
+    const isSolid = type === 'solid';
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
+    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
     
     if (direction === 'gold') {
-        // 黃金交叉：紅色向上三角形 (▲)
+        // 黃金交叉：紅色向上
         return (
             <polygon 
                 points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
-                fill="#ef4444" // Red-500
-                stroke="white" 
-                strokeWidth={1}
+                fill={fillColor} 
+                stroke={strokeColor}
+                strokeWidth={2}
             />
         );
     } else {
-        // 死亡交叉：綠色向下三角形 (▼)
+        // 死亡交叉：綠色向下
         return (
             <polygon 
                 points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
-                fill="#16a34a" // Green-600
-                stroke="white" 
-                strokeWidth={1}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
             />
         );
     }
@@ -448,7 +453,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
-  // ★★★ V11.2 核心升級：N-5 強力趨勢過濾 ★★★
+  // ★★★ V11.3 核心升級：雙重邏輯 (順勢實心 + 逆勢空心) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -460,12 +465,11 @@ export default function SpectatorView() {
           const ind20 = calculateIndicators(fullData, 20, realIdx);
           const ind60 = calculateIndicators(fullData, 60, realIdx);
 
-          // 1. 計算前一日 (用於比對交叉)
           const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // 2. 計算前五日 (用於比對大趨勢，避免盤整時的小抖動)
+          // 5日斜率參考
           const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
           const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
           
@@ -473,30 +477,32 @@ export default function SpectatorView() {
           let riverBottom = null;
           if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
 
-          // 3. 判斷交叉訊號 (加入 5日趨勢過濾)
+          // 訊號判斷結構：{ type: 'gold'|'death', style: 'solid'|'hollow' }
           let crossSignal = null; 
           
           if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
-              // 基礎交叉
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
 
-              // 趨勢過濾：看 5 天前的季線位置
-              // 如果 今天季線 > 5天前季線 => 趨勢向上
-              // 如果 今天季線 < 5天前季線 => 趨勢向下
-              const isTrendUp = ind60.ma > refInd60.ma;
+              // 季線趨勢 (Current > 5 days ago)
+              const isTrendUp = ind60.ma >= refInd60.ma;
               const isTrendDown = ind60.ma < refInd60.ma;
 
               if (isGoldCross) {
-                  // 有效黃金交叉：季線必須是往上走的 (或持平)
-                  if (isTrendUp || ind60.ma === refInd60.ma) {
-                      crossSignal = 'gold';
+                  if (isTrendUp) {
+                      // 順勢黃金交叉 -> 實心
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  } else {
+                      // 逆勢黃金交叉 (搶反彈/V轉) -> 空心
+                      crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  // 有效死亡交叉：季線必須是往下走的
-                  // 這條邏輯會直接過濾掉您截圖中「季線還在漲」的假死叉
                   if (isTrendDown) {
-                      crossSignal = 'death';
+                      // 順勢死亡交叉 -> 實心
+                      crossSignal = { type: 'death', style: 'solid' };
+                  } else {
+                      // 逆勢死亡交叉 (漲多拉回/V轉向下) -> 空心
+                      crossSignal = { type: 'death', style: 'hollow' };
                   }
               }
           }
@@ -558,7 +564,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v11.2 Trend Filter | NBS Team
+            v11.3 Dual Logic (Solid/Hollow) | NBS Team
           </div>
         </div>
       </div>
@@ -624,41 +630,35 @@ export default function SpectatorView() {
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
     <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+        {/* 1. 網格與軸線 */}
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
         <XAxis dataKey="date" hide />
         <YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
         
-        {/* 扣抵值標註 */}
+        {/* 2. 扣抵值標註 */}
         {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
         {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
 
-        {/* 均線與淨值 */}
+        {/* 3. 均線 */}
         {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
         {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
         {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
         {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
 
-        {/* 訊號 - 確保在最上層 */}
+        {/* 4. 訊號 - 修正：根據 crossSignal 的物件屬性繪製 */}
         {indicators.trend && chartData.map((entry, index) => {
-            if (entry.crossSignal === 'gold') {
+            if (entry.crossSignal) {
                 return (
                     <ReferenceDot
-                        key={`gold-${index}`}
+                        key={`cross-${index}`}
                         x={entry.date}
                         y={entry.ma60} 
-                        shape={(props) => renderCrossTriangle({ ...props, direction: 'gold' })}
-                        isAnimationActive={false}
-                    />
-                );
-            }
-            if (entry.crossSignal === 'death') {
-                return (
-                    <ReferenceDot
-                        key={`death-${index}`}
-                        x={entry.date}
-                        y={entry.ma60}
-                        shape={(props) => renderCrossTriangle({ ...props, direction: 'death' })}
+                        shape={(props) => renderCrossTriangle({ 
+                            ...props, 
+                            direction: entry.crossSignal.type, 
+                            type: entry.crossSignal.style 
+                        })}
                         isAnimationActive={false}
                     />
                 );

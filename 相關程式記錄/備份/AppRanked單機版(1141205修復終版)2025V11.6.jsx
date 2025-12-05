@@ -1,4 +1,4 @@
-// 2025v11.7 - 單機版 (首頁優化畫面A)
+// 2025v11.6 - 單機版 (UI 響應式優化 + 趨勢徽章 + 雙重訊號完整整合)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
@@ -565,21 +565,14 @@ export default function AppRanked() {
                 </div>
             </div>
             
-<div className="mb-6 flex items-center gap-3">
-                {/* 按鈕區域：佔寬度 2/3 */}
-                <button 
-                    onClick={() => navigate('/competition')} 
-                    className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
-                >
-                    <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 
-                    S1 賽季競技場
+            <div className="mb-6">
+                <button onClick={() => navigate('/competition')} className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm">
+                    <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 前往 S1 賽季競技場
                 </button>
-                
-                {/* 文字區域：佔寬度 1/3 */}
-                <p className="w-1/3 text-xs text-slate-500 leading-tight text-left">
-                    與其他玩家一較高下，爭奪榮耀！
-                </p>
-            </div>            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+                <p className="text-xs text-slate-500 text-center mt-2">與其他玩家一較高下，爭奪榮耀！</p>
+            </div>
+
+            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
             
             <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
             

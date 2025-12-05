@@ -215,10 +215,8 @@ export default function AppRanked() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
-  
-  // ★★★ 新增趨勢開關 ★★★
+    // ★★★ 新增趨勢開關 ★★★
   const [showTrend, setShowTrend] = useState(false);
-
   const [customStopLossInput, setCustomStopLossInput] = useState(10);
   const [chartPeriod, setChartPeriod] = useState(250);
   const [dataSourceType, setDataSourceType] = useState('random');
@@ -600,11 +598,11 @@ export default function AppRanked() {
             </div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
-                    <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
+ <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>                    
+<button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
                     <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
                     <button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button>
-                    <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
-                </div>
+                   </div>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">{[125, 250, 500].map(days => (<button key={days} onClick={() => setChartPeriod(days)} className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${chartPeriod === days ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{days === 125 ? '半年' : (days === 250 ? '1年' : '2年')}</button>))}</div>
             </div>
             <button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>

@@ -1,4 +1,4 @@
-// 2025v11.6 - 單機版 (UI 響應式優化 + 趨勢徽章 + 雙重訊號完整整合)
+// 2025v11.5 - 單機版 (修復 Build Error + 調整淨值顯示格式)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
@@ -311,32 +311,6 @@ export default function AppRanked() {
       if (gameStatus !== 'ended') return 0;
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
-
-  // ★★★ V11.5 趨勢訊號徽章判斷 ★★★
-  const trendSignal = useMemo(() => {
-      // 如果沒有開趨勢功能，或是數據不足，就不回傳訊號
-      if (!showTrend || !fullData[currentDay]) return null;
-      
-      const idx = currentDay;
-      const curNav = fullData[idx].nav;
-      // 計算當日指標
-      const ind20 = calculateIndicators(fullData, 20, idx);
-      const ind60 = calculateIndicators(fullData, 60, idx);
-      const ma20 = ind20.ma; 
-      const ma60 = ind60.ma;
-
-      if (!ma20 || !ma60) return null;
-
-      // 判斷邏輯
-      if (curNav > ma20 && ma20 > ma60) {
-          return { text: '多頭', icon: <TrendingUp size={14} />, style: 'bg-red-100 text-red-600 border-red-200' };
-      } else if (curNav < ma20 && ma20 < ma60) {
-          return { text: '空頭', icon: <TrendingDown size={14} />, style: 'bg-green-100 text-green-600 border-green-200' };
-      }
-      
-      // 盤整狀態
-      return { text: '盤整', icon: <Activity size={14} />, style: 'bg-slate-100 text-slate-500 border-slate-200' };
-  }, [fullData, currentDay, showTrend]);
   
   // ★★★ V11.4 核心升級：計算交叉訊號 (含順勢/逆勢判斷) ★★★
   const chartDataInfo = useMemo(() => {
@@ -606,7 +580,7 @@ export default function AppRanked() {
                 <button onClick={startGame} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Play size={24} fill="currentColor" /> 開始</button>
             </div>
             
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v11.6 SetupUI Update | NBS Team</span></div>
+            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v11.4 SetupUI Update | NBS Team</span></div>
         </div>
       </div>
     );
@@ -623,16 +597,24 @@ export default function AppRanked() {
         </header>
 
         <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
-            <div className="absolute top-3 left-4 z-0 pointer-events-none">
-                <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
-                    <div className="flex items-center gap-2">
-                        <span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">{currentNav.toFixed(2)}</span>
-                        {trendSignal && (<div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${trendSignal.style} shadow-sm animate-in fade-in zoom-in duration-300`}>{trendSignal.icon}<span className="text-[10px] font-bold">{trendSignal.text}</span></div>)}
-                    </div>
-                    <span className="text-[10px] sm:text-sm text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 w-fit">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[7px] sm:text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span>
-                </div>
-                {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
-            </div>
+<div className="absolute top-3 left-4 z-0 pointer-events-none">
+    {/* 修改處：手機版垂直排列 (flex-col)，平板以上水平排列 (sm:flex-row) */}
+    <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
+        {/* 淨值 */}
+        <span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">
+            {currentNav.toFixed(2)}
+        </span>
+        
+        {/* 日期：手機版縮小字體並自適應寬度 (w-fit) */}
+        <span className="text-[10px] sm:text-sm text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 w-fit">
+            {chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}
+            {timeOffset > 0 && <span className="text-[7px] sm:text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
+        </span>
+    </div>
+    
+    {/* 均價顯示 (維持原樣) */}
+    {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
+</div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
                     <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
@@ -653,16 +635,36 @@ export default function AppRanked() {
                         <XAxis dataKey="displayDate" hide />
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} width={40} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
                         
-                        {showTrend && showMA20 && fullData[currentDay - 20] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 20].date)} y={fullData[currentDay - 20].nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />)}
-                        {showTrend && showMA60 && fullData[currentDay - 60] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 60].date)} y={fullData[currentDay - 60].nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />)}
+                        {/* 1. 扣抵值 (只在 showTrend 開啟時顯示) */}
+                        {showTrend && showMA20 && fullData[currentDay - 20] && (
+                            <ReferenceDot 
+                                x={getDisplayDate(fullData[currentDay - 20].date)} 
+                                y={fullData[currentDay - 20].nav} 
+                                shape={renderTriangle} 
+                                fill="#38bdf8" 
+                                isAnimationActive={false} 
+                            />
+                        )}
+                        {showTrend && showMA60 && fullData[currentDay - 60] && (
+                            <ReferenceDot 
+                                x={getDisplayDate(fullData[currentDay - 60].date)} 
+                                y={fullData[currentDay - 60].nav} 
+                                shape={renderTriangle} 
+                                fill="#1d4ed8" 
+                                isAnimationActive={false} 
+                            />
+                        )}
 
+                        {/* 2. 均線與淨值線 */}
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
                         
+                        {/* 3. 停損線 */}
                         {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={2} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 11, fontWeight: 'bold', dy: -8 }} />)}
 
+                        {/* 4. 交叉訊號 (放在最下面，確保不被遮擋) */}
                         {showTrend && chartDataInfo.data.map((entry, index) => {
                             if (entry.crossSignal) {
                                 return (
@@ -723,7 +725,7 @@ export default function AppRanked() {
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <div className="bg-emerald-50 p-4 rounded-full mb-4 ring-4 ring-emerald-100"><Activity size={56} className="text-emerald-500" /></div>
                 <h2 className="text-3xl font-bold text-slate-800 mb-1 tracking-tight">結算成績單</h2>
-                <p className="text-sm text-slate-500 mb-8 font-medium">(2025v11.6 單機版結算)</p>
+                <p className="text-sm text-slate-500 mb-8 font-medium">(2025v11.4 單機版結算)</p>
                 <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
                     <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-lg">
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">你的操作</div>
@@ -749,7 +751,7 @@ export default function AppRanked() {
                         {isAnalyzing ? 'AI 正在讀取數據...' : '召喚 AI 導師復盤'}
                     </button>
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all mt-2"><RotateCcw size={20} /> 重新開始挑戰</button>
-                    <div className="mt-6 text-center text-[10px] text-slate-400">Environment: {detectedEnv} | 2025v11.6 單機版</div>
+                    <div className="mt-6 text-center text-[10px] text-slate-400">Environment: {detectedEnv} | 2025v11.4.1 單機版</div>
                 </div>
             </div>
         )}

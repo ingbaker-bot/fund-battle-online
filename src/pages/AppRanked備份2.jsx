@@ -1,4 +1,4 @@
-// 2025v11.4.1 - 單機版 (修復 Build Error + 調整淨值顯示格式)
+// 2025v11.4 - 單機版 (整合雙重趨勢訊號：順勢實心/逆勢空心)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
@@ -215,10 +215,8 @@ export default function AppRanked() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
-  
-  // ★★★ 新增趨勢開關 ★★★
+    // ★★★ 新增趨勢開關 ★★★
   const [showTrend, setShowTrend] = useState(false);
-
   const [customStopLossInput, setCustomStopLossInput] = useState(10);
   const [chartPeriod, setChartPeriod] = useState(250);
   const [dataSourceType, setDataSourceType] = useState('random');
@@ -291,7 +289,6 @@ export default function AppRanked() {
 
   // --- Calculations ---
   const currentNav = fullData[currentDay]?.nav || 10;
-  
   const getDisplayDate = (dateStr) => {
       if (!dateStr || dataSourceType === 'random') return dateStr;
       const dateObj = new Date(dateStr);
@@ -301,12 +298,10 @@ export default function AppRanked() {
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
   };
-  
   const benchmarkRoi = useMemo(() => {
       if (!benchmarkStartNav || benchmarkStartNav === 0) return 0;
       return ((currentNav - benchmarkStartNav) / benchmarkStartNav) * 100;
   }, [currentNav, benchmarkStartNav]);
-  
   const pureRspRoi = useMemo(() => {
       if (gameStatus !== 'ended') return 0;
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
@@ -598,24 +593,16 @@ export default function AppRanked() {
 
         <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
             <div className="absolute top-3 left-4 z-0 pointer-events-none">
-                <div className="flex items-baseline gap-3">
-                    <span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">
-                        {currentNav.toFixed(2)}
-                    </span>
-                    <span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                        {chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}
-                        {timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
-                    </span>
-                </div>
+                <div className="flex items-baseline gap-3"><span className="text-xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">{currentNav.toFixed(2)}</span><span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-400 ml-1">}</span></div>
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
             </div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
-                    <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
+ <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>                    
+<button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
                     <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
                     <button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button>
-                    <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
-                </div>
+                   </div>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">{[125, 250, 500].map(days => (<button key={days} onClick={() => setChartPeriod(days)} className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${chartPeriod === days ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{days === 125 ? '半年' : (days === 250 ? '1年' : '2年')}</button>))}</div>
             </div>
             <button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>
@@ -629,36 +616,16 @@ export default function AppRanked() {
                         <XAxis dataKey="displayDate" hide />
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} width={40} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
                         
-                        {/* 1. 扣抵值 (只在 showTrend 開啟時顯示) */}
-                        {showTrend && showMA20 && fullData[currentDay - 20] && (
-                            <ReferenceDot 
-                                x={getDisplayDate(fullData[currentDay - 20].date)} 
-                                y={fullData[currentDay - 20].nav} 
-                                shape={renderTriangle} 
-                                fill="#38bdf8" 
-                                isAnimationActive={false} 
-                            />
-                        )}
-                        {showTrend && showMA60 && fullData[currentDay - 60] && (
-                            <ReferenceDot 
-                                x={getDisplayDate(fullData[currentDay - 60].date)} 
-                                y={fullData[currentDay - 60].nav} 
-                                shape={renderTriangle} 
-                                fill="#1d4ed8" 
-                                isAnimationActive={false} 
-                            />
-                        )}
+                        {showTrend && showMA20 && fullData[currentDay - 20] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 20].date)} y={fullData[currentDay - 20].nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />)}
+                        {showTrend && showMA60 && fullData[currentDay - 60] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 60].date)} y={fullData[currentDay - 60].nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />)}
 
-                        {/* 2. 均線與淨值線 */}
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
                         
-                        {/* 3. 停損線 */}
                         {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={2} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 11, fontWeight: 'bold', dy: -8 }} />)}
 
-                        {/* 4. 交叉訊號 (放在最下面，確保不被遮擋) */}
                         {showTrend && chartDataInfo.data.map((entry, index) => {
                             if (entry.crossSignal) {
                                 return (
@@ -745,7 +712,7 @@ export default function AppRanked() {
                         {isAnalyzing ? 'AI 正在讀取數據...' : '召喚 AI 導師復盤'}
                     </button>
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all mt-2"><RotateCcw size={20} /> 重新開始挑戰</button>
-                    <div className="mt-6 text-center text-[10px] text-slate-400">Environment: {detectedEnv} | 2025v11.4.1 單機版</div>
+                    <div className="mt-6 text-center text-[10px] text-slate-400">Environment: {detectedEnv} | 2025v11.4 單機版</div>
                 </div>
             </div>
         )}

@@ -593,7 +593,7 @@ export default function AppRanked() {
 
         <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
             <div className="absolute top-3 left-4 z-0 pointer-events-none">
-                <div className="flex items-baseline gap-3"><span className="text-4xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">${currentNav.toFixed(2)}</span><span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span></div>
+                <div className="flex items-baseline gap-3"><span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">{currentNav.toFixed(2)}</span><span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span></div>
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
             </div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">

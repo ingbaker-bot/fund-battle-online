@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         "gemini-2.5-flash",      // 首選：最新、最快
         "gemini-2.0-flash",      // 備選 1
         "gemini-pro",            // 備選 2：最舊但最穩
-        "gemini-1.5-flash-latest" // 最後防線
+        "gemini-2.5-pro" // 最後防線
     ];
 
     const prompt = `

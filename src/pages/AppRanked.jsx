@@ -597,18 +597,24 @@ export default function AppRanked() {
         </header>
 
         <div className="relative w-full bg-white border-b border-slate-200 shrink-0 z-0" style={{ height: '50%' }}>
-            <div className="absolute top-3 left-4 z-0 pointer-events-none">
-                <div className="flex items-baseline gap-3">
-                    <span className="text-xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">
-                        {currentNav.toFixed(2)}
-                    </span>
-                    <span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                        {chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}
-                        {timeOffset > 0 && <span className="text-[7px] bg-slate-200 px-1 rounded text-slate-500 ml-1"></span>}
-                    </span>
-                </div>
-                {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
-            </div>
+<div className="absolute top-3 left-4 z-0 pointer-events-none">
+    {/* 修改處：手機版垂直排列 (flex-col)，平板以上水平排列 (sm:flex-row) */}
+    <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3">
+        {/* 淨值 */}
+        <span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">
+            {currentNav.toFixed(2)}
+        </span>
+        
+        {/* 日期：手機版縮小字體並自適應寬度 (w-fit) */}
+        <span className="text-[10px] sm:text-sm text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 w-fit">
+            {chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}
+            {timeOffset > 0 && <span className="text-[7px] sm:text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
+        </span>
+    </div>
+    
+    {/* 均價顯示 (維持原樣) */}
+    {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
+</div>
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
                     <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>

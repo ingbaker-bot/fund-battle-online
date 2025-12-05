@@ -551,12 +551,14 @@ export default function AppRanked() {
 
   if (gameStatus === 'shutdown') return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 font-sans"><Power size={48} className="mb-4 opacity-50" /><p className="text-lg">系統已關閉</p><button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-slate-300 rounded hover:bg-white hover:text-slate-800 transition-colors">重啟電源</button></div> );
   
-  if (gameStatus === 'setup') {
+if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
         <div className="w-full max-w-sm bg-white rounded-xl p-6 shadow-xl border border-slate-200 relative">
+            {/* 右上角登出按鈕 */}
             <button onClick={handleLogout} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="登出"><LogOut size={20} /></button>
             
+            {/* Logo 區域 */}
             <div className="flex items-center justify-center gap-3 mb-8">
                 <img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
@@ -565,8 +567,8 @@ export default function AppRanked() {
                 </div>
             </div>
             
-<div className="mb-6 flex items-center gap-3">
-                {/* 按鈕區域：佔寬度 2/3 */}
+            {/* S1 賽季競技場按鈕 (左 2/3, 右 1/3) */}
+            <div className="mb-6 flex items-center gap-3">
                 <button 
                     onClick={() => navigate('/competition')} 
                     className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3.5 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
@@ -574,25 +576,18 @@ export default function AppRanked() {
                     <Sword size={20} className="group-hover:rotate-12 transition-transform"/> 
                     S1 賽季競技場
                 </button>
-                
-                {/* 文字區域：佔寬度 1/3 */}
                 <p className="w-1/3 text-xs text-slate-500 leading-tight text-left">
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
-            </div>            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
-            
-            <div className="flex items-center justify-center gap-2 mb-6"><UserCheck size={14} className="text-emerald-600"/><span className="text-slate-500 text-xs">{user.email}</span>{myNickname && <span className="text-amber-500 text-xs">({myNickname})</span>}</div>
-            
-            <div className="flex items-center gap-3 mb-4 bg-slate-50 border border-slate-300 rounded-xl p-3">
-// 找到 gameStatus === 'setup' 的 return 內部，保留上方的 Logo、按鈕、跑馬燈
-// 從 <div className="flex items-center gap-3 mb-4 bg-slate-50..."> (初始資金那段) 開始修改
-// 直到最後的 <button onClick={startGame}...> 結束
+            </div> 
 
-            {/* --- 新版配置 Start --- */}
+            {/* 跑馬燈 (如果有 Ticker 資料) */}
+            {tickerData.length > 0 && (<div className="mb-6 overflow-hidden bg-slate-50 border border-slate-200 rounded py-2"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+            
+            {/* --- 設定區域 Start --- */}
 
             {/* Row 1: 初始資金 (2/3) + 停損設定 (1/3) */}
             <div className="flex gap-3 mb-4">
-                {/* 初始資金 */}
                 <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
                     <input 
@@ -603,7 +598,6 @@ export default function AppRanked() {
                     />
                 </div>
                 
-                {/* 停損設定 (從下面移上來) */}
                 <div className="w-1/3 bg-slate-50 border border-slate-300 rounded-xl px-1 py-2 flex flex-col items-center justify-center shadow-sm">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">停損 (%)</span>
                     <input 
@@ -615,7 +609,7 @@ export default function AppRanked() {
                 </div>
             </div>
             
-            {/* Row 2: 定期定額 (保持不變) */}
+            {/* Row 2: 定期定額 (RSP) */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 shadow-sm">
                 <div className="flex items-center justify-between mb-3 text-indigo-600">
                     <div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
@@ -632,7 +626,7 @@ export default function AppRanked() {
                 )}
             </div>
 
-            {/* Row 3: 挑戰項目選擇 (保持不變) */}
+            {/* Row 3: 挑戰項目選擇 */}
             <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">選擇挑戰項目</label>
             <div className="flex gap-3 mb-4 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
                 <button onClick={() => setDataSourceType('random')} className={`flex-1 py-3 rounded-lg text-sm font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button>
@@ -640,7 +634,7 @@ export default function AppRanked() {
             </div>
             {dataSourceType === 'real' && (<div className="mb-4 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-4 py-3 shadow-sm"><Database size={20} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-sm font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
             
-            {/* Row 4: 河流圖參數 (保持不變) */}
+            {/* Row 4: 河流圖參數 */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-6 shadow-sm">
                 <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
                 <div className="flex gap-2">
@@ -676,13 +670,11 @@ export default function AppRanked() {
                 </button>
             </div>
             
-            {/* --- 新版配置 End --- */}            
-            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v11.6 SetupUI Update | NBS Team</span></div>
+            <div className="mt-6 text-center"><span className="bg-slate-100 text-slate-500 text-xs px-3 py-1.5 rounded-full border border-slate-200 font-mono">2025v11.7 SetupUI Fixed | NBS Team</span></div>
         </div>
       </div>
     );
   }
-
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-emerald-500" /><p className="text-slate-500">正在載入數據...</p></div> );
 
   return (

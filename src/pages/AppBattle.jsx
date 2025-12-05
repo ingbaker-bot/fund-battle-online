@@ -1,4 +1,4 @@
-// 2025v10.4 - 玩家端 (UI 高度縮減緊湊版)
+// 2025v11.0 - 玩家端 (修正黃金交叉)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -39,6 +39,38 @@ const renderTriangle = (props) => {
             strokeWidth={2}
         />
     );
+};
+
+// ★★★ 第一步：插入這裡 (交叉訊號繪圖器) ★★★
+// 支援實心(順勢)與空心(逆勢)
+const renderCrossTriangle = (props) => {
+    const { cx, cy, direction, type } = props;
+    
+    const isSolid = type === 'solid';
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
+    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
+    
+    if (direction === 'gold') {
+        // 黃金交叉：紅色向上
+        return (
+            <polygon 
+                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
+                fill={fillColor} 
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    } else {
+        // 死亡交叉：綠色向下
+        return (
+            <polygon 
+                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    }
 };
 
 export default function AppBattle() {
@@ -365,13 +397,60 @@ export default function AppBattle() {
       return `${year}-${month}-${day}`;
   };
 
+// ★★★ V11.3 核心升級：計算交叉訊號 (含順勢/逆勢判斷) ★★★
   const chartData = useMemo(() => {
-      const start = Math.max(0, currentDay - 330); const end = currentDay + 1;
+      const start = Math.max(0, currentDay - 330); 
+      const end = currentDay + 1;
+      
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
-          const ind20 = calculateIndicators(fullData, 20, realIdx); const ind60 = calculateIndicators(fullData, 60, realIdx);
-          let riverTop = null; let riverBottom = null; if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
-          return { ...d, ma20: ind20.ma, ma60: ind60.ma, riverTop, riverBottom };
+          
+          // 1. 計算當日指標
+          const ind20 = calculateIndicators(fullData, 20, realIdx); 
+          const ind60 = calculateIndicators(fullData, 60, realIdx);
+          
+          // 2. 計算前一日指標 (用於比對交叉發生)
+          const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
+          const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
+          const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
+
+          // 3. 計算前五日指標 (用於比對季線斜率)
+          const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
+          const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+
+          let riverTop = null; 
+          let riverBottom = null; 
+          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
+
+          // 4. 訊號判斷：雙重邏輯 (順勢實心 / 逆勢空心)
+          let crossSignal = null; 
+          
+          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
+              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
+
+              // 季線趨勢 (今日 vs 5天前)
+              // 季線向上: 今日 > 5天前
+              const isTrendUp = ind60.ma >= refInd60.ma;
+              const isTrendDown = ind60.ma < refInd60.ma;
+
+              if (isGoldCross) {
+                  // 順勢(季線向上) -> 實心；逆勢(季線向下) -> 空心
+                  crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
+              } else if (isDeathCross) {
+                  // 順勢(季線向下) -> 實心；逆勢(季線向上) -> 空心
+                  crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
+              }
+          }
+
+          return { 
+              ...d, 
+              ma20: ind20.ma, 
+              ma60: ind60.ma, 
+              riverTop, 
+              riverBottom, 
+              crossSignal // 將訊號帶入數據
+          };
       });
   }, [fullData, currentDay]);
 
@@ -516,6 +595,26 @@ export default function AppBattle() {
 
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
                     <YAxis domain={['auto', 'auto']} hide />
+{/* ★★★ 第三步：插入這段繪圖程式碼 (確保放在最下方，圖層才會在最上面) ★★★ */}
+                    {showIndicators.trend && chartData.map((entry, index) => {
+                        if (entry.crossSignal) {
+                            return (
+                                <ReferenceDot
+                                    key={`cross-${index}`}
+                                    x={entry.date}
+                                    y={entry.ma60} 
+                                    shape={(props) => renderCrossTriangle({ 
+                                        ...props, 
+                                        direction: entry.crossSignal.type, 
+                                        type: entry.crossSignal.style 
+                                    })}
+                                    isAnimationActive={false}
+                                />
+                            );
+                        }
+                        return null;
+                    })}
+
                 </ComposedChart>
              </ResponsiveContainer>
           </div>

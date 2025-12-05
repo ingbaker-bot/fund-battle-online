@@ -629,7 +629,7 @@ export default function AppRanked() {
                         <span className="text-2xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">{currentNav.toFixed(2)}</span>
                         {trendSignal && (<div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${trendSignal.style} shadow-sm animate-in fade-in zoom-in duration-300`}>{trendSignal.icon}<span className="text-[10px] font-bold">{trendSignal.text}</span></div>)}
                     </div>
-                    <span className="text-[10px] sm:text-sm text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 w-fit">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[7px] sm:text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}</span>
+                    <span className="text-[10px] sm:text-sm text-slate-500 font-mono bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1 w-fit">{chartDataInfo.data.length > 0 ? chartDataInfo.data[chartDataInfo.data.length-1].displayDate : '---'}{timeOffset > 0 && <span className="text-[7px] sm:text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1"></span>}</span>
                 </div>
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
             </div>
@@ -642,7 +642,7 @@ export default function AppRanked() {
                 </div>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">{[125, 250, 500].map(days => (<button key={days} onClick={() => setChartPeriod(days)} className={`px-2.5 py-1 text-[10px] font-bold rounded transition-colors ${chartPeriod === days ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>{days === 125 ? '半年' : (days === 250 ? '1年' : '2年')}</button>))}</div>
             </div>
-            <button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>
+            {/*<button onClick={triggerReset} className="absolute bottom-4 left-4 z-10 p-2.5 rounded-full bg-white border border-slate-200 text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors shadow-lg" title="重置"><RotateCcw size={18} /></button>*/}
             {showRspAlert && (<div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-bounce flex flex-col items-center gap-2"><AlertCircle size={32} /><span className="font-bold text-lg">餘額不足！</span><span className="text-xs">定期定額已自動暫停</span></div>)}
             {warningActive && gameStatus === 'playing' && (<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10 bg-red-500 text-white px-4 py-1.5 rounded-full shadow-lg animate-pulse flex items-center gap-2 backdrop-blur-sm border-2 border-red-200"><AlertCircle size={16} strokeWidth={2.5} /><span className="text-sm font-extrabold tracking-wide">觸及停損 ({customStopLossInput}%)</span></div>)}
             

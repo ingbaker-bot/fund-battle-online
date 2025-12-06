@@ -437,7 +437,7 @@ export default function AppCompetition() {
   const openTrade = (mode) => { if (isAutoPlaying) toggleAutoPlay(); setTradeMode(mode); setInputAmount(''); };
   const closeTrade = () => { setTradeMode(null); setInputAmount(''); };
   const executeBuy = () => { const amount = parseFloat(inputAmount); if (!amount || amount <= 0 || amount > cash) return; const buyUnits = amount / currentNav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + amount) / newTotalUnits; setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - amount); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'BUY', price: currentNav, units: buyUnits, amount: amount, balance: cash - amount }, ...prev]); if (units === 0) setHighestNavSinceBuy(currentNav); closeTrade(); advanceDay(); };
-  const executeSell = () => { let unitsToSell = parseFloat(inputAmount); if (!unitsToSell || unitsToSell <= 0) return; if (unitsToSell > units) { if (unitsToSell - units < 0.1) unitsToSell = units; else return; } const sellAmount = unitsToSell * currentNav; const costOfSoldUnits = unitsToSell * avgCost; const pnl = sellAmount - costOfSoldUnits; setCash(prev => prev + sellAmount); setUnits(prev => { const remaining = prev - unitsToSell; return remaining < 0.0001 ? 0 : remaining; }); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'SELL', price: currentNav, units: unitsToSell, amount: sellAmount, balance: cash + sellAmount, pnl }, ...prev]); if (Math.abs(units - unitsToSell) < 0.0001) { setHighestNavSinceBuy(0); setWarningActive(false); setAvgCost(0); setUnits(0); } closeTrade(); advanceDay(); };
+  const executeSell = () => { let unitsToSell = parseFloat(inputAmount); if (!unitsToSell || unitsToSell <= 0) return; if (unitsToSell > units) { if (unitsToSell - units < 0.1) unitsToSell = units; else return; } const sellAmount = unitsToSell * currentNav; const costOfSoldUnits = unitsToSell * avgCost; const pnl = sellAmount - costOfSoldUnits; setCash(prev => prev + sellAmount); setUnits(prev => { const remaining = prev - amount; return remaining < 0.01 ? 0 : remaining; }); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'SELL', price: currentNav, units: unitsToSell, amount: sellAmount, balance: cash + sellAmount, pnl }, ...prev]); if (Math.abs(units - unitsToSell) < 0.0001) { setHighestNavSinceBuy(0); setWarningActive(false); setAvgCost(0); setUnits(0); } closeTrade(); advanceDay(); };
   const toggleAutoPlay = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } else { setTradeMode(null); setIsAutoPlaying(true); autoPlayRef.current = setInterval(() => { setCurrentDay(prev => prev + 1); }, 100); } };
   
   const executeReset = () => { setConfirmModal({ show: false, type: null }); clearInterval(autoPlayRef.current); setIsAutoPlaying(false); setTradeMode(null); setUnits(0); setAvgCost(0); setTransactions([]); setHighestNavSinceBuy(0); setBenchmarkStartNav(null); setGameStatus('setup'); };
@@ -491,9 +491,25 @@ export default function AppCompetition() {
       setShowRankModal(true);
   };
 
-  const setBuyPercent = (pct) => setInputAmount(Math.floor(cash * pct).toString());
-  const setSellPercent = (pct) => { if (pct === 1) setInputAmount(units.toString()); else setInputAmount((units * pct).toFixed(2)); };
-  const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
+const setBuyPercent = (pct) => {
+      if (pct === 1) {
+          // 如果是 100% (All In)，直接使用全部現金 (含小數)，確保餘額歸零
+          setInputAmount(cash.toString());
+      } else {
+          // 其他比例 (如 50%) 維持無條件捨去取整，避免產生過多奇怪的小數
+          setInputAmount(Math.floor(cash * pct).toString());
+      }
+  };
+
+  const setSellPercent = (pct) => { 
+      if (pct === 1) {
+          // 賣出 All In：直接使用全部單位數
+          setInputAmount(units.toString()); 
+      } else {
+          // 其他比例：保留兩位小數
+          setInputAmount((units * pct).toFixed(2)); 
+      }
+  };  const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
 
   // 登入畫面 (淺色版)
   if (authLoading || loadingSeason) return <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在連接賽事伺服器...</p></div>;

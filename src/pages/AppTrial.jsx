@@ -409,11 +409,11 @@ export default function AppTrial() {
             <div className="mb-4 flex items-center gap-2">
                 <div className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-br from-cyan-50 to-teal-50 text-cyan-700 font-bold py-3 rounded-xl border border-cyan-200 shadow-sm relative overflow-hidden">
                     <Sparkles size={18} className="text-cyan-500" /> 
-                    <span className="z-10 px-1">遊客體驗版</span>
+                    <span className="z-10 px-1">基金操盤・時光沙盒</span>
                 </div>
                 <div className="w-1/3 flex flex-col justify-center gap-0.5 pl-1 text-center">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">功能全開</span>
-                    <span className="text-[10px] text-cyan-500 font-bold">免登入試玩</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">策略驗證</span>
+                    <span className="text-[10px] text-cyan-500 font-bold">免登入試煉</span>
                 </div>
             </div> 
 
@@ -528,8 +528,8 @@ export default function AppTrial() {
                         <span className="text-[10px] font-bold">遊客</span>
                     </div>
                     <div className="flex flex-col items-center w-full">
-                        <span className="text-[10px] text-slate-600 font-mono truncate w-full text-center px-1">Guest</span>
-                        <span className="text-[10px] text-cyan-500 font-bold truncate w-full text-center leading-none">(未登入)</span>
+			<span className="text-[9px] text-cyan-600 bg-cyan-50 px-1.5 rounded border border-cyan-200 mb-0.5">FUND SANDBOX</span>
+   			 <span className={`text-sm font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span>
                     </div>
                 </div>
 

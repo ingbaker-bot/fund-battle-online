@@ -580,17 +580,14 @@ if (gameStatus === 'setup') {
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
-{/* 跑馬燈區域 (Top 5 循環 - 修正版) */}
+{/* 跑馬燈區域 (Top 5 循環 - 修正版 v2) */}
             {tickerData.length > 0 && (
                 <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center relative overflow-hidden">
-                    {/* 關鍵修正說明：
-                       1. absolute: 讓內容脫離文檔流，方便左右移動
-                       2. whitespace-nowrap: 【最重要】強制文字全部排成一行，不可換行
-                       3. animate-marquee: 執行移動動畫
-                       4. h-full & flex & items-center: 確保文字垂直置中
+                    {/* 修正重點：
+                       1. 加入 'w-max'：強制寬度依內容撐開，絕對不換行。
+                       2. 確保 'flex-row'：強制橫向排列。
                     */}
-                    <div className="absolute whitespace-nowrap animate-marquee flex items-center h-full">
-                        {/* 取前 5 名並依照 ROI 排序 */}
+                    <div className="absolute whitespace-nowrap animate-marquee flex flex-row items-center h-full w-max">
                         {[...tickerData]
                             .sort((a, b) => b.roi - a.roi)
                             .slice(0, 5)
@@ -603,14 +600,13 @@ if (gameStatus === 'setup') {
                                     <span className="text-slate-400">獲利</span>
                                     <span className="text-red-500 font-bold text-xs">+{tick.roi}%</span>
                                 </span>
-                                {/* 分隔線符號 */}
+                                {/* 分隔線 */}
                                 <span className="ml-8 text-slate-300">|</span>
                             </div>
                         ))}
                     </div>
                 </div>
-            )}
-            {/* --- 設定區域 Start --- */}
+            )}            {/* --- 設定區域 Start --- */}
 
             {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}
             <div className="flex gap-2 mb-3">

@@ -580,17 +580,32 @@ if (gameStatus === 'setup') {
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
-{/* 跑馬燈區域 */}
+{/* 跑馬燈區域 (Top 5 循環) */}
             {tickerData.length > 0 && (
-                <div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-1.5 relative">
-                    {/* 加入 animate-marquee class，配合剛剛加入 CSS 檔案的設定 */}
-                    <div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">
-                        {tickerData.map((tick, idx) => (
-                            <span key={idx} className="flex items-center gap-1 shrink-0">
-                                <span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 
-                                在 {tick.fundName.substring(0,6)}.. 獲利 
-                                <span className="text-red-500 font-bold">+{tick.roi}%</span>
-                            </span>
+                <div className="mb-4 w-full h-8 overflow-hidden bg-slate-50 border border-slate-200 rounded flex items-center relative">
+                    {/* 1. h-8: 固定高度，讓它變成細長條
+                       2. whitespace-nowrap: 關鍵！強制文字不換行
+                       3. animate-marquee: 套用動畫
+                    */}
+                    <div className="whitespace-nowrap animate-marquee flex items-center gap-0">
+                        {/* 先排序並只取前 5 名 */}
+                        {[...tickerData]
+                            .sort((a, b) => b.roi - a.roi) // 確保是高分在前
+                            .slice(0, 5) // 只取前 5 筆
+                            .map((tick, idx) => (
+                            <div key={idx} className="flex items-center">
+                                {/* 資料本體 */}
+                                <span className="flex items-center text-[10px] text-slate-600 font-mono">
+                                    <span className="text-emerald-600 font-bold ml-1">★ {tick.displayName}</span> 
+                                    <span className="mx-1 text-slate-400">在</span>
+                                    {tick.fundName.substring(0, 6)}... 
+                                    <span className="mx-1 text-slate-400">獲利</span>
+                                    <span className="text-red-500 font-bold">+{tick.roi}%</span>
+                                </span>
+                                
+                                {/* 分隔線 (除了最後一筆之外都顯示) */}
+                                <span className="mx-6 text-slate-300 text-[10px]">|</span>
+                            </div>
                         ))}
                     </div>
                 </div>

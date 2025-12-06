@@ -8,7 +8,7 @@ import {
 import { FUNDS_LIBRARY } from '../config/funds';
 
 // ============================================
-// 繪圖輔助函式 (與單機版一致)
+// 繪圖輔助函式
 // ============================================
 
 // 1. 扣抵值三角形
@@ -86,14 +86,12 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
 };
 
 // ============================================
-// 主元件：AppTrial (體驗版 - 無需登入)
+// 主元件：AppTrial (體驗版 v11.1)
 // ============================================
 export default function AppTrial() {
-  // 移除了 Auth 相關狀態，改為固定遊客身份
   const user = { email: 'guest@trial.mode', uid: 'guest' }; 
   const myNickname = '體驗玩家';
 
-  // 模擬跑馬燈數據 (因為體驗版可能沒連 Firebase，用假資料營造氣氛)
   const tickerData = [
       { displayName: '股神巴菲特', fundName: '科技趨勢基金', roi: 128.5 },
       { displayName: '華爾街之狼', fundName: '全球能源基金', roi: 89.2 },
@@ -125,7 +123,7 @@ export default function AppTrial() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
-  const [showTrend, setShowTrend] = useState(true); // 預設開啟趨勢
+  const [showTrend, setShowTrend] = useState(true);
   
   const [chartPeriod, setChartPeriod] = useState(250);
   
@@ -134,8 +132,16 @@ export default function AppTrial() {
   const [riverWidthInput, setRiverWidthInput] = useState(10); 
   const [riverSDMultiplier, setRiverSDMultiplier] = useState(2);
 
-  const [dataSourceType, setDataSourceType] = useState('random'); 
-  const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0].id);
+  // ★★★ 修改1：預設模式強制為 'real' (真實) ★★★
+  const [dataSourceType, setDataSourceType] = useState('real'); 
+  
+  // ★★★ 修改2：預設選中開放的基金 (新手入門) ★★★
+  // 尋找名稱含有 '新手' 的基金ID，若找不到則預設第一個
+  const defaultFundId = useMemo(() => {
+      const beginnerFund = FUNDS_LIBRARY.find(f => f.name.includes('新手'));
+      return beginnerFund ? beginnerFund.id : FUNDS_LIBRARY[0].id;
+  }, []);
+  const [selectedFundId, setSelectedFundId] = useState(defaultFundId);
 
   const [tradeMode, setTradeMode] = useState(null); 
   const [inputAmount, setInputAmount] = useState(''); 
@@ -147,21 +153,18 @@ export default function AppTrial() {
 
   const autoPlayRef = useRef(null);
 
-  // 格式化數字
   const formatNumber = (num) => num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const handleCapitalChange = (e) => { const val = Number(e.target.value.replace(/,/g, '')); if (!isNaN(val)) setInitialCapital(val); };
 
-  // 遊戲開始
   const startGame = async () => {
-    let targetFund = FUNDS_LIBRARY[0];
-    if (dataSourceType === 'real') {
-        const found = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
-        if (found) targetFund = found;
-    } else {
-        // 隨機模式：隨機挑選一支真實基金
-        const randomIndex = Math.floor(Math.random() * FUNDS_LIBRARY.length);
-        targetFund = FUNDS_LIBRARY[randomIndex];
+    // 雖然前端有鎖，但這裡再做一次防呆，體驗版強制使用真實模式
+    if (dataSourceType === 'random') {
+        alert("體驗版僅開放部分真實基金，隨機模式請登入會員使用。");
+        return;
     }
+
+    const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
+    if (!targetFund) return;
 
     const randomTimeOffset = Math.floor(Math.random() * 51) + 50;
     setTimeOffset(randomTimeOffset);
@@ -173,7 +176,6 @@ export default function AppTrial() {
         const rawData = await response.json();
         let processedData = processRealData(rawData);
         
-        // 隨機起點
         const minStart = 60;
         const maxStart = Math.max(minStart, processedData.length - 250);
         const startIdx = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart;
@@ -181,7 +183,7 @@ export default function AppTrial() {
         if (processedData.length < 100) throw new Error("數據區間過短");
 
         setFullData(processedData);
-        setCash(initialCapital); // 使用設定的初始資金
+        setCash(initialCapital); 
         setTransactions([]);
         setUnits(0);
         setAvgCost(0);
@@ -197,8 +199,7 @@ export default function AppTrial() {
             setLastRspMonth(sd.getFullYear() * 12 + sd.getMonth() - 1);
         }
 
-        // 隱藏真實名稱，增加盲測感
-        setCurrentFundName(dataSourceType === 'random' ? '隨機模擬基金 A' : targetFund.name.replace('🔒 [進階] ', ''));
+        setCurrentFundName(targetFund.name.replace('🔒 [進階] ', ''));
         setGameStatus('playing');
         setIsReady(true);
     } catch (error) {
@@ -207,7 +208,6 @@ export default function AppTrial() {
     }
   };
 
-  // RSP 定期定額邏輯
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
@@ -236,7 +236,6 @@ export default function AppTrial() {
       }
   }, [currentDay, gameStatus, fullData, rspConfig, cash, units, avgCost, lastRspMonth, isAutoPlaying]);
 
-  // 遊戲結束檢查
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0) {
           if (currentDay >= fullData.length - 1) {
@@ -267,7 +266,6 @@ export default function AppTrial() {
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
 
-  // 趨勢訊號徽章
   const trendSignal = useMemo(() => {
       if (!showTrend || !fullData[currentDay]) return null;
       const idx = currentDay;
@@ -281,7 +279,6 @@ export default function AppTrial() {
       return { text: '盤整', icon: <Activity size={14} />, style: 'bg-slate-100 text-slate-500 border-slate-200' };
   }, [fullData, currentDay, showTrend]);
 
-  // 圖表數據計算
   const chartDataInfo = useMemo(() => {
     if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
     const start = Math.max(0, currentDay - chartPeriod);
@@ -341,7 +338,6 @@ export default function AppTrial() {
     } else { setHighestNavSinceBuy(0); setWarningActive(false); }
   }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
 
-  // 交易操作函式 (含 All In 修正)
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const advanceDay = () => { if (currentDay >= fullData.length - 1) { setGameStatus('ended'); return; } setCurrentDay(prev => prev + 1); };
   
@@ -394,7 +390,7 @@ export default function AppTrial() {
 
   const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
 
-  // 體驗版 Setup 畫面 (Cyan 風格)
+  // Setup UI
   if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center font-sans">
@@ -421,7 +417,6 @@ export default function AppTrial() {
                 </div>
             </div> 
 
-            {/* 模擬跑馬燈 (展示用) */}
             <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center overflow-hidden relative">
                 <div className="animate-marquee items-center gap-0">
                     {[...tickerData, ...tickerData].map((tick, idx) => (
@@ -468,12 +463,50 @@ export default function AppTrial() {
                 )}
             </div>
 
+            {/* ★★★ 修改3：選擇挑戰項目 (鎖住隨機) ★★★ */}
             <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
             <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button onClick={() => setDataSourceType('random')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${dataSourceType === 'random' ? 'bg-violet-500 text-white shadow-md' : 'text-slate-500'}`}>🎲 隨機</button>
-                <button onClick={() => setDataSourceType('real')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500'}`}>📉 真實</button>
+                <button 
+                    onClick={() => alert("隨機模式僅限會員使用，請前往註冊！")}
+                    className="flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-slate-200 text-slate-400 cursor-not-allowed"
+                >
+                    <Lock size={12} /> 隨機
+                </button>
+                <button 
+                    onClick={() => setDataSourceType('real')} 
+                    className="flex-1 py-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 bg-cyan-600 text-white shadow-md ring-1 ring-cyan-400"
+                >
+                    <span className="animate-bounce">📉</span> 真實
+                </button>
             </div>
-            {dataSourceType === 'real' && (<div className="mb-3 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 shadow-sm"><Database size={18} className="text-blue-600" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-blue-900 outline-none text-xs font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white text-slate-700">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
+            
+            {/* ★★★ 修改4：基金下拉選單 (限制僅三檔) ★★★ */}
+            <div className="mb-3 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center gap-2 bg-cyan-50/50 border border-cyan-200 rounded-xl px-3 py-2 shadow-sm">
+                    <Database size={18} className="text-cyan-600" />
+                    <select 
+                        value={selectedFundId} 
+                        onChange={(e) => setSelectedFundId(e.target.value)} 
+                        className="w-full bg-transparent text-cyan-900 outline-none text-xs font-bold"
+                    >
+                        {FUNDS_LIBRARY.map(fund => {
+                            // 判斷是否為開放的體驗基金
+                            const isAllowed = fund.name.includes('新手') || fund.name.includes('教育') || fund.name.includes('高手');
+                            return (
+                                <option 
+                                    key={fund.id} 
+                                    value={fund.id} 
+                                    className={isAllowed ? "bg-white text-slate-700" : "text-slate-300 bg-slate-50"}
+                                    disabled={!isAllowed}
+                                >
+                                    {!isAllowed ? '🔒 ' : ''}{fund.name.replace('🔒 [進階] ', '')}
+                                    {!isAllowed ? ' (會員限定)' : ''}
+                                </option>
+                            );
+                        })}
+                    </select>
+                </div>
+            </div>
 
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
@@ -505,7 +538,8 @@ export default function AppTrial() {
                 </button>
             </div>
             
-            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v1.2 Trial Mode</span></div>
+            {/* ★★★ 修改5：更新版本號為 v11.1 ★★★ */}
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.1 Trial Mode</span></div>
         </div>
       </div>
     );
@@ -513,7 +547,6 @@ export default function AppTrial() {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800 gap-4"><Loader2 size={48} className="animate-spin text-cyan-500" /><p className="text-slate-500">正在準備試玩資料...</p></div> );
 
-  // 遊戲主畫面 (Cyan 風格)
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
         <header className="bg-white px-3 py-1 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">

@@ -402,7 +402,7 @@ export default function AppTrial() {
                 <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
-                    <span className="text-[10px] text-cyan-600 font-bold tracking-wide bg-cyan-50 px-1 rounded">EXPERIENCE MODE</span>
+                    <span className="text-[10px] text-cyan-600 font-bold tracking-wide bg-cyan-50 px-1 rounded">FCF教具專利</span>
                 </div>
             </div>
 
@@ -539,7 +539,7 @@ export default function AppTrial() {
             </div>
             
             {/* ★★★ 修改5：更新版本號為 v11.1 ★★★ */}
-            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.1 Trial Mode</span></div>
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.1 2025v11.7 NBS-奈AI團隊</span></div>
         </div>
       </div>
     );

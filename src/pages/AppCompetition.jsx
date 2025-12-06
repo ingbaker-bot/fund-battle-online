@@ -20,7 +20,9 @@ import {
   getTickerData
 } from '../services/firestoreService';
 
-// --- 繪圖輔助函式 ---
+// ============================================
+// 繪圖輔助函式
+// ============================================
 
 // 1. 扣抵值三角形 (藍色/深藍色)
 const renderTriangle = (props) => {
@@ -71,7 +73,9 @@ const renderCrossTriangle = (props) => {
     }
 };
 
-// --- 數據處理輔助函式 ---
+// ============================================
+// 數據處理輔助函式
+// ============================================
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
     return rawData.map((item, index) => ({ id: index, date: item.date, nav: parseFloat(item.nav) }));
@@ -120,7 +124,7 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
 };
 
 // ============================================
-// 2025v1.2: 賽季爭霸版 (Benchmark + RSP + Blind Test + Trend Logic)
+// 主元件：AppCompetition (2025v1.2 Stable Fixed)
 // ============================================
 export default function AppCompetition() {
   const [user, setUser] = useState(null); 
@@ -134,7 +138,7 @@ export default function AppCompetition() {
 
   const [myNickname, setMyNickname] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState([]);
-  const [tickerData, setTickerData] = useState([]); // 新增：跑馬燈數據
+  const [tickerData, setTickerData] = useState([]); 
   const [showRankModal, setShowRankModal] = useState(false);
   const [rankUploadStatus, setRankUploadStatus] = useState('idle'); 
   const [inputNickname, setInputNickname] = useState('');
@@ -162,9 +166,7 @@ export default function AppCompetition() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
-  
-  // ★★★ 修改：趨勢開關預設為 true (開啟) ★★★
-  const [showTrend, setShowTrend] = useState(true);
+  const [showTrend, setShowTrend] = useState(true); // 預設開啟趨勢
   
   const [chartPeriod, setChartPeriod] = useState(250);
   
@@ -180,11 +182,10 @@ export default function AppCompetition() {
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isCssFullscreen, setIsCssFullscreen] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
-  const [showShareMenu, setShowShareMenu] = useState(false); 
 
   const autoPlayRef = useRef(null);
 
-  // 載入使用者與跑馬燈
+  // 1. 驗證與載入
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
@@ -196,7 +197,6 @@ export default function AppCompetition() {
              const config = await getSeasonConfig();
              if (config) setSeasonConfig(config);
              
-             // 載入跑馬燈
              const tData = await getTickerData();
              if (tData) setTickerData(tData);
              
@@ -206,6 +206,7 @@ export default function AppCompetition() {
       return () => unsubscribe();
   }, []);
 
+  // 2. 遊戲開始
   const startGame = async () => {
     if (!seasonConfig) return;
     const targetFund = FUNDS_LIBRARY.find(f => f.id === seasonConfig.fundId);
@@ -260,7 +261,7 @@ export default function AppCompetition() {
     }
   };
 
-  // RSP 邏輯
+  // 3. RSP 定期定額邏輯
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
@@ -304,6 +305,7 @@ export default function AppCompetition() {
       }
   }, [currentDay, gameStatus, fullData, rspConfig, cash, units, avgCost, lastRspMonth, isAutoPlaying]);
 
+  // 4. 遊戲結束檢查
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0) {
           const seasonEnd = seasonConfig?.endDay || fullData.length - 1;
@@ -336,7 +338,7 @@ export default function AppCompetition() {
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
 
-  // ★★★ 趨勢儀表板邏輯 (移植自 AppRanked) ★★★
+  // 5. 趨勢訊號徽章
   const trendSignal = useMemo(() => {
       if (!showTrend || !fullData[currentDay]) return null;
       
@@ -357,7 +359,7 @@ export default function AppCompetition() {
       return { text: '盤整', icon: <Activity size={14} />, style: 'bg-slate-100 text-slate-500 border-slate-200' };
   }, [fullData, currentDay, showTrend]);
 
-  // ★★★ 升級版：計算圖表數據與交叉訊號 ★★★
+  // 6. 圖表數據計算 (含交叉訊號)
   const chartDataInfo = useMemo(() => {
     if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
     const start = Math.max(0, currentDay - chartPeriod);
@@ -366,17 +368,14 @@ export default function AppCompetition() {
     const slice = fullData.slice(start, end).map((d, idx) => {
         const realIdx = start + idx;
         
-        // 當日指標
         const ind20 = calculateIndicators(fullData, 20, realIdx);
         const ind60 = calculateIndicators(fullData, 60, realIdx);
         const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev;
         
-        // 前一日指標 (用於比對交叉)
         const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
         const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
         const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
         
-        // 五日前指標 (用於比對季線趨勢)
         const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
         const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
 
@@ -386,7 +385,6 @@ export default function AppCompetition() {
             else { if (stdDev60) { riverTop = ma60 + (stdDev60 * riverSDMultiplier); riverBottom = ma60 - (stdDev60 * riverSDMultiplier); } }
         }
 
-        // 訊號判斷
         let crossSignal = null;
         if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
             const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
@@ -430,14 +428,91 @@ export default function AppCompetition() {
     } else { setHighestNavSinceBuy(0); setWarningActive(false); }
   }, [currentDay, units, currentNav, highestNavSinceBuy, customStopLossInput]);
 
+  // 7. 交易操作函式 (含 All In 修正)
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
   
   const advanceDay = () => { if (currentDay >= fullData.length - 1) { setGameStatus('ended'); return; } setCurrentDay(prev => prev + 1); };
+  
+  // 設定買賣 All In 邏輯
+  const setBuyPercent = (pct) => {
+      if (pct === 1) setInputAmount(cash ? cash.toString() : '0'); // 全額 (含小數)
+      else setInputAmount(Math.floor(cash * pct).toString()); // 部分則捨去
+  };
+  const setSellPercent = (pct) => { 
+      if (pct === 1) setInputAmount(units ? units.toString() : '0'); // 全部單位
+      else setInputAmount((units * pct).toFixed(2)); // 部分單位
+  };
+
   const openTrade = (mode) => { if (isAutoPlaying) toggleAutoPlay(); setTradeMode(mode); setInputAmount(''); };
   const closeTrade = () => { setTradeMode(null); setInputAmount(''); };
-  const executeBuy = () => { const amount = parseFloat(inputAmount); if (!amount || amount <= 0 || amount > cash) return; const buyUnits = amount / currentNav; const newTotalUnits = units + buyUnits; const newAvgCost = (units * avgCost + amount) / newTotalUnits; setAvgCost(newAvgCost); setUnits(newTotalUnits); setCash(prev => prev - amount); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'BUY', price: currentNav, units: buyUnits, amount: amount, balance: cash - amount }, ...prev]); if (units === 0) setHighestNavSinceBuy(currentNav); closeTrade(); advanceDay(); };
-  const executeSell = () => { let unitsToSell = parseFloat(inputAmount); if (!unitsToSell || unitsToSell <= 0) return; if (unitsToSell > units) { if (unitsToSell - units < 0.1) unitsToSell = units; else return; } const sellAmount = unitsToSell * currentNav; const costOfSoldUnits = unitsToSell * avgCost; const pnl = sellAmount - costOfSoldUnits; setCash(prev => prev + sellAmount); setUnits(prev => { const remaining = prev - amount; return remaining < 0.01 ? 0 : remaining; }); setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'SELL', price: currentNav, units: unitsToSell, amount: sellAmount, balance: cash + sellAmount, pnl }, ...prev]); if (Math.abs(units - unitsToSell) < 0.0001) { setHighestNavSinceBuy(0); setWarningActive(false); setAvgCost(0); setUnits(0); } closeTrade(); advanceDay(); };
+
+  // 執行買入
+  const executeBuy = () => { 
+      const amount = parseFloat(inputAmount); 
+      if (!amount || amount <= 0 || amount > cash) return; 
+      const buyUnits = amount / currentNav; 
+      const newTotalUnits = units + buyUnits; 
+      const newAvgCost = (units * avgCost + amount) / newTotalUnits; 
+      setAvgCost(newAvgCost); 
+      setUnits(newTotalUnits); 
+      // 修正：如果餘額極小則歸零
+      setCash(prev => {
+          const rem = prev - amount;
+          return rem < 0.01 ? 0 : rem;
+      });
+      setTransactions(prev => [{ id: Date.now(), day: currentDay, type: 'BUY', price: currentNav, units: buyUnits, amount: amount, balance: cash - amount }, ...prev]); 
+      if (units === 0) setHighestNavSinceBuy(currentNav); 
+      closeTrade(); 
+      advanceDay(); 
+  };
+
+  // 執行賣出 (防黑屏修正版)
+  const executeSell = () => { 
+      let unitsToSell = parseFloat(inputAmount); 
+      if (!unitsToSell || unitsToSell <= 0) return; 
+
+      // 判斷是否為 All In (容許極小誤差)
+      const isAllIn = unitsToSell >= units || Math.abs(unitsToSell - units) < 0.0001;
+      
+      if (isAllIn) unitsToSell = units;
+      else if (unitsToSell > units) return;
+
+      const sellAmount = unitsToSell * currentNav; 
+      const costOfSoldUnits = unitsToSell * avgCost; 
+      const pnl = sellAmount - costOfSoldUnits; 
+
+      setCash(prev => prev + sellAmount); 
+
+      // 原子化更新 Units
+      setUnits(prev => { 
+          if (isAllIn) return 0;
+          const remaining = prev - unitsToSell; 
+          return remaining < 0.0001 ? 0 : remaining; 
+      }); 
+
+      setTransactions(prev => [{ 
+          id: Date.now(), 
+          day: currentDay, 
+          type: 'SELL', 
+          price: currentNav, 
+          units: unitsToSell, 
+          amount: sellAmount, 
+          balance: cash + sellAmount, 
+          pnl 
+      }, ...prev]); 
+
+      // 狀態重置
+      if (isAllIn) { 
+          setHighestNavSinceBuy(0); 
+          setWarningActive(false); 
+          setAvgCost(0); 
+      } 
+
+      closeTrade(); 
+      advanceDay(); 
+  };
+
   const toggleAutoPlay = () => { if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); } else { setTradeMode(null); setIsAutoPlaying(true); autoPlayRef.current = setInterval(() => { setCurrentDay(prev => prev + 1); }, 100); } };
   
   const executeReset = () => { setConfirmModal({ show: false, type: null }); clearInterval(autoPlayRef.current); setIsAutoPlaying(false); setTradeMode(null); setUnits(0); setAvgCost(0); setTransactions([]); setHighestNavSinceBuy(0); setBenchmarkStartNav(null); setGameStatus('setup'); };
@@ -491,44 +566,23 @@ export default function AppCompetition() {
       setShowRankModal(true);
   };
 
-const setBuyPercent = (pct) => {
-      if (pct === 1) {
-          // 如果是 100% (All In)，直接使用全部現金 (含小數)，確保餘額歸零
-          setInputAmount(cash.toString());
-      } else {
-          // 其他比例 (如 50%) 維持無條件捨去取整，避免產生過多奇怪的小數
-          setInputAmount(Math.floor(cash * pct).toString());
-      }
-  };
+  const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
 
-  const setSellPercent = (pct) => { 
-      if (pct === 1) {
-          // 賣出 All In：直接使用全部單位數
-          setInputAmount(units.toString()); 
-      } else {
-          // 其他比例：保留兩位小數
-          setInputAmount((units * pct).toFixed(2)); 
-      }
-  };  const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
-
-  // 登入畫面 (淺色版)
+  // 畫面渲染
   if (authLoading || loadingSeason) return <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在連接賽事伺服器...</p></div>;
 
   if (!user) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center font-sans p-6"><div className="w-full max-w-sm bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl"><div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div><h2 className="text-2xl font-bold text-slate-800 text-center mb-2">Fund 手遊 FCF教具專利</h2><p className="text-slate-500 text-center text-sm mb-6">賽季爭霸版 - 請先登入</p><form onSubmit={handleLogin} className="space-y-4"><div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button></form></div></div> );
 
   if (!seasonConfig) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Sword size={64} className="opacity-20" /><h2 className="text-xl font-bold text-slate-400">目前沒有進行中的賽事</h2><p className="text-sm">請等待下一季開打，或前往練習模式。</p><button onClick={() => window.location.href = '/'} className="px-6 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white">返回首頁</button></div> );
 
-  // 設定畫面 (Setup) - S1賽季琥珀色風格 (整合版)
+  // Setup UI
   if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center font-sans">
         <div className="w-full max-w-sm bg-white rounded-xl p-5 shadow-xl border border-amber-200 relative overflow-hidden">
-            {/* 頂部裝飾線 (賽季專屬) */}
             <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-orange-500"></div>
-            
             <button onClick={() => window.location.href = '/'} className="absolute top-4 right-3 text-slate-400 hover:text-slate-600 transition-colors" title="離開"><LogOut size={18} /></button>
             
-            {/* Logo 區域 */}
             <div className="flex items-center justify-center gap-3 mb-5 mt-2">
                 <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
@@ -537,7 +591,6 @@ const setBuyPercent = (pct) => {
                 </div>
             </div>
 
-            {/* 賽季標題區塊 */}
             <div className="mb-4 flex items-center gap-2">
                 <div className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-700 font-bold py-3 rounded-xl border border-amber-200 shadow-sm relative overflow-hidden">
                     <Sword size={18} className="text-amber-500" /> 
@@ -551,7 +604,6 @@ const setBuyPercent = (pct) => {
                 </div>
             </div> 
 
-            {/* 跑馬燈區域 */}
             {tickerData.length > 0 && (
                 <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center overflow-hidden relative">
                     <div className="animate-marquee items-center gap-0">
@@ -573,7 +625,6 @@ const setBuyPercent = (pct) => {
                 </div>
             )}
             
-            {/* Row 1: 初始資金 + 停損 */}
             <div className="flex gap-2 mb-3">
                 <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
@@ -586,7 +637,6 @@ const setBuyPercent = (pct) => {
                 </div>
             </div>
             
-            {/* Row 2: 定期定額 (RSP) */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 shadow-sm">
                 <div className="flex items-center justify-between mb-2 text-indigo-600">
                     <div className="flex items-center gap-2"><CalendarClock size={16} /><span className="text-xs font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
@@ -603,7 +653,6 @@ const setBuyPercent = (pct) => {
                 )}
             </div>
 
-            {/* Row 3: 賽季說明 */}
             <div className="mb-3 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-start gap-2">
                 <Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 leading-relaxed">
@@ -611,7 +660,6 @@ const setBuyPercent = (pct) => {
                 </p>
             </div>
             
-            {/* Row 4: 河流圖參數 */}
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
                 <div className="flex gap-2">
@@ -625,7 +673,6 @@ const setBuyPercent = (pct) => {
                 </div>
             </div>
 
-            {/* Row 5: 玩家資訊 + 開始按鈕 */}
             <div className="flex gap-2 mb-4">
                 <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-1 text-emerald-600">
@@ -653,7 +700,7 @@ const setBuyPercent = (pct) => {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在下載歷史行情...</p></div> );
 
-  // Game Screen - 遊戲主畫面 (含趨勢整合)
+  // Playing UI
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
         <header className="bg-white px-3 py-1 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">
@@ -667,7 +714,7 @@ const setBuyPercent = (pct) => {
                 <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">${currentNav.toFixed(2)}</span>
                     
-                    {/* ★★★ 新增：趨勢儀表板徽章 (顯示多頭/空頭) ★★★ */}
+                    {/* 趨勢儀表板徽章 */}
                     {trendSignal && (
                         <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${trendSignal.style} shadow-sm animate-in fade-in zoom-in duration-300 ml-1`}>
                             {trendSignal.icon}
@@ -675,7 +722,6 @@ const setBuyPercent = (pct) => {
                         </div>
                     )}
                 </div>
-                {/* 顯示偽裝日期 */}
                 <span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1 mt-1 w-fit">
                     {getDisplayDate(fullData[currentDay]?.date)}
                     {timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
@@ -688,7 +734,6 @@ const setBuyPercent = (pct) => {
                     <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
                     <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
                     <button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button>
-                    {/* ★★★ 新增：趨勢開關按鈕 ★★★ */}
                     <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
                 </div>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">
@@ -726,11 +771,10 @@ const setBuyPercent = (pct) => {
                         <XAxis dataKey="displayDate" hide />
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 10, fontWeight: 'bold'}} width={35} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
                         
-                        {/* 扣抵值三角形 (僅在開啟趨勢時顯示) */}
+                        {/* 趨勢輔助線 */}
                         {showTrend && showMA20 && fullData[currentDay - 20] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 20].date)} y={fullData[currentDay - 20].nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />)}
                         {showTrend && showMA60 && fullData[currentDay - 60] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 60].date)} y={fullData[currentDay - 60].nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />)}
 
-                        {/* 線條繪製 */}
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
@@ -738,7 +782,7 @@ const setBuyPercent = (pct) => {
                         
                         {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={1.5} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 10, fontWeight: 'bold', dy: -5 }} />)}
 
-                        {/* ★★★ 新增：交叉訊號 (黃金/死亡交叉) ★★★ */}
+                        {/* 交叉訊號 */}
                         {showTrend && chartDataInfo.data.map((entry, index) => {
                             if (entry.crossSignal) {
                                 return (
@@ -762,7 +806,7 @@ const setBuyPercent = (pct) => {
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
         </div>
 
-        {/* Control Panel - 淺色版 */}
+        {/* 控制面板 */}
         <div className="bg-white shrink-0 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] border-t border-slate-200">
             <div className="flex justify-between px-4 py-1.5 bg-slate-50 border-b border-slate-200 text-[10px]">
                 <div className="flex gap-2 items-center"><span className="text-slate-500">資產</span><span className={`font-mono font-bold text-xs ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
@@ -809,7 +853,7 @@ const setBuyPercent = (pct) => {
                             {t.type === 'BUY' ? '買' : (t.type === 'RSP' ? '定額' : '賣')}
                         </span>
                         <span className="text-slate-700 font-mono font-bold">{getDisplayDate(fullData[t.day]?.date)}</span>
-                        <span className="text-slate-400 pl-1">{t.type !== 'SELL' ? `$${t.amount.toLocaleString()}` : `${parseFloat(t.units).toFixed(2)}U`}</span>
+                        <span className="text-slate-400 pl-1">{t.type !== 'SELL' ? `$${Number(t.amount).toLocaleString()}` : `${Number(t.units).toFixed(2)}U`}</span>
                     </div>
                     <div className="text-right text-slate-800">
                         <span className="mr-2 font-mono font-bold">${t.price.toFixed(2)}</span>

@@ -580,37 +580,36 @@ if (gameStatus === 'setup') {
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
-{/* 跑馬燈區域 (Top 5 循環) */}
+{/* 跑馬燈區域 (Top 5 循環 - 修正版) */}
             {tickerData.length > 0 && (
-                <div className="mb-4 w-full h-8 overflow-hidden bg-slate-50 border border-slate-200 rounded flex items-center relative">
-                    {/* 1. h-8: 固定高度，讓它變成細長條
-                       2. whitespace-nowrap: 關鍵！強制文字不換行
-                       3. animate-marquee: 套用動畫
+                <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center relative overflow-hidden">
+                    {/* 關鍵修正說明：
+                       1. absolute: 讓內容脫離文檔流，方便左右移動
+                       2. whitespace-nowrap: 【最重要】強制文字全部排成一行，不可換行
+                       3. animate-marquee: 執行移動動畫
+                       4. h-full & flex & items-center: 確保文字垂直置中
                     */}
-                    <div className="whitespace-nowrap animate-marquee flex items-center gap-0">
-                        {/* 先排序並只取前 5 名 */}
+                    <div className="absolute whitespace-nowrap animate-marquee flex items-center h-full">
+                        {/* 取前 5 名並依照 ROI 排序 */}
                         {[...tickerData]
-                            .sort((a, b) => b.roi - a.roi) // 確保是高分在前
-                            .slice(0, 5) // 只取前 5 筆
+                            .sort((a, b) => b.roi - a.roi)
+                            .slice(0, 5)
                             .map((tick, idx) => (
-                            <div key={idx} className="flex items-center">
-                                {/* 資料本體 */}
-                                <span className="flex items-center text-[10px] text-slate-600 font-mono">
-                                    <span className="text-emerald-600 font-bold ml-1">★ {tick.displayName}</span> 
-                                    <span className="mx-1 text-slate-400">在</span>
-                                    {tick.fundName.substring(0, 6)}... 
-                                    <span className="mx-1 text-slate-400">獲利</span>
-                                    <span className="text-red-500 font-bold">+{tick.roi}%</span>
+                            <div key={idx} className="flex items-center mx-4">
+                                <span className="text-[11px] font-mono text-slate-600 flex items-center gap-1">
+                                    <span className="text-emerald-600 font-bold">★ {tick.displayName}</span>
+                                    <span className="text-slate-400">在</span>
+                                    <span>{tick.fundName.substring(0, 6)}...</span>
+                                    <span className="text-slate-400">獲利</span>
+                                    <span className="text-red-500 font-bold text-xs">+{tick.roi}%</span>
                                 </span>
-                                
-                                {/* 分隔線 (除了最後一筆之外都顯示) */}
-                                <span className="mx-6 text-slate-300 text-[10px]">|</span>
+                                {/* 分隔線符號 */}
+                                <span className="ml-8 text-slate-300">|</span>
                             </div>
                         ))}
                     </div>
                 </div>
-            )}
-            
+            )}            
             {/* --- 設定區域 Start --- */}
 
             {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}

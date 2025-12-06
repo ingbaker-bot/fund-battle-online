@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
-// V2025v1.2: 引入完整 Icon Set
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
   Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
   Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Trophy, Globe, User, 
@@ -17,10 +16,62 @@ import {
   registerNickname, 
   saveGameResult, 
   getLeaderboard,
-  getSeasonConfig 
+  getSeasonConfig,
+  getTickerData
 } from '../services/firestoreService';
 
-// --- 輔助函式 ---
+// --- 繪圖輔助函式 (新增：用於繪製三角形與交叉訊號) ---
+
+// 1. 扣抵值三角形 (藍色/深藍色)
+const renderTriangle = (props) => {
+    const { cx, cy, fill } = props;
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    return (
+        <polygon 
+            points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
+            fill={fill} 
+            stroke="white" 
+            strokeWidth={2}
+        />
+    );
+};
+
+// 2. 交叉訊號繪製器 (支援 實心/空心)
+// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
+const renderCrossTriangle = (props) => {
+    const { cx, cy, direction, type } = props;
+    
+    // 防呆檢查
+    if (!Number.isFinite(cx) || !Number.isFinite(cy) || !direction) return null;
+
+    const isSolid = type === 'solid';
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
+    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
+    
+    if (direction === 'gold') {
+        // 黃金交叉：紅色向上
+        return (
+            <polygon 
+                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
+                fill={fillColor} 
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    } else {
+        // 死亡交叉：綠色向下
+        return (
+            <polygon 
+                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    }
+};
+
+// --- 數據處理輔助函式 ---
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
     return rawData.map((item, index) => ({ id: index, date: item.date, nav: parseFloat(item.nav) }));
@@ -41,7 +92,6 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)), stdDev: parseFloat(stdDev.toFixed(2)) };
 };
 
-// 2025v1.2: 計算純定期定額報酬率
 const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     if (!data || startDay >= endDay) return 0;
     let units = 0;
@@ -70,7 +120,7 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
 };
 
 // ============================================
-// 2025v1.2: 賽季爭霸版 (Benchmark + RSP + Blind Test)
+// 2025v1.2: 賽季爭霸版 (Benchmark + RSP + Blind Test + Trend Logic)
 // ============================================
 export default function AppCompetition() {
   const [user, setUser] = useState(null); 
@@ -84,6 +134,7 @@ export default function AppCompetition() {
 
   const [myNickname, setMyNickname] = useState(null);
   const [leaderboardData, setLeaderboardData] = useState([]);
+  const [tickerData, setTickerData] = useState([]); // 新增：跑馬燈數據
   const [showRankModal, setShowRankModal] = useState(false);
   const [rankUploadStatus, setRankUploadStatus] = useState('idle'); 
   const [inputNickname, setInputNickname] = useState('');
@@ -100,12 +151,10 @@ export default function AppCompetition() {
   const [avgCost, setAvgCost] = useState(0);
   const [transactions, setTransactions] = useState([]);
   
-  // 2025v1.2: 新增核心狀態
   const [benchmarkStartNav, setBenchmarkStartNav] = useState(null);
   const [realStartDay, setRealStartDay] = useState(0); 
-  const [timeOffset, setTimeOffset] = useState(0); // 時空偽裝偏移量
+  const [timeOffset, setTimeOffset] = useState(0); 
   
-  // RSP 狀態
   const [rspConfig, setRspConfig] = useState({ enabled: false, amount: 5000, day: 6 });
   const [lastRspMonth, setLastRspMonth] = useState(-1);
   const [showRspAlert, setShowRspAlert] = useState(false);
@@ -113,6 +162,9 @@ export default function AppCompetition() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
+  // ★★★ 新增：趨勢開關 ★★★
+  const [showTrend, setShowTrend] = useState(false);
+  
   const [chartPeriod, setChartPeriod] = useState(250);
   
   const [customStopLossInput, setCustomStopLossInput] = useState(10);
@@ -125,14 +177,13 @@ export default function AppCompetition() {
   const [highestNavSinceBuy, setHighestNavSinceBuy] = useState(0);
   const [warningActive, setWarningActive] = useState(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
-  const [showCopyToast, setShowCopyToast] = useState(false);
   const [isCssFullscreen, setIsCssFullscreen] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
-  const [showShareMenu, setShowShareMenu] = useState(false);
-  const [detectedEnv, setDetectedEnv] = useState('Browser');
+  const [showShareMenu, setShowShareMenu] = useState(false); // 雖然賽季版暫時用不到，但保留避免錯誤
 
   const autoPlayRef = useRef(null);
 
+  // 載入使用者與跑馬燈
   useEffect(() => {
       if (!auth) { setAuthError("Firebase Config Error"); setAuthLoading(false); return; }
       const unsubscribe = onAuthStateChanged(auth, async (u) => { 
@@ -143,6 +194,11 @@ export default function AppCompetition() {
              if (nick) setMyNickname(nick);
              const config = await getSeasonConfig();
              if (config) setSeasonConfig(config);
+             
+             // 載入跑馬燈
+             const tData = await getTickerData();
+             if (tData) setTickerData(tData);
+             
              setLoadingSeason(false);
           }
       });
@@ -154,7 +210,6 @@ export default function AppCompetition() {
     const targetFund = FUNDS_LIBRARY.find(f => f.id === seasonConfig.fundId);
     if (!targetFund) { alert("賽季指定基金不存在"); return; }
 
-    // 2025v1.2: 產生時空偽裝 (Blind Test) 偏移量 50-100 年
     const randomTimeOffset = Math.floor(Math.random() * 51) + 50;
     setTimeOffset(randomTimeOffset);
 
@@ -166,23 +221,14 @@ export default function AppCompetition() {
         let processedData = processRealData(rawData);
         
         let startIdx = 0;
-        
-        // 2025v1.2: 隨機歷史起點邏輯
-        // 如果賽季設定有指定 startDay，則使用賽季設定 (確保公平)
-        // 如果賽季設定沒有指定 (或為 -1)，則隨機切入
         if (seasonConfig.startDay !== undefined && seasonConfig.startDay !== null && seasonConfig.startDay >= 0) {
             startIdx = seasonConfig.startDay;
         } else {
-            // 隨機切入：確保前面有 60 天均線，後面至少有 250 天可玩
             const minStart = 60;
             const maxStart = Math.max(minStart, processedData.length - 250);
             startIdx = Math.floor(Math.random() * (maxStart - minStart + 1)) + minStart;
         }
 
-        const endIdx = seasonConfig.endDay || processedData.length;
-        // 注意：這裡我們通常取全量數據，然後透過 currentDay 控制顯示，以避免資料切斷導致均線計算錯誤
-        // 為了簡化，我們直接使用全量數據，並設定 currentDay
-        
         if (processedData.length < 100) throw new Error("賽季數據區間過短");
 
         setFullData(processedData);
@@ -193,14 +239,12 @@ export default function AppCompetition() {
         setAvgCost(0);
         setHighestNavSinceBuy(0);
         
-        // 設定起始日
         const playStartDay = startIdx > 60 ? startIdx : 60;
         setCurrentDay(playStartDay);
         setRealStartDay(playStartDay);
         
         if (processedData && processedData[playStartDay]) {
             setBenchmarkStartNav(processedData[playStartDay].nav);
-            // 2025v1.2: 設定 RSP 初始月份
             const sd = new Date(processedData[playStartDay].date);
             setLastRspMonth(sd.getFullYear() * 12 + sd.getMonth() - 1);
         }
@@ -215,7 +259,7 @@ export default function AppCompetition() {
     }
   };
 
-  // 2025v1.2: RSP 自動扣款邏輯
+  // RSP 邏輯
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0 && rspConfig.enabled) {
           const currentData = fullData[currentDay];
@@ -261,7 +305,6 @@ export default function AppCompetition() {
 
   useEffect(() => {
       if (gameStatus === 'playing' && fullData.length > 0) {
-          // 檢查是否到達賽季結束日 (如果有設定)
           const seasonEnd = seasonConfig?.endDay || fullData.length - 1;
           if (currentDay >= seasonEnd || currentDay >= fullData.length - 1) {
               if (isAutoPlaying) { clearInterval(autoPlayRef.current); setIsAutoPlaying(false); }
@@ -272,12 +315,11 @@ export default function AppCompetition() {
 
   const currentNav = fullData[currentDay]?.nav || 10;
 
-  // 2025v1.2: 日期偽裝處理
   const getDisplayDate = (dateStr) => {
       if (!dateStr) return dateStr;
       const dateObj = new Date(dateStr);
       if (isNaN(dateObj.getTime())) return dateStr;
-      const newYear = dateObj.getFullYear() + timeOffset; // 加上隨機偏移
+      const newYear = dateObj.getFullYear() + timeOffset; 
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
@@ -293,23 +335,74 @@ export default function AppCompetition() {
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
 
+  // ★★★ 新增：趨勢儀表板邏輯 ★★★
+  const trendSignal = useMemo(() => {
+      if (!showTrend || !fullData[currentDay]) return null;
+      
+      const idx = currentDay;
+      const curNav = fullData[idx].nav;
+      const ind20 = calculateIndicators(fullData, 20, idx);
+      const ind60 = calculateIndicators(fullData, 60, idx);
+      const ma20 = ind20.ma; 
+      const ma60 = ind60.ma;
+
+      if (!ma20 || !ma60) return null;
+
+      if (curNav > ma20 && ma20 > ma60) {
+          return { text: '多頭', icon: <TrendingUp size={14} />, style: 'bg-red-100 text-red-600 border-red-200' };
+      } else if (curNav < ma20 && ma20 < ma60) {
+          return { text: '空頭', icon: <TrendingDown size={14} />, style: 'bg-green-100 text-green-600 border-green-200' };
+      }
+      return { text: '盤整', icon: <Activity size={14} />, style: 'bg-slate-100 text-slate-500 border-slate-200' };
+  }, [fullData, currentDay, showTrend]);
+
+  // ★★★ 升級版：計算圖表數據與交叉訊號 ★★★
   const chartDataInfo = useMemo(() => {
     if (!isReady || fullData.length === 0) return { data: [], domain: [0, 100] };
     const start = Math.max(0, currentDay - chartPeriod);
     const end = currentDay + 1;
+    
     const slice = fullData.slice(start, end).map((d, idx) => {
         const realIdx = start + idx;
+        
+        // 當日指標
         const ind20 = calculateIndicators(fullData, 20, realIdx);
         const ind60 = calculateIndicators(fullData, 60, realIdx);
         const ma20 = ind20.ma; const ma60 = ind60.ma; const stdDev60 = ind60.stdDev;
+        
+        // 前一日指標 (用於比對交叉)
+        const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
+        const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
+        const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
+        
+        // 五日前指標 (用於比對季線趨勢)
+        const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
+        const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+
         let riverTop = null; let riverBottom = null;
         if (ma60) {
             if (riverMode === 'fixed') { const ratio = riverWidthInput / 100; riverTop = ma60 * (1 + ratio); riverBottom = ma60 * (1 - ratio); } 
             else { if (stdDev60) { riverTop = ma60 + (stdDev60 * riverSDMultiplier); riverBottom = ma60 - (stdDev60 * riverSDMultiplier); } }
         }
-        // 2025v1.2: 使用 getDisplayDate 偽裝日期
-        return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom };
+
+        // 訊號判斷
+        let crossSignal = null;
+        if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+            const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
+            const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
+            const isTrendUp = ma60 >= refInd60.ma;
+            const isTrendDown = ma60 < refInd60.ma;
+
+            if (isGoldCross) {
+                crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
+            } else if (isDeathCross) {
+                crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
+            }
+        }
+
+        return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom, crossSignal };
     });
+
     let min = Infinity, max = -Infinity;
     slice.forEach(d => {
         const values = [d.nav, showMA20 ? d.ma20 : null, showMA60 ? d.ma60 : null, showRiver ? d.riverTop : null, showRiver ? d.riverBottom : null];
@@ -323,7 +416,7 @@ export default function AppCompetition() {
     const domainMin = Math.max(0, Math.floor(finalMin - padding));
     const domainMax = Math.ceil(finalMax + padding);
     return { data: slice, domain: [domainMin, domainMax], stopLossPrice };
-  }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset]);
+  }, [fullData, currentDay, isReady, units, highestNavSinceBuy, customStopLossInput, showMA20, showMA60, showRiver, chartPeriod, riverMode, riverWidthInput, riverSDMultiplier, timeOffset, showTrend]);
 
   const totalAssets = cash + (units * currentNav);
   const roi = initialCapital > 0 ? ((totalAssets - initialCapital) / initialCapital) * 100 : 0;
@@ -338,7 +431,6 @@ export default function AppCompetition() {
 
   const toggleFullscreen = () => setIsCssFullscreen(!isCssFullscreen);
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, email, password); } catch (err) { setAuthError('登入失敗'); } };
-  const handleLogout = async () => { await signOut(auth); setGameStatus('shutdown'); setTimeout(() => window.location.reload(), 500); };
   
   const advanceDay = () => { if (currentDay >= fullData.length - 1) { setGameStatus('ended'); return; } setCurrentDay(prev => prev + 1); };
   const openTrade = (mode) => { if (isAutoPlaying) toggleAutoPlay(); setTradeMode(mode); setInputAmount(''); };
@@ -401,18 +493,16 @@ export default function AppCompetition() {
   const setBuyPercent = (pct) => setInputAmount(Math.floor(cash * pct).toString());
   const setSellPercent = (pct) => { if (pct === 1) setInputAmount(units.toString()); else setInputAmount((units * pct).toFixed(2)); };
   const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
-  const [tickerData, setTickerData] = useState([]);
-  useEffect(() => { const fetchTicker = async () => { const data = await getTickerData(); if (data) setTickerData(data); }; fetchTicker(); }, []);
 
   // 登入畫面 (淺色版)
   if (authLoading || loadingSeason) return <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在連接賽事伺服器...</p></div>;
 
-  if (!user) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center font-sans p-6"><div className="w-full max-w-sm bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl"><div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div><h2 className="text-2xl font-bold text-slate-800 text-center mb-2">Fund 手遊 V31</h2><p className="text-slate-500 text-center text-sm mb-6">賽季爭霸版 - 請先登入</p><form onSubmit={handleLogin} className="space-y-4"><div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button></form></div></div> );
+  if (!user) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center font-sans p-6"><div className="w-full max-w-sm bg-white p-8 rounded-2xl border border-slate-200 shadow-2xl"><div className="flex justify-center mb-6 text-emerald-500"><Lock size={56} /></div><h2 className="text-2xl font-bold text-slate-800 text-center mb-2">Fund 手遊 FCF教具專利</h2><p className="text-slate-500 text-center text-sm mb-6">賽季爭霸版 - 請先登入</p><form onSubmit={handleLogin} className="space-y-4"><div><label className="text-xs text-slate-500 ml-1">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><div><label className="text-xs text-slate-500 ml-1">密碼</label><input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 focus:border-emerald-500 outline-none"/></div><button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg transition-all active:scale-[0.98]">登入系統</button></form></div></div> );
 
   if (!seasonConfig) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Sword size={64} className="opacity-20" /><h2 className="text-xl font-bold text-slate-400">目前沒有進行中的賽事</h2><p className="text-sm">請等待下一季開打，或前往練習模式。</p><button onClick={() => window.location.href = '/'} className="px-6 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white">返回首頁</button></div> );
 
-  // 設定畫面 (Setup) - 淺色版 + RSP
-if (gameStatus === 'setup') {
+  // 設定畫面 (Setup) - S1賽季琥珀色風格 (整合版)
+  if (gameStatus === 'setup') {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center font-sans">
         <div className="w-full max-w-sm bg-white rounded-xl p-5 shadow-xl border border-amber-200 relative overflow-hidden">
@@ -426,11 +516,11 @@ if (gameStatus === 'setup') {
                 <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
-                    <span className="text-[10px] text-amber-600 font-bold tracking-wide bg-amber-50 px-1 rounded">S1 RANKED MATCH</span>
+                    <span className="text-[10px] text-amber-600 font-bold tracking-wide bg-amber-50 px-1 rounded">FCF教具專利</span>
                 </div>
             </div>
 
-            {/* 賽季標題區塊 (取代原本的 S1 按鈕位置) */}
+            {/* 賽季標題區塊 */}
             <div className="mb-4 flex items-center gap-2">
                 <div className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-700 font-bold py-3 rounded-xl border border-amber-200 shadow-sm relative overflow-hidden">
                     <Sword size={18} className="text-amber-500" /> 
@@ -444,7 +534,7 @@ if (gameStatus === 'setup') {
                 </div>
             </div> 
 
-            {/* 跑馬燈區域 (與 AppRanked 保持一致，但資料來源是全站) */}
+            {/* 跑馬燈區域 */}
             {tickerData.length > 0 && (
                 <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center overflow-hidden relative">
                     <div className="animate-marquee items-center gap-0">
@@ -466,8 +556,6 @@ if (gameStatus === 'setup') {
                 </div>
             )}
             
-            {/* --- 設定區域 (完全沿用 AppRanked 結構) --- */}
-
             {/* Row 1: 初始資金 + 停損 */}
             <div className="flex gap-2 mb-3">
                 <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
@@ -498,7 +586,7 @@ if (gameStatus === 'setup') {
                 )}
             </div>
 
-            {/* Row 3: 賽季說明 (取代 AppRanked 的挑戰項目按鈕) */}
+            {/* Row 3: 賽季說明 */}
             <div className="mb-3 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-start gap-2">
                 <Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-amber-800 leading-relaxed">
@@ -548,7 +636,7 @@ if (gameStatus === 'setup') {
 
   if (gameStatus === 'loading_data') return ( <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-800 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在下載歷史行情...</p></div> );
 
-  // Game Screen - 淺色版 + Blind Test + RSP
+  // Game Screen - 遊戲主畫面 (含趨勢整合)
   return (
     <div style={containerStyle} className="bg-slate-50 text-slate-800 font-sans flex flex-col overflow-hidden transition-all duration-300">
         <header className="bg-white px-3 py-1 border-b border-slate-200 flex justify-between items-center shrink-0 h-12 z-30 relative shadow-sm">
@@ -561,21 +649,30 @@ if (gameStatus === 'setup') {
             <div className="absolute top-3 left-4 z-0 pointer-events-none">
                 <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold text-slate-800 tracking-tight shadow-white drop-shadow-sm font-mono">${currentNav.toFixed(2)}</span>
-                    {/* 2025v1.2: 使用 getDisplayDate 顯示偽裝日期 */}
-                    <span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1">
-                        {getDisplayDate(fullData[currentDay]?.date)}
-                        {timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
-                    </span>
+                    
+                    {/* ★★★ 新增：趨勢儀表板徽章 (顯示多頭/空頭) ★★★ */}
+                    {trendSignal && (
+                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border ${trendSignal.style} shadow-sm animate-in fade-in zoom-in duration-300 ml-1`}>
+                            {trendSignal.icon}
+                            <span className="text-[10px] font-bold">{trendSignal.text}</span>
+                        </div>
+                    )}
                 </div>
+                {/* 顯示偽裝日期 */}
+                <span className="text-sm text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 flex items-center gap-1 mt-1 w-fit">
+                    {getDisplayDate(fullData[currentDay]?.date)}
+                    {timeOffset > 0 && <span className="text-[9px] bg-slate-200 px-1 rounded text-slate-500 ml-1">Sim</span>}
+                </span>
                 {avgCost > 0 && (<div className="text-xs text-slate-400 mt-1 font-mono font-bold ml-1">均價 ${avgCost.toFixed(2)}</div>)}
             </div>
             
             <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
                 <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
-                    {/* 按鈕顏色修正 */}
                     <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
                     <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
                     <button onClick={() => setShowRiver(!showRiver)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showRiver ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>河流</button>
+                    {/* ★★★ 新增：趨勢開關按鈕 ★★★ */}
+                    <button onClick={() => setShowTrend(!showTrend)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showTrend ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-transparent text-slate-400 border-slate-200 hover:text-slate-600'}`}>趨勢</button>
                 </div>
                 <div className="flex bg-white/90 rounded-lg border border-slate-200 p-1 backdrop-blur-sm shadow-sm">
                     {[125, 250, 500].map(days => (
@@ -612,13 +709,37 @@ if (gameStatus === 'setup') {
                         <XAxis dataKey="displayDate" hide />
                         <YAxis domain={chartDataInfo.domain} orientation="right" tick={{fill: '#64748b', fontSize: 10, fontWeight: 'bold'}} width={35} tickFormatter={(v) => Math.round(v)} interval="preserveStartEnd" />
                         
-                        {/* 線條顏色修正 */}
+                        {/* 扣抵值三角形 (僅在開啟趨勢時顯示) */}
+                        {showTrend && showMA20 && fullData[currentDay - 20] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 20].date)} y={fullData[currentDay - 20].nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />)}
+                        {showTrend && showMA60 && fullData[currentDay - 60] && (<ReferenceDot x={getDisplayDate(fullData[currentDay - 60].date)} y={fullData[currentDay - 60].nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />)}
+
+                        {/* 線條繪製 */}
                         {showRiver && (<><Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /><Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} /></>)}
                         {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
                         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.2)" />
                         
                         {units > 0 && chartDataInfo.stopLossPrice && (<ReferenceLine y={chartDataInfo.stopLossPrice} stroke="#ef4444" strokeDasharray="3 3" strokeWidth={1.5} label={{ position: 'insideBottomLeft', value: `Stop ${chartDataInfo.stopLossPrice.toFixed(1)}`, fill: '#ef4444', fontSize: 10, fontWeight: 'bold', dy: -5 }} />)}
+
+                        {/* ★★★ 新增：交叉訊號 (黃金/死亡交叉) ★★★ */}
+                        {showTrend && chartDataInfo.data.map((entry, index) => {
+                            if (entry.crossSignal) {
+                                return (
+                                    <ReferenceDot
+                                        key={`cross-${index}`}
+                                        x={entry.displayDate}
+                                        y={entry.ma60} 
+                                        shape={(props) => renderCrossTriangle({ 
+                                            ...props, 
+                                            direction: entry.crossSignal.type, 
+                                            type: entry.crossSignal.style 
+                                        })}
+                                        isAnimationActive={false}
+                                    />
+                                );
+                            }
+                            return null;
+                        })}
                     </ComposedChart>
                 </ResponsiveContainer>
             ) : <div className="flex items-center justify-center h-full text-slate-400">載入中...</div>}
@@ -629,7 +750,6 @@ if (gameStatus === 'setup') {
             <div className="flex justify-between px-4 py-1.5 bg-slate-50 border-b border-slate-200 text-[10px]">
                 <div className="flex gap-2 items-center"><span className="text-slate-500">資產</span><span className={`font-mono font-bold text-xs ${roi>=0?'text-red-500':'text-green-600'}`}>${Math.round(totalAssets).toLocaleString()}</span></div>
                 
-                {/* 2025v1.2: RSP 快速開關 (醒目設計) */}
                 <div className="flex items-center gap-2">
                     <button 
                         onClick={() => setRspConfig(prev => ({...prev, enabled: !prev.enabled}))}
@@ -668,11 +788,9 @@ if (gameStatus === 'setup') {
             {transactions.map(t => (
                 <div key={t.id} className="flex justify-between items-center p-2 mb-1 bg-white rounded border border-slate-200 text-[10px] shadow-sm">
                     <div className="flex items-center gap-2">
-                        {/* 2025v1.2: 標籤樣式 */}
                         <span className={`w-10 text-center py-0.5 rounded font-bold ${t.type === 'BUY' ? 'bg-red-50 text-red-500' : (t.type === 'RSP' ? 'bg-indigo-50 text-indigo-600' : 'bg-green-50 text-green-600')}`}>
                             {t.type === 'BUY' ? '買' : (t.type === 'RSP' ? '定額' : '賣')}
                         </span>
-                        {/* 顯示偽裝日期 */}
                         <span className="text-slate-700 font-mono font-bold">{getDisplayDate(fullData[t.day]?.date)}</span>
                         <span className="text-slate-400 pl-1">{t.type !== 'SELL' ? `$${t.amount.toLocaleString()}` : `${parseFloat(t.units).toFixed(2)}U`}</span>
                     </div>
@@ -783,14 +901,14 @@ if (gameStatus === 'setup') {
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">你的 ROI</div>
                         <div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</div>
                     </div>
-                    {/* 2025v1.2: Benchmark */}
+                    {/* Benchmark */}
                     <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-lg">
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">大盤 (Buy&Hold)</div>
                         <div className={`text-xl font-mono font-bold ${benchmarkRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%</div>
                     </div>
                 </div>
 
-                {/* 2025v1.2: RSP Benchmark */}
+                {/* RSP Benchmark */}
                 <div className="w-full max-w-xs bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-6 flex justify-between items-center shadow-sm">
                     <span className="text-indigo-800 font-bold text-sm flex items-center gap-1"><CalendarClock size={16}/> 純定期定額績效</span>
                     <span className={`font-mono font-bold text-lg ${pureRspRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -798,7 +916,7 @@ if (gameStatus === 'setup') {
                     </span>
                 </div>
 
-                {/* 2025v1.2: 時空解密 */}
+                {/* 時空解密 */}
                 {fullData[realStartDay] && fullData[currentDay] && (
                     <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl w-full max-w-xs mb-6 text-left">
                          <div className="flex items-center gap-2 mb-2 text-amber-700 font-bold">

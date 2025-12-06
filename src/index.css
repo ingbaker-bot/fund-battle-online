@@ -8,24 +8,30 @@ body {
   background-color: #020617;
 }
 
-/* --- 跑馬燈核心動畫 (重新定義) --- */
+/* --- 跑馬燈核心動畫 (修正版) --- */
 @keyframes marquee-scroll {
-  0% { transform: translateX(100%); }   /* 從容器最右邊外面開始 */
-  100% { transform: translateX(-100%); } /* 移動到容器最左邊外面結束 */
+  /* 修改重點：
+     原本是 100% (文字總長度，會導致超長等待)
+     改為 420px (剛好在手機畫面右邊緣外，可達成無縫進場)
+  */
+  0% { transform: translateX(420px); } 
+  100% { transform: translateX(-100%); }
 }
 
 .animate-marquee {
-  /* 關鍵：讓這個 div 變成一個不換行的長條 */
   display: inline-flex; 
   white-space: nowrap;
   
-  /* 動畫設定：30秒跑完一趟，線性均速，無限循環 */
+  /* 30秒跑完一趟，線性均速，無限循環 */
   animation: marquee-scroll 30s linear infinite;
   
-  /* 確保滑鼠移上去時會暫停，讓玩家看資料 */
-  padding-left: 100%; /* 確保初始狀態不會一片空白，雖非必要但可讓動畫更順暢 */
+  /* 修改重點：
+     移除了 padding-left: 100%; 
+     這行原本會造成文字前面有一大段空白，移除後文字會緊接著出現
+  */
 }
 
+/* 滑鼠移上去時暫停，讓玩家可以看清楚內容 */
 .animate-marquee:hover {
   animation-play-state: paused;
 }

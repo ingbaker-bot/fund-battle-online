@@ -20,7 +20,7 @@ import {
   getTickerData
 } from '../services/firestoreService';
 
-// --- 繪圖輔助函式 (新增：用於繪製三角形與交叉訊號) ---
+// --- 繪圖輔助函式 ---
 
 // 1. 扣抵值三角形 (藍色/深藍色)
 const renderTriangle = (props) => {
@@ -162,8 +162,9 @@ export default function AppCompetition() {
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [showRiver, setShowRiver] = useState(false);
-  // ★★★ 新增：趨勢開關 ★★★
-  const [showTrend, setShowTrend] = useState(false);
+  
+  // ★★★ 修改：趨勢開關預設為 true (開啟) ★★★
+  const [showTrend, setShowTrend] = useState(true);
   
   const [chartPeriod, setChartPeriod] = useState(250);
   
@@ -179,7 +180,7 @@ export default function AppCompetition() {
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isCssFullscreen, setIsCssFullscreen] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, type: null });
-  const [showShareMenu, setShowShareMenu] = useState(false); // 雖然賽季版暫時用不到，但保留避免錯誤
+  const [showShareMenu, setShowShareMenu] = useState(false); 
 
   const autoPlayRef = useRef(null);
 
@@ -335,7 +336,7 @@ export default function AppCompetition() {
       return calculatePureRspRoi(fullData, realStartDay, currentDay, rspConfig.amount, rspConfig.day);
   }, [gameStatus, fullData, realStartDay, currentDay, rspConfig]);
 
-  // ★★★ 新增：趨勢儀表板邏輯 ★★★
+  // ★★★ 趨勢儀表板邏輯 (移植自 AppRanked) ★★★
   const trendSignal = useMemo(() => {
       if (!showTrend || !fullData[currentDay]) return null;
       

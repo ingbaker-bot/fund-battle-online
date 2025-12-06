@@ -398,6 +398,8 @@ export default function AppCompetition() {
   const setBuyPercent = (pct) => setInputAmount(Math.floor(cash * pct).toString());
   const setSellPercent = (pct) => { if (pct === 1) setInputAmount(units.toString()); else setInputAmount((units * pct).toFixed(2)); };
   const containerStyle = isCssFullscreen ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, width: '100vw', height: '100vh' } : { position: 'relative', height: '100vh', width: '100%' };
+  const [tickerData, setTickerData] = useState([]);
+  useEffect(() => { const fetchTicker = async () => { const data = await getTickerData(); if (data) setTickerData(data); }; fetchTicker(); }, []);
 
   // 登入畫面 (淺色版)
   if (authLoading || loadingSeason) return <div className="h-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Loader2 size={48} className="animate-spin text-amber-500" /><p className="text-slate-500">正在連接賽事伺服器...</p></div>;
@@ -407,58 +409,135 @@ export default function AppCompetition() {
   if (!seasonConfig) return ( <div className="h-screen w-screen bg-slate-50 flex flex-col items-center justify-center text-slate-500 gap-4"><Sword size={64} className="opacity-20" /><h2 className="text-xl font-bold text-slate-400">目前沒有進行中的賽事</h2><p className="text-sm">請等待下一季開打，或前往練習模式。</p><button onClick={() => window.location.href = '/'} className="px-6 py-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white">返回首頁</button></div> );
 
   // 設定畫面 (Setup) - 淺色版 + RSP
-  if (gameStatus === 'setup') {
+if (gameStatus === 'setup') {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 p-6 flex flex-col items-center justify-center font-sans">
-        <div className="w-full max-w-sm bg-white rounded-xl p-6 shadow-2xl border border-amber-500/30 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-600 to-orange-600"></div>
-            <button onClick={() => window.location.href = '/'} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors" title="離開"><X size={20} /></button>
-            <div className="flex justify-center mb-4 text-amber-500 animate-pulse"><Crown size={56} strokeWidth={1.5} /></div>
-            <h1 className="text-2xl font-bold text-center mb-1 tracking-tight text-amber-500">賽季爭霸戰</h1>
-            <p className="text-center text-xs text-slate-400 mb-6 font-mono tracking-widest">{seasonConfig.seasonId}</p>
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-4 text-center"><p className="text-xs text-slate-500 mb-1 uppercase tracking-wider">本季題目</p><p className="text-lg font-bold text-slate-800 mb-3">{seasonConfig.title}</p><div className="flex justify-center gap-4 text-xs text-slate-400 border-t border-slate-200 pt-3"><div><span className="block text-slate-600 mb-0.5">初始資金</span><span className="text-emerald-600 font-mono font-bold">$1,000,000</span></div><div><span className="block text-slate-600 mb-0.5">交易區間</span><span className="text-amber-500 font-mono font-bold">{(seasonConfig.endDay - seasonConfig.startDay)} 天</span></div></div></div>
+      <div className="min-h-screen bg-slate-50 text-slate-800 p-4 flex flex-col items-center justify-center font-sans">
+        <div className="w-full max-w-sm bg-white rounded-xl p-5 shadow-xl border border-amber-200 relative overflow-hidden">
+            {/* 頂部裝飾線 (賽季專屬) */}
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-amber-400 to-orange-500"></div>
             
-            {/* 2025v1.2: RSP Setting */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                <div className="flex items-center justify-between mb-3 text-indigo-600">
-                    <div className="flex items-center gap-2"><CalendarClock size={18} /><span className="text-sm font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
+            <button onClick={() => window.location.href = '/'} className="absolute top-4 right-3 text-slate-400 hover:text-slate-600 transition-colors" title="離開"><LogOut size={18} /></button>
+            
+            {/* Logo 區域 */}
+            <div className="flex items-center justify-center gap-3 mb-5 mt-2">
+                <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
+                <div className="flex flex-col">
+                    <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
+                    <span className="text-[10px] text-amber-600 font-bold tracking-wide bg-amber-50 px-1 rounded">S1 RANKED MATCH</span>
+                </div>
+            </div>
+
+            {/* 賽季標題區塊 (取代原本的 S1 按鈕位置) */}
+            <div className="mb-4 flex items-center gap-2">
+                <div className="w-2/3 flex items-center justify-center gap-2 bg-gradient-to-br from-amber-50 to-orange-50 text-amber-700 font-bold py-3 rounded-xl border border-amber-200 shadow-sm relative overflow-hidden">
+                    <Sword size={18} className="text-amber-500" /> 
+                    <span className="z-10 truncate px-1">{seasonConfig.title}</span>
+                    <Crown size={64} className="absolute -right-4 -bottom-4 text-amber-500/10 rotate-12" />
+                </div>
+                <div className="w-1/3 flex flex-col justify-center gap-0.5 pl-1">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">交易區間</span>
+                    <span className="text-sm font-mono font-bold text-slate-700">{(seasonConfig.endDay - seasonConfig.startDay)} 天</span>
+                    <span className="text-[10px] text-amber-500 font-bold">難度: ★★★</span>
+                </div>
+            </div> 
+
+            {/* 跑馬燈區域 (與 AppRanked 保持一致，但資料來源是全站) */}
+            {tickerData.length > 0 && (
+                <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center overflow-hidden relative">
+                    <div className="animate-marquee items-center gap-0">
+                        {[...tickerData].sort((a, b) => b.roi - a.roi).slice(0, 10).map((tick, idx) => (
+                            <div key={idx} className="flex items-center shrink-0 px-4">
+                                <span className="text-[11px] font-mono text-slate-600 flex items-center gap-1 whitespace-nowrap">
+                                    <span className="text-amber-600 font-bold">★ {tick.displayName}</span>
+                                    <span className="text-slate-400 text-[10px]">在</span>
+                                    <span className="font-medium text-slate-700">{tick.fundName.substring(0, 6)}...</span>
+                                    <span className="text-slate-400 text-[10px]">獲利</span>
+                                    <span className="text-red-500 font-bold text-xs">+{tick.roi}%</span>
+                                </span>
+                                <span className="ml-8 text-slate-300 select-none">|</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none"></div>
+                    <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none"></div>
+                </div>
+            )}
+            
+            {/* --- 設定區域 (完全沿用 AppRanked 結構) --- */}
+
+            {/* Row 1: 初始資金 + 停損 */}
+            <div className="flex gap-2 mb-3">
+                <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
+                    <span className="w-full text-right text-lg font-mono text-slate-400 font-bold select-none cursor-not-allowed">1,000,000</span>
+                </div>
+                
+                <div className="w-1/3 bg-slate-50 border border-slate-300 rounded-xl px-1 py-2 flex flex-col items-center justify-center shadow-sm">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">停損 (%)</span>
+                    <input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="w-full bg-transparent text-center text-lg font-mono text-slate-800 font-bold outline-none h-5"/>
+                </div>
+            </div>
+            
+            {/* Row 2: 定期定額 (RSP) */}
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 shadow-sm">
+                <div className="flex items-center justify-between mb-2 text-indigo-600">
+                    <div className="flex items-center gap-2"><CalendarClock size={16} /><span className="text-xs font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
                     <div className="flex items-center">
-                        <input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" />
-                        <span className={`text-sm font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
+                        <input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" />
+                        <span className={`text-xs font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
                     </div>
                 </div>
                 {rspConfig.enabled && (
-                    <div className="flex gap-3 animate-in fade-in slide-in-from-top-1">
-                        <div className="flex-1">
-                            <label className="text-xs text-slate-400 mb-1 block">扣款金額</label>
-                            <input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono"/>
-                        </div>
-                        <div className="flex-1">
-                            <label className="text-xs text-slate-400 mb-1 block">每月扣款日</label>
-                            <select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-2 text-sm text-center text-slate-800 outline-none font-mono">
-                                {[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}
-                            </select>
-                        </div>
+                    <div className="flex gap-2 animate-in fade-in slide-in-from-top-1">
+                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono"/></div>
+                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div>
                     </div>
                 )}
             </div>
 
-            <div className="bg-white p-3 rounded-lg border border-slate-200 mb-6">
-                <div className="flex items-center justify-between mb-2 text-blue-600"><div className="flex items-center gap-2"><Waves size={16} /><span className="text-xs font-bold uppercase tracking-wider">你的策略參數</span></div></div>
-                <div className="flex gap-2 mb-2">
-                    <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-1.5 text-xs rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>固定 %</button>
-                    <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-1.5 text-xs rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>動態標準差</button>
-                </div>
-                <div className="flex items-center bg-slate-50 border border-slate-200 rounded px-3 py-1">
-                    {riverMode === 'fixed' ? (<><span className="text-xs text-slate-500 mr-2">寬度</span><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono"/><span className="text-xs text-slate-500 ml-2">%</span></>) : (<><span className="text-xs text-slate-500 mr-2" title="標準差倍數">K 值</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono"/><span className="text-xs text-slate-500 ml-2">SD</span></>)}
-                </div>
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200">
-                    <span className="text-xs text-slate-400">風險停損</span>
-                    <div className="flex items-center w-24 bg-slate-50 border border-slate-200 rounded px-2 py-0.5"><input type="number" value={customStopLossInput} onChange={(e) => setCustomStopLossInput(Number(e.target.value))} className="w-full bg-transparent text-right text-slate-800 text-sm outline-none font-mono" /><span className="text-xs text-slate-500 ml-1">%</span></div>
-                </div>
+            {/* Row 3: 賽季說明 (取代 AppRanked 的挑戰項目按鈕) */}
+            <div className="mb-3 bg-amber-50 p-2 rounded-xl border border-amber-100 flex items-start gap-2">
+                <Info size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-amber-800 leading-relaxed">
+                    <span className="font-bold">賽季規則：</span>本場比賽使用真實歷史數據進行盲測。起始日期隨機，結束日期固定。請善用技術指標擊敗大盤！
+                </p>
             </div>
             
-            <button onClick={startGame} className="w-full bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-bold py-3 rounded-xl text-lg shadow-xl shadow-amber-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2"><Sword size={20} /> 進入戰場</button>
+            {/* Row 4: 河流圖參數 */}
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
+                <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
+                <div className="flex gap-2">
+                    <div className="flex w-1/2 gap-1">
+                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
+                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
+                    </div>
+                    <div className="flex items-center w-1/2 bg-white border border-slate-300 rounded px-2">
+                        {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold text-sm"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-sm"/></>)}
+                    </div>
+                </div>
+            </div>
+
+            {/* Row 5: 玩家資訊 + 開始按鈕 */}
+            <div className="flex gap-2 mb-4">
+                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm">
+                    <div className="flex items-center gap-1 text-emerald-600">
+                        <UserCheck size={12} />
+                        <span className="text-[10px] font-bold">參賽者</span>
+                    </div>
+                    <div className="flex flex-col items-center w-full">
+                        <span className="text-[10px] text-slate-600 font-mono truncate w-full text-center px-1">
+                            {user.email.split('@')[0]}
+                        </span>
+                        {myNickname && <span className="text-[10px] text-amber-500 font-bold truncate w-full text-center leading-none">({myNickname})</span>}
+                    </div>
+                </div>
+
+                <button onClick={startGame} className="flex-[2] bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl text-lg shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 py-2">
+                    <Sword size={22} fill="currentColor" /> 進入戰場
+                </button>
+            </div>
+            
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v1.2 Competition UI</span></div>
         </div>
       </div>
     );

@@ -589,10 +589,10 @@ if (gameStatus === 'setup') {
                        3. 這裡的 div 會被 CSS 強制變成一條無限長的軌道
                     */}
                     <div className="animate-marquee items-center gap-0">
-                        {/* 資料處理：排序並取前 5 名 */}
+                        {/* 資料處理：排序並取前 10 名 */}
                         {[...tickerData]
                             .sort((a, b) => b.roi - a.roi)
-                            .slice(0, 5)
+                            .slice(0, 10)
                             .map((tick, idx) => (
                             <div key={idx} className="flex items-center shrink-0 px-4">
                                 {/* shrink-0 是關鍵：確保這個區塊絕對不會被壓縮換行 */}

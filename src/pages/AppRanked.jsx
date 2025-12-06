@@ -580,33 +580,44 @@ if (gameStatus === 'setup') {
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
-{/* 跑馬燈區域 (Top 5 循環 - 修正版 v2) */}
+{/* 跑馬燈區域 (Rebuilt v3.0 - Stable Flow Version) */}
             {tickerData.length > 0 && (
-                <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center relative overflow-hidden">
-                    {/* 修正重點：
-                       1. 加入 'w-max'：強制寬度依內容撐開，絕對不換行。
-                       2. 確保 'flex-row'：強制橫向排列。
+                <div className="mb-4 w-full h-10 bg-slate-50 border border-slate-200 rounded flex items-center overflow-hidden relative">
+                    {/* 核心改動：
+                       1. 移除 absolute，改用標準流 (Flow) 避免跑版
+                       2. animate-marquee class 會處理移動邏輯
+                       3. 這裡的 div 會被 CSS 強制變成一條無限長的軌道
                     */}
-                    <div className="absolute whitespace-nowrap animate-marquee flex flex-row items-center h-full w-max">
+                    <div className="animate-marquee items-center gap-0">
+                        {/* 資料處理：排序並取前 5 名 */}
                         {[...tickerData]
                             .sort((a, b) => b.roi - a.roi)
                             .slice(0, 5)
                             .map((tick, idx) => (
-                            <div key={idx} className="flex items-center mx-4">
-                                <span className="text-[11px] font-mono text-slate-600 flex items-center gap-1">
+                            <div key={idx} className="flex items-center shrink-0 px-4">
+                                {/* shrink-0 是關鍵：確保這個區塊絕對不會被壓縮換行 */}
+                                <span className="text-[11px] font-mono text-slate-600 flex items-center gap-1 whitespace-nowrap">
                                     <span className="text-emerald-600 font-bold">★ {tick.displayName}</span>
-                                    <span className="text-slate-400">在</span>
-                                    <span>{tick.fundName.substring(0, 6)}...</span>
-                                    <span className="text-slate-400">獲利</span>
+                                    <span className="text-slate-400 text-[10px]">在</span>
+                                    <span className="font-medium text-slate-700">{tick.fundName.substring(0, 6)}...</span>
+                                    <span className="text-slate-400 text-[10px]">獲利</span>
                                     <span className="text-red-500 font-bold text-xs">+{tick.roi}%</span>
                                 </span>
-                                {/* 分隔線 */}
-                                <span className="ml-8 text-slate-300">|</span>
+                                
+                                {/* 分隔線 (美化用) */}
+                                <span className="ml-8 text-slate-300 select-none">|</span>
                             </div>
                         ))}
                     </div>
+                    
+                    {/* 左側遮罩 (Fade Effect) - 增加質感，讓字從左邊消失時有漸層 */}
+                    <div className="absolute left-0 top-0 bottom-0 w-4 bg-gradient-to-r from-slate-50 to-transparent z-10 pointer-events-none"></div>
+                    {/* 右側遮罩 */}
+                    <div className="absolute right-0 top-0 bottom-0 w-4 bg-gradient-to-l from-slate-50 to-transparent z-10 pointer-events-none"></div>
                 </div>
-            )}            {/* --- 設定區域 Start --- */}
+            )}
+
+           {/* --- 設定區域 Start --- */}
 
             {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}
             <div className="flex gap-2 mb-3">

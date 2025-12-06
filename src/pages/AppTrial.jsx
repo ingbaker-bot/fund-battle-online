@@ -85,6 +85,10 @@ const calculatePureRspRoi = (data, startDay, endDay, rspAmount, rspDay) => {
     return ((finalValue - totalInvested) / totalInvested) * 100;
 };
 
+// ★★★ 請在此處填入您的報名表單連結 ★★★
+
+const APPLY_FORM_URL = "https://reurl.cc/0ador6"; // 範例：您的 Google Form 連結
+
 // ============================================
 // 主元件：AppTrial (體驗版 v11.1)
 // ============================================
@@ -521,15 +525,23 @@ export default function AppTrial() {
                 </div>
             </div>
 
+{/* Row 5: 玩家資訊 + 開始按鈕 (含申請會員引導) */}
             <div className="flex gap-2 mb-4">
-                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm">
+                <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm relative group">
                     <div className="flex items-center gap-1 text-emerald-600">
                         <UserCheck size={12} />
                         <span className="text-[10px] font-bold">遊客</span>
                     </div>
                     <div className="flex flex-col items-center w-full">
-			<span className="text-[9px] text-cyan-600 bg-cyan-50 px-1.5 rounded border border-cyan-200 mb-0.5">FUND SANDBOX</span>
-   			 <span className={`text-sm font-bold font-mono ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span>
+                        <span className="text-[10px] text-slate-600 font-mono truncate w-full text-center px-1">Guest</span>
+                        <a 
+                            href={APPLY_FORM_URL} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[9px] text-amber-500 font-bold underline decoration-amber-300 hover:text-amber-600 cursor-pointer animate-pulse"
+                        >
+                            申請正式帳號
+                        </a>
                     </div>
                 </div>
 
@@ -720,17 +732,19 @@ export default function AppTrial() {
             </div>
         )}
         
-        {gameStatus === 'ended' && (
+{gameStatus === 'ended' && (
             <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300 backdrop-blur-md">
                 <Crown size={64} className="text-cyan-500 mb-4 animate-bounce" />
                 <h2 className="text-3xl font-bold text-slate-800 mb-2 tracking-tight">體驗完成</h2>
-                <p className="text-cyan-600/80 text-sm mb-8 font-mono">{currentFundName}</p>
-                <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-8">
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-lg">
+                <p className="text-cyan-600/80 text-sm mb-6 font-mono">{currentFundName}</p>
+                
+                {/* 績效顯示區塊 (保持不變) */}
+                <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-4">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">你的 ROI</div>
                         <div className={`text-xl font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</div>
                     </div>
-                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-lg">
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-lg">
                         <div className="text-xs text-slate-400 mb-1 uppercase tracking-wider font-bold">大盤 (Buy&Hold)</div>
                         <div className={`text-xl font-mono font-bold ${benchmarkRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{benchmarkRoi > 0 ? '+' : ''}{benchmarkRoi.toFixed(2)}%</div>
                     </div>
@@ -741,20 +755,37 @@ export default function AppTrial() {
                     <span className={`font-mono font-bold text-lg ${pureRspRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{pureRspRoi > 0 ? '+' : ''}{pureRspRoi.toFixed(2)}%</span>
                 </div>
 
+                {/* ★★★ 導購/轉化按鈕區塊 ★★★ */}
                 <div className="flex flex-col w-full max-w-xs gap-3">
-                    <button onClick={() => window.location.href = '/ranked'} className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white py-4 rounded-xl font-bold shadow-lg shadow-cyan-900/20 active:scale-[0.98] transition-all mb-2 animate-pulse">
-                        <LogIn size={18} /> 登入保存戰績
+                    {/* 1. 最優先：申請會員 (導向 Google Form) */}
+                    <a 
+                        href={APPLY_FORM_URL} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-amber-200 active:scale-[0.98] transition-all animate-pulse"
+                    >
+                        <Crown size={20} fill="currentColor" /> 申請全功能會員
+                        <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-normal ml-1">解鎖 S1 賽季</span>
+                    </a>
+
+                    {/* 2. 次要：已有帳號去登入 */}
+                    <button onClick={() => window.location.href = '/ranked'} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold transition-all shadow-md">
+                        <LogIn size={18} /> 會員登入
                     </button>
-                    <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 py-4 rounded-xl font-bold border border-slate-300 transition-colors">
-                        <RotateCcw size={18} /> 再玩一次
-                    </button>
-                    <button onClick={executeExit} className="text-slate-400 text-xs mt-4 hover:text-slate-600 transition-colors">
-                        離開
-                    </button>
+
+                    {/* 3. 其他操作 */}
+                    <div className="flex gap-3 mt-1">
+                        <button onClick={executeReset} className="flex-1 flex items-center justify-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl font-bold border border-slate-300 transition-colors text-sm">
+                            <RotateCcw size={16} /> 再試一次
+                        </button>
+                        <button onClick={executeExit} className="flex-1 text-slate-400 hover:text-slate-600 transition-colors text-sm border border-transparent hover:border-slate-200 rounded-xl">
+                            離開
+                        </button>
+                    </div>
                 </div>
             </div>
         )}
-        
+
         {confirmModal.show && (
             <div className="absolute inset-0 bg-slate-900/50 z-[60] flex items-center justify-center p-6 backdrop-blur-sm animate-in fade-in duration-200">
                 <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-2xl w-full max-w-xs text-center">

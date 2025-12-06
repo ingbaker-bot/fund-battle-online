@@ -626,14 +626,51 @@ if (gameStatus === 'setup') {
                 )}
             </div>
 
-            {/* Row 3: 挑戰項目：mb-2 改為 mb-1, mb-4 改為 mb-3 */}
+{/* Row 3: 挑戰項目 */}
             <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
             <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                <button onClick={() => setDataSourceType('random')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${dataSourceType === 'random' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>🎲 隨機</button>
-                <button onClick={() => setDataSourceType('real')} className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${dataSourceType === 'real' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-800'}`}>📉 真實</button>
+                <button 
+                    onClick={() => setDataSourceType('random')} 
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                        dataSourceType === 'random' 
+                        ? 'bg-violet-500 text-white shadow-md shadow-violet-200 ring-1 ring-violet-400' 
+                        : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'
+                    }`}
+                >
+                    <span className={dataSourceType === 'random' ? 'animate-pulse' : ''}>🎲</span> 隨機
+                </button>
+                
+                <button 
+                    onClick={() => setDataSourceType('real')} 
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                        dataSourceType === 'real' 
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-200 ring-1 ring-blue-500' 
+                        : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'
+                    }`}
+                >
+                    <span className={dataSourceType === 'real' ? 'animate-bounce' : ''}>📉</span> 真實
+                </button>
             </div>
-            {dataSourceType === 'real' && (<div className="mb-3 animate-in fade-in slide-in-from-top-2"><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm"><Database size={18} className="text-blue-500" /><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-transparent text-slate-700 outline-none text-xs font-bold">{FUNDS_LIBRARY.map(fund => (<option key={fund.id} value={fund.id} className="bg-white">{fund.name.replace('🔒 [進階] ', '')}</option>))}</select></div></div>)}
             
+            {/* 真實數據下拉選單 (配色微調以配合藍色主題) */}
+            {dataSourceType === 'real' && (
+                <div className="mb-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2 bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 shadow-sm">
+                        <Database size={18} className="text-blue-600" />
+                        <select 
+                            value={selectedFundId} 
+                            onChange={(e) => setSelectedFundId(e.target.value)} 
+                            className="w-full bg-transparent text-blue-900 outline-none text-xs font-bold"
+                        >
+                            {FUNDS_LIBRARY.map(fund => (
+                                <option key={fund.id} value={fund.id} className="bg-white text-slate-700">
+                                    {fund.name.replace('🔒 [進階] ', '')}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            )}            
             {/* Row 4: 河流圖參數：mb-6 改為 mb-4 */}
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
                 <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>

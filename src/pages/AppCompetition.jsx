@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart } from 'recharts';
 // V2025v1.2: 引入完整 Icon Set
-import { Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Trophy, Globe, User, Share2, Mail, MessageCircle, Monitor, Sword, Crown, CalendarClock, History, Settings2 } from 'lucide-react';
-
+import { 
+  Play, Pause, TrendingUp, TrendingDown, Activity, RotateCcw, AlertCircle, X, Check, MousePointer2, Flag, 
+  Download, Copy, Maximize, LogOut, Power, Lock, Database, UserCheck, Loader2, Waves, Trophy, Globe, User, 
+  Share2, Mail, MessageCircle, Monitor, Sword, Crown, CalendarClock, History, Settings2, Info 
+} from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 

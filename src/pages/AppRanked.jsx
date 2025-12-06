@@ -1,4 +1,4 @@
-// 2025v11.7 - 單機版 (首頁優化畫面B)
+// 2025v11.7 - 單機版 (首頁優化畫面)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
 import { 
@@ -580,9 +580,21 @@ if (gameStatus === 'setup') {
                     與其他玩家一較高下，爭奪榮耀！
                 </p>
             </div> 
-
-            {/* 跑馬燈：mb-6 改為 mb-4 */}
-            {tickerData.length > 0 && (<div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-1.5"><div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">{tickerData.map((tick, idx) => (<span key={idx} className="flex items-center gap-1"><span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 在 {tick.fundName.substring(0,6)}.. 獲利 <span className="text-red-500 font-bold">+{tick.roi}%</span></span>))}</div></div>)}
+{/* 跑馬燈區域 */}
+            {tickerData.length > 0 && (
+                <div className="mb-4 overflow-hidden bg-slate-50 border border-slate-200 rounded py-1.5 relative">
+                    {/* 加入 animate-marquee class，配合剛剛加入 CSS 檔案的設定 */}
+                    <div className="whitespace-nowrap animate-marquee text-[10px] text-slate-600 px-2 flex gap-8">
+                        {tickerData.map((tick, idx) => (
+                            <span key={idx} className="flex items-center gap-1 shrink-0">
+                                <span className="text-emerald-600 font-bold">★ {tick.displayName}</span> 
+                                在 {tick.fundName.substring(0,6)}.. 獲利 
+                                <span className="text-red-500 font-bold">+{tick.roi}%</span>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
             
             {/* --- 設定區域 Start --- */}
 
@@ -705,7 +717,7 @@ if (gameStatus === 'setup') {
                 </button>
             </div>
             
-            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 Compact UI</span></div>
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 NBS-奈AI團隊</span></div>
         </div>
       </div>
     );

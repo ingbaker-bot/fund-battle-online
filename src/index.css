@@ -7,3 +7,25 @@ body {
   -webkit-user-select: none;
   background-color: #020617;
 }
+
+/* 定義跑馬燈動畫軌跡：從右邊畫面外(100%) 移動到 左邊畫面外(-100%) */
+@keyframes marquee {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* 定義 class 的執行方式 */
+.animate-marquee {
+  display: inline-block;
+  /* 20s 代表跑一趟要 20秒，秒數越小跑越快 */
+  animation: marquee 25s linear infinite;
+  /* 加上這行，確保內容不會換行 */
+  white-space: nowrap; 
+  /* 讓寬度撐開，確保可以從最右跑到最左 */
+  min-width: 100%; 
+}
+
+/* 加分功能：滑鼠移上去時暫停，讓玩家可以看清楚內容 */
+.animate-marquee:hover {
+  animation-play-state: paused;
+}

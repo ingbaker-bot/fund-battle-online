@@ -609,7 +609,7 @@ if (gameStatus === 'setup') {
                         ))}
                     </div>
                 </div>
-            )}            
+            )}
             {/* --- 設定區域 Start --- */}
 
             {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}

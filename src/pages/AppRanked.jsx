@@ -563,7 +563,7 @@ if (gameStatus === 'setup') {
                 <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
-                    <span className="text-[10px] text-slate-500 font-bold tracking-wide">FCF教具專利</span>
+                    <span className="text-[12px] text-slate-500 font-bold tracking-wide">FCF教具專利</span>
                 </div>
             </div>
             
@@ -738,7 +738,7 @@ if (gameStatus === 'setup') {
                 </button>
             </div>
             
-            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[10px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 NBS-奈AI團隊</span></div>
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[12px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 NBS-奈AI團隊</span></div>
         </div>
       </div>
     );

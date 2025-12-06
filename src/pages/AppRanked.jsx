@@ -563,7 +563,7 @@ if (gameStatus === 'setup') {
                 <img src="/logo.jpg" alt="Logo" className="h-9 object-contain rounded-sm shadow-sm" />
                 <div className="flex flex-col">
                     <span className="font-black text-lg text-slate-800 leading-tight">Fund 手遊</span>
-                    <span className="text-[5px] text-slate-500 font-bold tracking-wide">FCF教具專利</span>
+                    <span className="text-[10px] text-slate-500 font-bold tracking-wide">FCF教具專利</span>
                 </div>
             </div>
             

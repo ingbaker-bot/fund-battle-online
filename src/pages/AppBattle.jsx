@@ -10,8 +10,8 @@ import {
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// ★★★ 引用 AI 分析模組 (確保名稱一致) ★★★
-import { generateAIAnalysis } from '../hooks/useAIAnalyst';
+// ★★★ 修正：順著編譯器的意思，我們這裡就用 useAIAnalyst ★★★
+import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 // ============================================
 // 1. 輔助函式
@@ -29,7 +29,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (AI Enhanced Version)
+// 主元件：AppBattle (Fail-Safe Version)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -42,7 +42,7 @@ export default function AppBattle() {
   const [myPlayer, setMyPlayer] = useState(null);
   const [gameStatus, setGameStatus] = useState('waiting'); 
   
-  // ★★★ 新增：本地交易紀錄 (AI 分析必須) ★★★
+  // 本地交易紀錄 (AI 分析用)
   const [transactions, setTransactions] = useState([]);
 
   // 交易操作 UI
@@ -91,8 +91,6 @@ export default function AppBattle() {
     const loadFund = async () => {
       if (battleData && battleData.fundId && fundData.length === 0) {
         try {
-          // 假設 battleData 有 fundUrl，如果沒有則需實作取得 URL 的邏輯
-          // 這裡為了演示，若無 url 則不載入
           const fundUrl = battleData.fundUrl || '/data/fund_data_1.json'; 
           if (fundUrl) {
               const res = await fetch(fundUrl);
@@ -112,20 +110,17 @@ export default function AppBattle() {
     loadFund();
   }, [battleData?.fundId, battleData?.fundUrl, fundData.length]); 
 
-  // ★★★ 4. 結算時觸發 AI 分析 ★★★
+  // 4. 結算觸發 AI 分析
   useEffect(() => {
-      // 當遊戲狀態變為 ended，且有數據、有玩家資料、還沒產生報告時執行
       if (gameStatus === 'ended' && fundData.length > 0 && myPlayer && !aiReport) {
-          
           const currentIdx = battleData.currentDay;
           const battleHistory = fundData.slice(0, currentIdx + 1);
-          // 多人對戰初始資金固定 1,000,000
           const finalAssets = myPlayer.cash + (myPlayer.units * fundData[currentIdx].nav);
           
-          // 呼叫外部 Hook 進行分析
-          const report = generateAIAnalysis(
-              transactions,   // 傳入我們收集的交易紀錄
-              battleHistory,  // 傳入歷史走勢
+          // ★ 這裡呼叫 useAIAnalyst (就是之前的 generateAIAnalysis)
+          const report = useAIAnalyst(
+              transactions,   
+              battleHistory,  
               1000000,        
               finalAssets     
           );
@@ -158,7 +153,7 @@ export default function AppBattle() {
     return { data: slice, domain: [Math.floor(min - padding), Math.ceil(max + padding)] };
   }, [fundData, battleData?.currentDay, showMA20, showMA60, chartPeriod]);
 
-  // 6. 交易執行 (增加 transactions 紀錄)
+  // 6. 交易執行
   const executeTrade = async (type) => {
     if (!myPlayer || !battleData || gameStatus !== 'playing') return;
     const currentNav = fundData[battleData.currentDay]?.nav;
@@ -177,7 +172,6 @@ export default function AppBattle() {
         newUnits += buyUnits;
         newCash -= amount;
         
-        // ★ 紀錄交易 (給 AI 分析用)
         setTransactions(prev => [...prev, {
             day: battleData.currentDay,
             type: 'BUY',
@@ -191,13 +185,11 @@ export default function AppBattle() {
         let sellUnits = amount / currentNav;
         if (sellUnits > newUnits) sellUnits = newUnits; 
         const sellAmount = sellUnits * currentNav;
-        // 計算損益 (賣出金額 - 成本)
         const pnl = sellAmount - (sellUnits * newAvgCost);
         newCash += sellAmount;
         newUnits -= sellUnits;
         if (newUnits < 0.0001) { newUnits = 0; newAvgCost = 0; }
 
-        // ★ 紀錄交易 (給 AI 分析用)
         setTransactions(prev => [...prev, {
             day: battleData.currentDay,
             type: 'SELL',
@@ -209,7 +201,6 @@ export default function AppBattle() {
         }]);
     }
 
-    // 更新 Firestore
     const playerIndex = battleData.players.findIndex(p => p.uid === user.uid);
     if (playerIndex === -1) return;
 
@@ -246,7 +237,7 @@ export default function AppBattle() {
   return (
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
       
-      {/* ★★★ 結算畫面 (AI 分析層) ★★★ */}
+      {/* 結算畫面 (AI 分析層) */}
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
@@ -310,7 +301,7 @@ export default function AppBattle() {
           </div>
       )}
 
-      {/* 遊戲進行中畫面 (保持不變) */}
+      {/* 遊戲進行中畫面 */}
       <header className="bg-white border-b border-slate-200 px-4 py-2 flex justify-between items-center shrink-0 shadow-sm z-20">
         <div className="flex items-center gap-3">
             <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><Sword size={18} /></div>

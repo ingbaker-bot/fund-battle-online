@@ -1,5 +1,5 @@
 // ==========================================
-// 檔案路徑：src/hooks/useAIAnalyst.js
+// 檔案位置：src/hooks/useAIAnalyst.js
 // ==========================================
 
 const calculateMA = (data, days, idx) => {
@@ -22,12 +22,12 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 核心導出函數：名稱為 generateAIAnalysis ★★★
-export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
+// 核心分析邏輯
+const analyzeLogic = (transactions, historyData, initialCapital, finalAssets) => {
     
-    // 防呆：無數據時回傳預設值
+    // 防呆
     if (!historyData || historyData.length === 0) {
-        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: {} };
+        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
     }
 
     const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
@@ -40,15 +40,12 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     let totalLoss = 0;
     let lossCount = 0;
 
-    // 確保交易紀錄為陣列
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
-    
-    // 篩選賣出訂單來計算勝率
     const sellOrders = safeTransactions.filter(t => t.type === 'SELL');
     
     sellOrders.forEach(t => {
-        // 支援 pnl 欄位 (AppBattle) 或計算邏輯
-        const pnl = t.pnl !== undefined ? t.pnl : (t.amount - (t.units * t.avgCost)); 
+        // 兼容 pnl 欄位
+        const pnl = t.pnl !== undefined ? t.pnl : (t.amount - (t.units * (t.avgCost || 0))); 
         if (pnl > 0) {
             winCount++;
             totalProfit += pnl;
@@ -64,7 +61,6 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     const avgLoss = lossCount > 0 ? (totalLoss / lossCount / initialCapital * 100).toFixed(1) : 0;
     const maxDrawdown = calculateMaxDrawdown(historyData); 
 
-    // 市場趨勢判斷
     const lastIdx = historyData.length - 1;
     const ma60_end = calculateMA(historyData, 60, lastIdx) || endNav;
     const ma60_start = calculateMA(historyData, 60, Math.min(60, lastIdx)) || startNav;
@@ -73,7 +69,6 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (endNav > ma60_end && ma60_end > ma60_start * 1.02) marketType = "多頭趨勢";
     else if (endNav < ma60_end && ma60_end < ma60_start * 0.98) marketType = "空頭修正";
 
-    // 評分邏輯
     let score = 60; 
     if (parseFloat(playerRoi) > parseFloat(marketRoi)) score += 20; 
     if (parseFloat(playerRoi) > 0) score += 10; 
@@ -83,7 +78,6 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (score > 99) score = 99;
     if (score < 10) score = 10;
 
-    // 評語生成
     let title = "股市見習生";
     let summary = "";
 
@@ -115,3 +109,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
         }
     };
 };
+
+// ★★★ 雙重導出：同時提供兩個名稱，確保萬無一失 ★★★
+export const generateAIAnalysis = analyzeLogic;
+export const useAIAnalyst = analyzeLogic; // 這一行是為了解決您當前的 Build Error

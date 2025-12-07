@@ -1,3 +1,4 @@
+// src/components/AIAnalysisModal.jsx
 import React from 'react';
 import { 
   X, Sparkles, Trophy, TrendingUp, TrendingDown, 
@@ -5,7 +6,6 @@ import {
 } from 'lucide-react';
 
 const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) => {
-  // 如果沒有打開，就不渲染任何東西
   if (!isOpen) return null;
 
   return (

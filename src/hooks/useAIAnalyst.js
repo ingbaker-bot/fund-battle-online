@@ -1,84 +1,125 @@
-// src/hooks/useAIAnalyst.js
-import { useState } from 'react';
+// ==========================================
+// AI 投資分析核心模組 (純邏輯層)
+// ==========================================
 
-export const useAIAnalyst = () => {
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState(null);
-  const [error, setError] = useState(null);
+// 輔助：計算移動平均線 (MA)
+const calculateMA = (data, days, idx) => {
+    if (idx < days - 1) return null;
+    let sum = 0;
+    for (let i = 0; i < days; i++) {
+        sum += data[idx - i].nav;
+    }
+    return sum / days;
+};
 
-  const analyzeGame = async (gameData) => {
-    setIsAnalyzing(true);
-    setError(null);
-    setAnalysisResult(null);
-    setShowModal(true);
+// 輔助：計算最大回撤 (Max Drawdown)
+const calculateMaxDrawdown = (data) => {
+    let peak = -Infinity;
+    let maxDrawdown = 0;
+    
+    for (const point of data) {
+        if (point.nav > peak) peak = point.nav;
+        const drawdown = (peak - point.nav) / peak;
+        if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+    }
+    return (maxDrawdown * 100).toFixed(2);
+};
 
-    // ★★★ 關鍵修正：模擬 AI 回覆 (僅在本地端生效) ★★★
-    // 這樣您用 npm run dev 也能看到漂亮的結果，不用擔心後端沒啟動
-    if (window.location.hostname === 'localhost') {
-        console.log("偵測到本地開發環境，啟動模擬 AI...");
-        setTimeout(() => {
-            setAnalysisResult(`(這是本地模擬的 AI 分析結果)
-            
-            嘿！${gameData.nickname || '操盤手'}，我看了一下你的操作：
-            
-            1. **風格點評**：你簡直是「多頭市場的幸運兒」，敢在河流圖下緣梭哈，這心臟不是普通的大啊！
-            2. **關鍵操作**：最精彩的是你在 D+120 那波大跌沒有被洗出場，反而加碼攤平，這操作給你 80 分。
-            3. **建議**：下次別這麼衝動 All In，留點現金在手上，不然遇到黑天鵝你就畢業了。
-            4. **操作智商**：85 分。
-            
-            (若要測試真實 AI，請將專案部署到 Vercel)`);
-            setIsAnalyzing(false);
-        }, 2000); // 假裝思考 2 秒
-        return;
+// ★★★ 核心導出函數：生成 AI 分析報告 ★★★
+// 這就是 AppBattle.jsx 正在尋找的函數
+export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
+    
+    // 1. 基礎績效計算
+    const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
+    
+    const startNav = historyData[0].nav;
+    const endNav = historyData[historyData.length - 1].nav;
+    const marketRoi = ((endNav - startNav) / startNav * 100).toFixed(2);
+
+    // 2. 詳細交易統計
+    let winCount = 0;
+    let totalProfit = 0;
+    let totalLoss = 0;
+    let lossCount = 0;
+
+    // 簡單過濾出已實現損益 (根據 AppBattle 的 transactions 結構)
+    // 注意：AppBattle 的 transaction 結構中 SELL 才有 pnl
+    const sellOrders = transactions.filter(t => t.type === 'SELL');
+    
+    sellOrders.forEach(t => {
+        if (t.pnl > 0) {
+            winCount++;
+            totalProfit += t.pnl;
+        } else {
+            lossCount++;
+            totalLoss += Math.abs(t.pnl);
+        }
+    });
+
+    const totalTrades = sellOrders.length;
+    const winRate = totalTrades > 0 ? ((winCount / totalTrades) * 100).toFixed(0) : 0;
+    const avgProfit = winCount > 0 ? (totalProfit / winCount / initialCapital * 100).toFixed(1) : 0;
+    const avgLoss = lossCount > 0 ? (totalLoss / lossCount / initialCapital * 100).toFixed(1) : 0;
+    const maxDrawdown = calculateMaxDrawdown(historyData); // 這裡是算大盤回撤，若要算個人資產回撤需更多數據
+
+    // 3. 市場趨勢判斷 (Market Context)
+    // 比較季線斜率與位置
+    const lastIdx = historyData.length - 1;
+    const ma60_end = calculateMA(historyData, 60, lastIdx) || endNav;
+    const ma60_start = calculateMA(historyData, 60, Math.min(60, lastIdx)) || startNav;
+    
+    let marketType = "盤整震盪";
+    if (endNav > ma60_end && ma60_end > ma60_start * 1.02) marketType = "多頭趨勢";
+    else if (endNav < ma60_end && ma60_end < ma60_start * 0.98) marketType = "空頭修正";
+
+    // 4. AI 評分邏輯 (0-100分)
+    let score = 60; // 基礎分
+    
+    // 績效加分
+    if (parseFloat(playerRoi) > parseFloat(marketRoi)) score += 20; // 贏大盤
+    if (parseFloat(playerRoi) > 0) score += 10; // 正報酬
+    
+    // 風險扣分
+    if (parseFloat(playerRoi) < -10) score -= 10;
+    if (parseFloat(playerRoi) < -20) score -= 20;
+
+    // 交易加分 (鼓勵有策略的交易)
+    if (totalTrades > 0 && parseFloat(winRate) > 50) score += 10;
+
+    // 分數邊界
+    if (score > 99) score = 99;
+    if (score < 10) score = 10;
+
+    // 5. 生成評語與稱號
+    let title = "股市見習生";
+    let summary = "";
+
+    if (score >= 90) {
+        title = "傳奇操盤手";
+        summary = `太驚人了！在${marketType}中，您不僅擊敗了大盤，還展現了極高的勝率 (${winRate}%)。您的進出場點位精準，充分利用了複利效應。建議您可以嘗試加大部位，挑戰更高的獲利目標。`;
+    } else if (score >= 80) {
+        title = "華爾街菁英";
+        summary = `表現優異！您的報酬率 (${playerRoi}%) 相當亮眼。您在趨勢判斷上已有相當火侯，只需注意在${marketType}時的風險控管，避免單筆較大的虧損，就能更上一層樓。`;
+    } else if (score >= 60) {
+        title = "穩健投資者";
+        summary = `表現中規中矩。在${marketType}的環境下，您守住了本金並獲得了合理的報酬。數據顯示您的平均獲利為 ${avgProfit}%，建議可以透過「移動停利」的方式讓獲利奔跑，提高賺賠比。`;
+    } else {
+        title = "韭菜練習生";
+        summary = `這是一次寶貴的經驗。在${marketType}中受傷是成長的必經之路。您的勝率為 ${winRate}%，顯示進場策略可能需要調整。建議多觀察「季線」方向，盡量避免在空頭排列時逆勢做多。`;
     }
 
-    // --- 以下是真實環境 (Vercel) 會執行的程式碼 ---
-    try {
-      const apiUrl = '/api/analyze-game'; 
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fundName: gameData.fundName,
-          roi: gameData.roi,
-          transactions: gameData.transactions,
-          nickname: gameData.nickname || '玩家'
-        }),
-      });
-
-      // 處理非 200 的狀態 (例如 API 壞掉或找不到)
-      if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`API Error: ${response.status} - ${errorText.substring(0, 50)}...`);
-      }
-
-      const data = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.error || 'AI 無法回應');
-      }
-
-      setAnalysisResult(data.analysis);
-
-    } catch (err) {
-      console.error("AI Analysis Failed:", err);
-      // 顯示較為友善的錯誤訊息
-      setError("連線發生問題，請確認網路或稍後再試。\n(若在本地測試，請依賴上方的模擬模式)");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const closeModal = () => setShowModal(false);
-
-  return {
-    analyzeGame,
-    isAnalyzing,
-    showModal,
-    closeModal,
-    analysisResult,
-    error
-  };
+    // 6. 回傳標準化格式
+    return {
+        score,
+        title,
+        marketRoi,
+        playerRoi,
+        summary,
+        details: {
+            winRate,
+            maxDrawdown, // 這裡暫時回傳大盤回撤，若有個人資產曲線可改為個人
+            avgProfit: `+${avgProfit}`,
+            avgLoss: `-${avgLoss}`
+        }
+    };
 };

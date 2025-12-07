@@ -8,7 +8,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
   // 1. 如果沒開，不渲染
   if (!isOpen) return null;
 
-  // 2. 安全檢查：確保 analysisResult 裡面的 details 存在，避免讀取錯誤
+  // 2. 安全檢查：防止 details 為空導致錯誤
   const safeDetails = analysisResult?.details || {
       winRate: 0,
       maxDrawdown: 0,
@@ -67,7 +67,6 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
         )}
 
         {/* ---------------- 狀態 3: 顯示結果 ---------------- */}
-        {/* 關鍵修正：這裡絕對不能寫 {analysisResult}，必須取用屬性 */}
         {!isLoading && !error && analysisResult && (
           <div className="flex flex-col h-full max-h-[85vh] overflow-y-auto">
             
@@ -85,14 +84,12 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                 </div>
                 
                 <div className="flex items-baseline justify-center gap-1 mb-1">
-                  {/* 只顯示數字 */}
                   <span className="text-6xl font-black tracking-tighter drop-shadow-xl">
                     {analysisResult.score || 0}
                   </span>
                   <span className="text-xl opacity-80 font-bold">分</span>
                 </div>
                 
-                {/* 只顯示標題文字 */}
                 <h2 className="text-lg font-bold text-white/90">
                   {analysisResult.title || '分析完成'}
                 </h2>
@@ -138,14 +135,13 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
               </div>
             </div>
 
-            {/* AI 評語區 */}
+            {/* AI 評語區 (安全顯示) */}
             <div className="p-6 bg-slate-50 flex-1">
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                   <Lightbulb size={18} className="text-amber-500 fill-current" />
                   策略建議
                 </h4>
-                {/* 確保這裡是字串，不是物件 */}
                 <p className="text-sm text-slate-600 leading-relaxed text-justify">
                   {typeof analysisResult.summary === 'string' ? analysisResult.summary : '分析資料格式有誤'}
                 </p>

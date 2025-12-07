@@ -11,8 +11,8 @@ import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
 import { signInAnonymously, updateProfile } from 'firebase/auth'; 
 import { db, auth } from '../config/firebase';
 
-// ★★★ 引用 AI 分析模組 (請確認 useAIAnalyst.js 已更新) ★★★
-import { generateAIAnalysis } from '../hooks/useAIAnalyst';
+// ★★★ 修正引用：對應 useAIAnalyst.js 的導出 ★★★
+import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 // ============================================
 // 1. 輔助函式
@@ -29,7 +29,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (No-Redirect Debug Version)
+// 主元件：AppBattle (Final Safe Version)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -45,7 +45,7 @@ export default function AppBattle() {
   // 訪客加入狀態
   const [nickName, setNickName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(''); // 錯誤訊息
+  const [errorMsg, setErrorMsg] = useState(''); 
 
   // 本地交易紀錄 (AI 分析用)
   const [transactions, setTransactions] = useState([]);
@@ -58,19 +58,14 @@ export default function AppBattle() {
   const [chartPeriod, setChartPeriod] = useState(120); 
   const [aiReport, setAiReport] = useState(null);
 
-  // 1. 監聽登入 & 自動匿名登入
+  // 1. 自動匿名登入 (解決訪客讀取權限問題)
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       if (u) {
         setUser(u);
       } else {
-        // 如果沒登入，自動執行匿名登入
-        try {
-            await signInAnonymously(auth);
-        } catch (err) {
-            console.error("Auth Error:", err);
-            setErrorMsg("自動登入失敗，請檢查網路或 Firebase 設定");
-        }
+        // 沒登入就自動登入
+        try { await signInAnonymously(auth); } catch (err) { console.error(err); }
       }
     });
     return () => unsubscribe();
@@ -78,13 +73,8 @@ export default function AppBattle() {
 
   // 2. 監聽戰鬥室數據
   useEffect(() => {
-    if (!battleId) {
-        setErrorMsg("網址缺少戰鬥 ID (URL Error)");
-        return;
-    }
-    
-    // 等待 User 準備好
-    if (!user) return;
+    if (!battleId) { setErrorMsg("網址缺少戰鬥 ID"); return; }
+    if (!user) return; // 等待自動登入完成
 
     const battleRef = doc(db, 'battles', battleId);
     const unsub = onSnapshot(battleRef, (docSnap) => {
@@ -98,12 +88,11 @@ export default function AppBattle() {
           setMyPlayer(me || null); 
         }
       } else {
-        // ★★★ 修正：不跳轉，顯示錯誤 ★★★
-        setErrorMsg(`找不到戰鬥室 (${battleId})，可能已結束或 ID 錯誤。`);
+        setErrorMsg("找不到此戰鬥室，可能已結束");
       }
     }, (err) => {
-        console.error("Snapshot Error:", err);
-        setErrorMsg("無法讀取戰局資料 (權限不足或連線錯誤)");
+        console.error("Read Error:", err);
+        setErrorMsg("無法讀取戰局 (權限或網路錯誤)");
     });
     return () => unsub();
   }, [battleId, user]);
@@ -125,8 +114,8 @@ export default function AppBattle() {
               setFundData(processed);
           }
         } catch (err) {
-          console.error("Fund Load Error:", err);
-          setErrorMsg("基金數據下載失敗，請檢查網路");
+          console.error("基金載入失敗", err);
+          setErrorMsg("基金數據下載失敗");
         }
       }
     };
@@ -140,7 +129,8 @@ export default function AppBattle() {
           const battleHistory = fundData.slice(0, currentIdx + 1);
           const finalAssets = myPlayer.cash + (myPlayer.units * fundData[currentIdx].nav);
           
-          const report = generateAIAnalysis(
+          // ★★★ 呼叫雙向導出的函數 ★★★
+          const report = useAIAnalyst(
               transactions,   
               battleHistory,  
               1000000,        
@@ -172,7 +162,7 @@ export default function AppBattle() {
     return { data: slice, domain: [Math.floor(min - padding), Math.ceil(max + padding)] };
   }, [fundData, battleData?.currentDay, showMA20, showMA60, chartPeriod]);
 
-  // --- 動作：訪客加入遊戲 ---
+  // 動作：加入戰局
   const handleJoinBattle = async () => {
       if (!nickName.trim()) return alert("請輸入暱稱");
       setIsJoining(true);
@@ -198,7 +188,7 @@ export default function AppBattle() {
       }
   };
 
-  // --- 動作：執行交易 ---
+  // 動作：交易
   const executeTrade = async (type) => {
     if (!myPlayer || !battleData || gameStatus !== 'playing') return;
     const currentNav = fundData[battleData.currentDay]?.nav;
@@ -247,24 +237,22 @@ export default function AppBattle() {
       }
   };
 
-  // === 畫面渲染邏輯 (含錯誤處理) ===
+  // === 畫面渲染 ===
 
-  // 1. 錯誤顯示頁面 (如果發生錯誤，停在這裡，不要跳回首頁)
+  // 1. 錯誤顯示
   if (errorMsg) {
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-4 p-6 text-center">
               <AlertTriangle size={48} className="text-amber-500 mb-2" />
-              <h2 className="text-xl font-bold">發生問題</h2>
+              <h2 className="text-xl font-bold">連線發生問題</h2>
               <p className="text-slate-400 font-mono text-sm bg-slate-800 p-2 rounded">{errorMsg}</p>
               <div className="text-xs text-slate-500 mt-2">ID: {battleId || 'Unknown'}</div>
-              <button onClick={() => navigate('/')} className="px-6 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors mt-4">
-                  返回首頁
-              </button>
+              <button onClick={() => navigate('/')} className="px-6 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors mt-4">返回首頁</button>
           </div>
       );
   }
 
-  // 2. 載入中畫面
+  // 2. 載入中
   if (!battleData || fundData.length === 0) {
       return (
           <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-3">
@@ -309,7 +297,6 @@ export default function AppBattle() {
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
-              {/* AI UI */}
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
                   <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white text-center relative overflow-hidden">
                       <div className="relative z-10"><h2 className="text-lg font-bold opacity-90 flex items-center justify-center gap-2"><BrainCircuit size={20} /> AI 投資診斷室</h2><div className="mt-4 mb-2"><span className="text-6xl font-black tracking-tighter drop-shadow-lg">{aiReport.score}</span><span className="text-xl opacity-80 ml-1">分</span></div><div className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/30">{aiReport.title}</div></div>

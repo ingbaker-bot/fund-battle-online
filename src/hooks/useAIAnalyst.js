@@ -2,6 +2,7 @@
 // 檔案位置：src/hooks/useAIAnalyst.js
 // ==========================================
 
+// 輔助：計算移動平均線 (MA)
 const calculateMA = (data, days, idx) => {
     if (idx < days - 1) return null;
     let sum = 0;
@@ -11,6 +12,7 @@ const calculateMA = (data, days, idx) => {
     return sum / days;
 };
 
+// 輔助：計算最大回撤
 const calculateMaxDrawdown = (data) => {
     let peak = -Infinity;
     let maxDrawdown = 0;
@@ -22,9 +24,10 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 核心導出函數：generateAIAnalysis ★★★
-export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
+// 核心分析邏輯
+const analyzeLogic = (transactions, historyData, initialCapital, finalAssets) => {
     
+    // 防呆：無數據
     if (!historyData || historyData.length === 0) {
         return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
     }
@@ -44,8 +47,13 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     
     sellOrders.forEach(t => {
         const pnl = t.pnl !== undefined ? t.pnl : (t.amount - (t.units * (t.avgCost || 0))); 
-        if (pnl > 0) { winCount++; totalProfit += pnl; } 
-        else { lossCount++; totalLoss += Math.abs(pnl); }
+        if (pnl > 0) {
+            winCount++;
+            totalProfit += pnl;
+        } else {
+            lossCount++;
+            totalLoss += Math.abs(pnl);
+        }
     });
 
     const totalTrades = sellOrders.length;
@@ -54,6 +62,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     const avgLoss = lossCount > 0 ? (totalLoss / lossCount / initialCapital * 100).toFixed(1) : 0;
     const maxDrawdown = calculateMaxDrawdown(historyData); 
 
+    // 市場趨勢判斷
     const lastIdx = historyData.length - 1;
     const ma60_end = calculateMA(historyData, 60, lastIdx) || endNav;
     const ma60_start = calculateMA(historyData, 60, Math.min(60, lastIdx)) || startNav;
@@ -62,6 +71,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (endNav > ma60_end && ma60_end > ma60_start * 1.02) marketType = "多頭趨勢";
     else if (endNav < ma60_end && ma60_end < ma60_start * 0.98) marketType = "空頭修正";
 
+    // 評分邏輯
     let score = 60; 
     if (parseFloat(playerRoi) > parseFloat(marketRoi)) score += 20; 
     if (parseFloat(playerRoi) > 0) score += 10; 
@@ -94,6 +104,16 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
         marketRoi,
         playerRoi,
         summary,
-        details: { winRate, maxDrawdown, avgProfit: `+${avgProfit}`, avgLoss: `-${avgLoss}` }
+        details: {
+            winRate,
+            maxDrawdown,
+            avgProfit: `+${avgProfit}`,
+            avgLoss: `-${avgLoss}`
+        }
     };
 };
+
+// ★★★ 雙重導出 (Dual Export) ★★★
+// 無論 AppBattle 呼叫哪一個名字，這裡都有準備好，絕對不會 Missing export
+export const useAIAnalyst = analyzeLogic;
+export const generateAIAnalysis = analyzeLogic;

@@ -5,13 +5,13 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Users, Sword, Loader2, BrainCircuit, Lightbulb,
-  Award, ArrowUpRight, ArrowDownRight, Trophy, LogIn, UserPlus
+  Award, ArrowUpRight, ArrowDownRight, Trophy, UserPlus
 } from 'lucide-react';
-import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore'; // 增加 arrayUnion
-import { signInAnonymously, updateProfile } from 'firebase/auth'; // 增加登入方法
+import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
+import { signInAnonymously, updateProfile } from 'firebase/auth';
 import { db, auth } from '../config/firebase';
 
-// ★★★ AI 分析模組 ★★★
+// ★★★ 引用 AI 分析模組 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -29,7 +29,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Join Logic + AI Fixed)
+// 主元件：AppBattle (Join Logic Fixed)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -61,10 +61,10 @@ export default function AppBattle() {
   // AI 分析報告
   const [aiReport, setAiReport] = useState(null);
 
-  // 1. 監聽登入狀態 (不再強制踢人，而是等待)
+  // 1. 監聽登入狀態
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u); // 有人就存，沒人就 null，不跳轉
+      setUser(u);
     });
     return () => unsubscribe();
   }, []);
@@ -80,9 +80,9 @@ export default function AppBattle() {
         setGameStatus(data.status); 
 
         // 如果已登入，檢查自己是否在玩家名單中
-        if (user && data.players) {
-          const me = data.players.find(p => p.uid === user.uid);
-          setMyPlayer(me || null); // 沒找到就是 null (代表觀戰或準備加入)
+        if (auth.currentUser && data.players) {
+          const me = data.players.find(p => p.uid === auth.currentUser.uid);
+          setMyPlayer(me || null); 
         }
       } else {
         alert('戰鬥室已關閉或不存在');
@@ -90,11 +90,12 @@ export default function AppBattle() {
       }
     });
     return () => unsub();
-  }, [battleId, user, navigate]);
+  }, [battleId, user, navigate]); // user 變更時會重新檢查 myPlayer
 
   // 3. 載入基金數據
   useEffect(() => {
     const loadFund = async () => {
+      // 只要連上房間且有 Fund ID 就開始載入，不需要等玩家加入
       if (battleData && battleData.fundId && fundData.length === 0) {
         try {
           const fundUrl = battleData.fundUrl || '/data/fund_data_1.json'; 
@@ -160,18 +161,24 @@ export default function AppBattle() {
       if (!nickName.trim()) return alert("請輸入暱稱");
       setIsJoining(true);
       try {
-          // 1. 匿名登入
-          const userCred = await signInAnonymously(auth);
-          await updateProfile(userCred.user, { displayName: nickName });
+          // 1. 如果沒登入，先匿名登入
+          let currentUser = auth.currentUser;
+          if (!currentUser) {
+              const userCred = await signInAnonymously(auth);
+              currentUser = userCred.user;
+          }
+          
+          // 更新暱稱 (Firebase Auth Profile)
+          await updateProfile(currentUser, { displayName: nickName });
           
           // 2. 加入戰局 (寫入 Firestore)
           const newPlayer = {
-              uid: userCred.user.uid,
+              uid: currentUser.uid,
               displayName: nickName,
               cash: 1000000,
               units: 0,
               avgCost: 0,
-              isReady: true // 預設準備好
+              isReady: true
           };
           
           const battleRef = doc(db, 'battles', battleId);
@@ -179,7 +186,7 @@ export default function AppBattle() {
               players: arrayUnion(newPlayer)
           });
           
-          // 狀態會透過 onSnapshot 自動更新，不用手動 setMyPlayer
+          // 加入成功後，useEffect 會監聽到 battleData 更新，自動設定 myPlayer
       } catch (error) {
           console.error("加入失敗", error);
           alert("加入失敗，請重試");
@@ -237,11 +244,17 @@ export default function AppBattle() {
       }
   };
 
-  // === 畫面 1: 載入中 ===
-  if (!battleData) return <div className="h-screen flex items-center justify-center bg-slate-900 text-white"><Loader2 className="animate-spin mr-2"/> 連線中...</div>;
+  // ============================================
+  // ★★★ 關鍵修正：渲染順序 (Render Logic) ★★★
+  // ============================================
 
-  // === 畫面 2: 訪客加入大廳 (如果沒登入 或 不在玩家名單) ===
-  if (!user || !myPlayer) {
+  // 1. 先確認是否連上房間 (Battle Data)
+  if (!battleData) {
+      return <div className="h-screen flex items-center justify-center bg-slate-900 text-white"><Loader2 className="animate-spin mr-2"/> 連線戰場中...</div>;
+  }
+
+  // 2. 再確認是否已加入 (My Player) -> 如果沒有，顯示加入畫面
+  if (!myPlayer) {
       return (
           <div className="h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
               <div className="w-full max-w-sm bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-2xl">
@@ -275,7 +288,12 @@ export default function AppBattle() {
       );
   }
 
-  // === 畫面 3: 遊戲主畫面 (含 AI 結算) ===
+  // 3. 最後確認數據是否載入 (Fund Data)
+  if (fundData.length === 0) {
+      return <div className="h-screen flex items-center justify-center bg-slate-900 text-white"><Loader2 className="animate-spin mr-2"/> 下載基金數據中...</div>;
+  }
+
+  // === 4. 遊戲主畫面 (Game UI) ===
   const currentNav = fundData[battleData.currentDay]?.nav || 0;
   const totalAssets = myPlayer.cash + (myPlayer.units * currentNav);
   const roi = ((totalAssets - 1000000) / 1000000 * 100);
@@ -287,7 +305,7 @@ export default function AppBattle() {
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
-                  {/* AI UI 內容保持不變 */}
+                  {/* AI UI 內容 */}
                   <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white text-center relative overflow-hidden">
                       <div className="relative z-10">
                           <h2 className="text-lg font-bold opacity-90 flex items-center justify-center gap-2"><BrainCircuit size={20} /> AI 投資診斷室</h2>
@@ -296,12 +314,35 @@ export default function AppBattle() {
                       </div>
                       <div className="absolute -bottom-10 -right-10 opacity-10"><Trophy size={150} /></div>
                   </div>
+                  
+                  <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                      <div className="p-4 text-center">
+                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><Award size={12}/> 勝率</div>
+                          <div className="text-lg font-bold text-slate-700">{aiReport.details.winRate}%</div>
+                      </div>
+                      <div className="p-4 text-center">
+                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><TrendingDown size={12}/> 最大回撤</div>
+                          <div className="text-lg font-bold text-green-600">{aiReport.details.maxDrawdown}%</div>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                      <div className="p-4 text-center">
+                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><ArrowUpRight size={12}/> 平均獲利</div>
+                          <div className="text-lg font-bold text-red-500">{aiReport.details.avgProfit}%</div>
+                      </div>
+                      <div className="p-4 text-center">
+                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><ArrowDownRight size={12}/> 平均虧損</div>
+                          <div className="text-lg font-bold text-green-600">{aiReport.details.avgLoss}%</div>
+                      </div>
+                  </div>
+
                   <div className="p-5">
                       <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                           <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Lightbulb size={16} className="text-amber-500"/> 策略建議</h4>
                           <p className="text-xs text-slate-600 leading-relaxed text-justify">{aiReport.summary}</p>
                       </div>
                   </div>
+
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
                       <button onClick={() => navigate('/')} className="flex-1 py-3 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">離開</button>
                   </div>
@@ -309,6 +350,7 @@ export default function AppBattle() {
           </div>
       )}
 
+      {/* 遊戲進行中 UI */}
       <header className="bg-white border-b border-slate-200 px-4 py-2 flex justify-between items-center shrink-0 shadow-sm z-20">
         <div className="flex items-center gap-3">
             <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><Sword size={18} /></div>

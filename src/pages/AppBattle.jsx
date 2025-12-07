@@ -11,7 +11,7 @@ import {
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// ★★★ 請確認此路徑正確，若檔案在 src/services 則需修改 ★★★
+// ★★★ 關鍵修正：這裡必須是用 { generateAIAnalysis }，名稱要跟 useAIAnalyst.js 裡面的一樣 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -30,7 +30,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Fixed Build Version)
+// 主元件：AppBattle
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();

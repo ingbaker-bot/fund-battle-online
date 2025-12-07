@@ -22,10 +22,9 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// 核心分析邏輯
-const analyzeLogic = (transactions, historyData, initialCapital, finalAssets) => {
+// ★★★ 核心導出函數：generateAIAnalysis ★★★
+export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
     
-    // 防呆
     if (!historyData || historyData.length === 0) {
         return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
     }
@@ -44,15 +43,9 @@ const analyzeLogic = (transactions, historyData, initialCapital, finalAssets) =>
     const sellOrders = safeTransactions.filter(t => t.type === 'SELL');
     
     sellOrders.forEach(t => {
-        // 兼容 pnl 欄位
         const pnl = t.pnl !== undefined ? t.pnl : (t.amount - (t.units * (t.avgCost || 0))); 
-        if (pnl > 0) {
-            winCount++;
-            totalProfit += pnl;
-        } else {
-            lossCount++;
-            totalLoss += Math.abs(pnl);
-        }
+        if (pnl > 0) { winCount++; totalProfit += pnl; } 
+        else { lossCount++; totalLoss += Math.abs(pnl); }
     });
 
     const totalTrades = sellOrders.length;
@@ -101,15 +94,6 @@ const analyzeLogic = (transactions, historyData, initialCapital, finalAssets) =>
         marketRoi,
         playerRoi,
         summary,
-        details: {
-            winRate,
-            maxDrawdown,
-            avgProfit: `+${avgProfit}`,
-            avgLoss: `-${avgLoss}`
-        }
+        details: { winRate, maxDrawdown, avgProfit: `+${avgProfit}`, avgLoss: `-${avgLoss}` }
     };
 };
-
-// ★★★ 雙重導出：同時提供兩個名稱，確保萬無一失 ★★★
-export const generateAIAnalysis = analyzeLogic;
-export const useAIAnalyst = analyzeLogic; // 這一行是為了解決您當前的 Build Error

@@ -1,6 +1,7 @@
-// 路徑：src/hooks/useAIAnalyst.js
+// ==========================================
+// 檔案路徑：src/hooks/useAIAnalyst.js
+// ==========================================
 
-// 輔助：計算移動平均線 (MA)
 const calculateMA = (data, days, idx) => {
     if (idx < days - 1) return null;
     let sum = 0;
@@ -10,7 +11,6 @@ const calculateMA = (data, days, idx) => {
     return sum / days;
 };
 
-// 輔助：計算最大回撤 (Max Drawdown)
 const calculateMaxDrawdown = (data) => {
     let peak = -Infinity;
     let maxDrawdown = 0;
@@ -22,12 +22,12 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 重點確認：這裡匯出的名稱是 generateAIAnalysis ★★★
+// ★★★ 核心導出函數：名稱為 generateAIAnalysis ★★★
 export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
     
-    // 防呆
+    // 防呆：無數據時回傳預設值
     if (!historyData || historyData.length === 0) {
-        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
+        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: {} };
     }
 
     const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
@@ -40,16 +40,21 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     let totalLoss = 0;
     let lossCount = 0;
 
+    // 確保交易紀錄為陣列
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
+    
+    // 篩選賣出訂單來計算勝率
     const sellOrders = safeTransactions.filter(t => t.type === 'SELL');
     
     sellOrders.forEach(t => {
-        if (t.pnl > 0) {
+        // 支援 pnl 欄位 (AppBattle) 或計算邏輯
+        const pnl = t.pnl !== undefined ? t.pnl : (t.amount - (t.units * t.avgCost)); 
+        if (pnl > 0) {
             winCount++;
-            totalProfit += t.pnl;
+            totalProfit += pnl;
         } else {
             lossCount++;
-            totalLoss += Math.abs(t.pnl);
+            totalLoss += Math.abs(pnl);
         }
     });
 

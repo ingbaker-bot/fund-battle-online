@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart 
+  Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart 
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Users, Sword, Loader2, BrainCircuit, Lightbulb,
@@ -10,7 +10,7 @@ import {
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// ★★★ 關鍵修正：這裡名稱已改為 generateAIAnalysis，與 useAIAnalyst.js 一致 ★★★
+// ★★★ 關鍵修正：這裡必須是 generateAIAnalysis，與 useAIAnalyst.js 完全一致 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -29,7 +29,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Import Fixed)
+// 主元件：AppBattle (Final Corrected Version)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();

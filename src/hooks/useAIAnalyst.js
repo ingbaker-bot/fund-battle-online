@@ -1,7 +1,6 @@
-// ==========================================
-// 檔案位置：src/hooks/useAIAnalyst.js
-// ==========================================
+// 路徑：src/hooks/useAIAnalyst.js
 
+// 輔助：計算移動平均線 (MA)
 const calculateMA = (data, days, idx) => {
     if (idx < days - 1) return null;
     let sum = 0;
@@ -11,6 +10,7 @@ const calculateMA = (data, days, idx) => {
     return sum / days;
 };
 
+// 輔助：計算最大回撤 (Max Drawdown)
 const calculateMaxDrawdown = (data) => {
     let peak = -Infinity;
     let maxDrawdown = 0;
@@ -22,10 +22,10 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 重點：這裡匯出的名稱是 generateAIAnalysis ★★★
+// ★★★ 重點確認：這裡匯出的名稱是 generateAIAnalysis ★★★
 export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
     
-    // 防呆：如果沒有數據，直接回傳預設值，避免當機
+    // 防呆
     if (!historyData || historyData.length === 0) {
         return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
     }
@@ -78,6 +78,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (score > 99) score = 99;
     if (score < 10) score = 10;
 
+    // 評語生成
     let title = "股市見習生";
     let summary = "";
 

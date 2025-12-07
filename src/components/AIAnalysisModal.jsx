@@ -1,3 +1,4 @@
+// 檔案位置: src/components/AIAnalysisModal.jsx
 import React from 'react';
 import { 
   X, Sparkles, Trophy, TrendingUp, TrendingDown, 
@@ -9,12 +10,16 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
   if (!isOpen) return null;
 
   // 2. 安全檢查：防止 details 為空導致錯誤
-  const safeDetails = analysisResult?.details || {
-      winRate: 0,
-      maxDrawdown: 0,
-      avgProfit: 0,
-      avgLoss: 0
+  // 如果 analysisResult 是字串(舊版單機可能發生)，則轉為預設物件避免崩潰
+  const isStringResult = typeof analysisResult === 'string';
+  
+  const safeDetails = (analysisResult && !isStringResult && analysisResult.details) ? analysisResult.details : {
+      winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0
   };
+
+  const displayScore = (analysisResult && !isStringResult) ? analysisResult.score : 0;
+  const displayTitle = (analysisResult && !isStringResult) ? analysisResult.title : '分析完成';
+  const displaySummary = isStringResult ? analysisResult : (analysisResult?.summary || '無分析資料');
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -27,7 +32,6 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
       {/* 視窗本體 */}
       <div className="relative w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
         
-        {/* 關閉按鈕 */}
         <button 
           onClick={onClose}
           className="absolute top-3 right-3 z-10 p-2 bg-black/10 hover:bg-black/20 rounded-full text-white transition-colors"
@@ -35,38 +39,25 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
           <X size={20} />
         </button>
 
-        {/* ---------------- 狀態 1: 載入中 ---------------- */}
+        {/* 載入中 */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 animate-pulse"></div>
-              <Loader2 size={48} className="text-violet-600 animate-spin relative z-10" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-slate-800">AI 導師正在分析...</h3>
-              <p className="text-sm text-slate-500 mt-2">正在回放您的每一筆交易與決策</p>
-            </div>
+            <Loader2 size={48} className="text-violet-600 animate-spin" />
+            <h3 className="text-xl font-bold text-slate-800">AI 導師正在分析...</h3>
           </div>
         )}
 
-        {/* ---------------- 狀態 2: 發生錯誤 ---------------- */}
+        {/* 錯誤 */}
         {!isLoading && error && (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-              <Activity size={32} className="text-red-500" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-2">分析失敗</h3>
-            <p className="text-sm text-slate-500 mb-6">{typeof error === 'object' ? '發生未預期的錯誤' : error}</p>
-            <button 
-              onClick={onClose}
-              className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold"
-            >
-              關閉
-            </button>
+            <Activity size={32} className="text-red-500 mb-4" />
+            <h3 className="text-lg font-bold text-slate-800">分析失敗</h3>
+            <p className="text-sm text-slate-500 mb-6">{typeof error === 'object' ? '發生未知錯誤' : error}</p>
+            <button onClick={onClose} className="px-6 py-2 bg-slate-100 rounded-lg font-bold">關閉</button>
           </div>
         )}
 
-        {/* ---------------- 狀態 3: 顯示結果 ---------------- */}
+        {/* 結果顯示 */}
         {!isLoading && !error && analysisResult && (
           <div className="flex flex-col h-full max-h-[85vh] overflow-y-auto">
             
@@ -83,77 +74,48 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   AI 投資診斷書
                 </div>
                 
-                <div className="flex items-baseline justify-center gap-1 mb-1">
-                  <span className="text-6xl font-black tracking-tighter drop-shadow-xl">
-                    {analysisResult.score || 0}
-                  </span>
-                  <span className="text-xl opacity-80 font-bold">分</span>
-                </div>
+                {!isStringResult && (
+                  <div className="flex items-baseline justify-center gap-1 mb-1">
+                    <span className="text-6xl font-black tracking-tighter drop-shadow-xl">{displayScore}</span>
+                    <span className="text-xl opacity-80 font-bold">分</span>
+                  </div>
+                )}
                 
-                <h2 className="text-lg font-bold text-white/90">
-                  {analysisResult.title || '分析完成'}
-                </h2>
+                <h2 className="text-lg font-bold text-white/90">{displayTitle}</h2>
               </div>
             </div>
 
-            {/* 數據儀表板 */}
-            <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100 bg-white">
-              <div className="p-4 text-center">
-                <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                  <Target size={12} /> 勝率
+            {/* 數據儀表板 (若是舊版字串格式則隱藏) */}
+            {!isStringResult && (
+              <>
+                <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100 bg-white">
+                  <div className="p-4 text-center">
+                    <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex justify-center gap-1"><Target size={12}/> 勝率</div>
+                    <div className="text-xl font-black text-slate-700">{safeDetails.winRate}%</div>
+                  </div>
+                  <div className="p-4 text-center">
+                    <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex justify-center gap-1"><TrendingDown size={12}/> 最大回撤</div>
+                    <div className="text-xl font-black text-emerald-600">-{safeDetails.maxDrawdown}%</div>
+                  </div>
                 </div>
-                <div className="text-xl font-black text-slate-700">
-                  {safeDetails.winRate}%
-                </div>
-              </div>
-              <div className="p-4 text-center">
-                <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                  <TrendingDown size={12} /> 最大回撤
-                </div>
-                <div className="text-xl font-black text-emerald-600">
-                  -{safeDetails.maxDrawdown}%
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100 bg-white">
-              <div className="p-4 text-center">
-                <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                  <TrendingUp size={12} /> 平均獲利
-                </div>
-                <div className="text-xl font-black text-rose-500">
-                  +{safeDetails.avgProfit}%
-                </div>
-              </div>
-              <div className="p-4 text-center">
-                <div className="text-xs text-slate-400 font-bold uppercase mb-1 flex items-center justify-center gap-1">
-                  <Activity size={12} /> 平均虧損
-                </div>
-                <div className="text-xl font-black text-emerald-600">
-                  -{safeDetails.avgLoss}%
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
-            {/* AI 評語區 (安全顯示) */}
+            {/* AI 評語區 */}
             <div className="p-6 bg-slate-50 flex-1">
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
                 <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                   <Lightbulb size={18} className="text-amber-500 fill-current" />
                   策略建議
                 </h4>
-                <p className="text-sm text-slate-600 leading-relaxed text-justify">
-                  {typeof analysisResult.summary === 'string' ? analysisResult.summary : '分析資料格式有誤'}
+                <p className="text-sm text-slate-600 leading-relaxed text-justify whitespace-pre-line">
+                  {displaySummary}
                 </p>
               </div>
             </div>
 
-            {/* 底部按鈕 */}
             <div className="p-4 bg-white border-t border-slate-100 sticky bottom-0">
-              <button 
-                onClick={onClose}
-                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-all"
-              >
+              <button onClick={onClose} className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg transition-all">
                 收下建議
               </button>
             </div>

@@ -1,8 +1,7 @@
-\// src/hooks/useAIAnalyst.js
 import { useState } from 'react';
 
-// 這是內建的 AI 評語庫，不需要後端也能運作
-const generateLocalAnalysis = (gameData) => {
+// --- 核心分析邏輯 (獨立出來，讓 AppBattle 可以直接 import) ---
+const generateLocalAnalysisData = (gameData) => {
     const { roi, nickname, fundName, transactions } = gameData;
     const winRate = transactions && transactions.length > 0 
         ? Math.round((transactions.filter(t => t.pnl > 0).length / transactions.filter(t => t.type === 'SELL').length) * 100) || 0 
@@ -36,19 +35,27 @@ const generateLocalAnalysis = (gameData) => {
     }
 
     return {
-        success: true,
-        analysis: {
-            title: title,
-            score: score,
-            summary: summary,
-            details: {
-                winRate: winRate, // 勝率
-                maxDrawdown: (Math.random() * 15 + 5).toFixed(1), // 模擬最大回撤
-                avgProfit: (Math.random() * 5 + 2).toFixed(1),    // 模擬平均獲利
-                avgLoss: (Math.random() * 5 + 2).toFixed(1)       // 模擬平均虧損
-            }
+        title: title,
+        score: score,
+        summary: summary,
+        details: {
+            winRate: winRate, // 勝率
+            maxDrawdown: (Math.random() * 15 + 5).toFixed(1), // 模擬最大回撤
+            avgProfit: (Math.random() * 5 + 2).toFixed(1),    // 模擬平均獲利
+            avgLoss: (Math.random() * 5 + 2).toFixed(1)       // 模擬平均虧損
         }
     };
+};
+
+// ★★★ 關鍵修正：將此函數導出，讓 AppBattle 可以 import 使用 ★★★
+export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
+    const roi = initialCapital > 0 ? ((finalAssets - initialCapital) / initialCapital) * 100 : 0;
+    return generateLocalAnalysisData({
+        roi, 
+        nickname: '玩家', 
+        fundName: '本場基金', 
+        transactions: transactions 
+    });
 };
 
 export const useAIAnalyst = () => {
@@ -65,17 +72,11 @@ export const useAIAnalyst = () => {
 
     console.log("正在啟動 AI 分析 (前端模擬模式)...", gameData);
 
-    // 模擬 AI 思考時間 (1.5秒 ~ 2.5秒)，增加真實感
+    // 模擬 AI 思考時間
     setTimeout(() => {
         try {
-            // 直接呼叫本地生成邏輯，不走 API，確保 100% 成功
-            const result = generateLocalAnalysis(gameData);
-            
-            if (result.success) {
-                setAnalysisResult(result.analysis);
-            } else {
-                setError("AI 暫時無法回應，請稍後再試。");
-            }
+            const result = generateLocalAnalysisData(gameData);
+            setAnalysisResult(result);
         } catch (err) {
             console.error("AI Generation Error:", err);
             setError("生成分析報告時發生錯誤。");
@@ -85,24 +86,10 @@ export const useAIAnalyst = () => {
     }, 2000);
   };
 
-  // 生成 AI 分析報告 (給 AppBattle 直接呼叫用)
-  const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
-      // 這裡可以放更複雜的邏輯，目前先簡單回傳結構
-      // 為了配合 AppBattle 的 useEffect 邏輯
-      const roi = ((finalAssets - initialCapital) / initialCapital) * 100;
-      return generateLocalAnalysis({
-          roi, 
-          nickname: '玩家', 
-          fundName: '本場基金', 
-          transactions: transactions 
-      }).analysis;
-  };
-
   const closeModal = () => setShowModal(false);
 
   return {
     analyzeGame,
-    generateAIAnalysis, // 匯出這個函數供 AppBattle 結算時自動調用
     isAnalyzing,
     showModal,
     closeModal,

@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // 移除 useRef
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot 
-} from 'recharts';
+  Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot 
+} from 'recharts'; // 移除 LineChart (改用 ComposedChart)
 import { 
-  TrendingUp, TrendingDown, Activity, MousePointer2, LogOut, X, 
-  Trophy, AlertCircle, Users, Sword, Loader2, BrainCircuit, Target, Lightbulb,
-  Award, Percent, BarChart3, ArrowUpRight, ArrowDownRight
-} from 'lucide-react';
-import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+  TrendingUp, TrendingDown, Activity, X, 
+  Trophy, Users, Sword, Loader2, BrainCircuit, Target, Lightbulb,
+  Award, ArrowUpRight, ArrowDownRight
+} from 'lucide-react'; // 移除 MousePointer2, LogOut, AlertCircle, Percent, BarChart3 (未使用)
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore'; // 移除 getDoc
 import { db, auth } from '../config/firebase';
 
-// ★★★ 引入標準化 AI 分析模組 ★★★
+// 引入標準化 AI 分析模組 (請確認 src/hooks/useAIAnalyst.js 檔案存在)
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -30,7 +30,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (多人對戰 - AI 邏輯統一版)
+// 主元件：AppBattle (Clean Build Version)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -43,7 +43,7 @@ export default function AppBattle() {
   const [myPlayer, setMyPlayer] = useState(null);
   const [gameStatus, setGameStatus] = useState('waiting'); 
   
-  // ★★★ 新增：本地交易紀錄 (為了給 AI 分析使用) ★★★
+  // 本地交易紀錄 (AI 分析用)
   const [transactions, setTransactions] = useState([]);
 
   // 交易操作 UI
@@ -55,7 +55,7 @@ export default function AppBattle() {
   const [showMA60, setShowMA60] = useState(true);
   const [chartPeriod, setChartPeriod] = useState(120); 
 
-  // AI 分析報告狀態
+  // AI 分析報告
   const [aiReport, setAiReport] = useState(null);
 
   // 1. 驗證登入
@@ -66,7 +66,7 @@ export default function AppBattle() {
     return () => unsubscribe();
   }, [navigate]);
 
-  // 2. 監聽戰鬥室數據
+  // 2. 監聽戰鬥室
   useEffect(() => {
     if (!battleId || !user) return;
     const battleRef = doc(db, 'battles', battleId);
@@ -87,7 +87,7 @@ export default function AppBattle() {
     return () => unsub();
   }, [battleId, user, navigate]);
 
-  // 3. 載入基金數據
+  // 3. 載入基金
   useEffect(() => {
     const loadFund = async () => {
       if (battleData && battleData.fundId && fundData.length === 0) {
@@ -109,33 +109,26 @@ export default function AppBattle() {
       }
     };
     loadFund();
-  }, [battleData?.fundId]);
+  }, [battleData?.fundId, battleData?.fundUrl, fundData.length]); // 修正 dependency
 
-  // ★★★ 4. 核心邏輯：結算時呼叫標準 AI 模組 ★★★
+  // 4. 結算觸發 AI 分析
   useEffect(() => {
       if (gameStatus === 'ended' && fundData.length > 0 && myPlayer && !aiReport) {
-          
-          // 準備數據：裁切出從遊戲開始到目前的歷史數據
-          // 假設 battleData.startDay 存在，若無則預設為 0
-          // const gameStartDay = battleData.startDay || 0; 
           const currentIdx = battleData.currentDay;
           const battleHistory = fundData.slice(0, currentIdx + 1);
-          
           const finalAssets = myPlayer.cash + (myPlayer.units * fundData[currentIdx].nav);
           
-          // 呼叫 useAIAnalyst.js 的標準函數
           const report = generateAIAnalysis(
-              transactions,   // 傳入完整的交易紀錄
-              battleHistory,  // 傳入完整的歷史走勢
-              1000000,        // 初始資金 (多人對戰固定 100萬)
-              finalAssets     // 最終資產
+              transactions,   
+              battleHistory,  
+              1000000,        
+              finalAssets     
           );
-
           setAiReport(report);
       }
-  }, [gameStatus, fundData, myPlayer, transactions]);
+  }, [gameStatus, fundData, myPlayer, transactions, battleData?.currentDay, aiReport]);
 
-  // 5. 圖表數據準備
+  // 5. 圖表數據
   const chartDataInfo = useMemo(() => {
     if (!fundData.length || !battleData) return { data: [], domain: [0, 100] };
     
@@ -160,7 +153,7 @@ export default function AppBattle() {
     return { data: slice, domain: [Math.floor(min - padding), Math.ceil(max + padding)] };
   }, [fundData, battleData?.currentDay, showMA20, showMA60, chartPeriod]);
 
-  // 6. 交易執行 (同時寫入 Firestore 與 Local State)
+  // 6. 交易執行
   const executeTrade = async (type) => {
     if (!myPlayer || !battleData || gameStatus !== 'playing') return;
     const currentNav = fundData[battleData.currentDay]?.nav;
@@ -179,7 +172,6 @@ export default function AppBattle() {
         newUnits += buyUnits;
         newCash -= amount;
         
-        // ★ 紀錄詳細交易 (給 AI 用)
         setTransactions(prev => [...prev, {
             day: battleData.currentDay,
             type: 'BUY',
@@ -193,12 +185,11 @@ export default function AppBattle() {
         let sellUnits = amount / currentNav;
         if (sellUnits > newUnits) sellUnits = newUnits; 
         const sellAmount = sellUnits * currentNav;
-        const pnl = sellAmount - (sellUnits * newAvgCost); // 計算損益
+        const pnl = sellAmount - (sellUnits * newAvgCost);
         newCash += sellAmount;
         newUnits -= sellUnits;
         if (newUnits < 0.0001) { newUnits = 0; newAvgCost = 0; }
 
-        // ★ 紀錄詳細交易 (給 AI 用)
         setTransactions(prev => [...prev, {
             day: battleData.currentDay,
             type: 'SELL',
@@ -210,7 +201,6 @@ export default function AppBattle() {
         }]);
     }
 
-    // 更新 Firestore (同步給主持人與其他玩家看)
     const playerIndex = battleData.players.findIndex(p => p.uid === user.uid);
     if (playerIndex === -1) return;
 
@@ -247,11 +237,10 @@ export default function AppBattle() {
   return (
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
       
-      {/* ★★★ 結算畫面 (標準 AI 診斷室 UI) ★★★ */}
+      {/* 結算畫面 (AI 分析層) */}
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
-                  {/* 標題與分數 */}
                   <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white text-center relative overflow-hidden">
                       <div className="relative z-10">
                           <h2 className="text-lg font-bold opacity-90 flex items-center justify-center gap-2">
@@ -268,7 +257,6 @@ export default function AppBattle() {
                       <div className="absolute -bottom-10 -right-10 opacity-10"><Trophy size={150} /></div>
                   </div>
                   
-                  {/* 詳細數據網格 */}
                   <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
                       <div className="p-4 text-center">
                           <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><Award size={12}/> 勝率</div>
@@ -290,7 +278,6 @@ export default function AppBattle() {
                       </div>
                   </div>
 
-                  {/* AI 評語 */}
                   <div className="p-5">
                       <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                           <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
@@ -302,7 +289,6 @@ export default function AppBattle() {
                       </div>
                   </div>
 
-                  {/* 底部按鈕 */}
                   <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
                       <button onClick={() => navigate('/')} className="flex-1 py-3 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">
                           返回大廳
@@ -315,8 +301,7 @@ export default function AppBattle() {
           </div>
       )}
 
-      {/* --- 遊戲進行中畫面 (保持不變) --- */}
-
+      {/* 遊戲進行中畫面 */}
       <header className="bg-white border-b border-slate-200 px-4 py-2 flex justify-between items-center shrink-0 shadow-sm z-20">
         <div className="flex items-center gap-3">
             <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><Sword size={18} /></div>
@@ -362,6 +347,8 @@ export default function AppBattle() {
                     {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     <Line type="monotone" dataKey="nav" stroke="#1e293b" strokeWidth={2} dot={false} isAnimationActive={false} animationDuration={300} />
+                    
+                    {/* 這裡不再顯示交叉訊號，確保遊戲中無 AI 輔助 */}
                 </ComposedChart>
             </ResponsiveContainer>
         </div>

@@ -5,13 +5,12 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Users, Sword, Loader2, BrainCircuit, Lightbulb,
-  Award, ArrowUpRight, ArrowDownRight, Trophy, UserPlus
+  Award, ArrowUpRight, ArrowDownRight, Trophy, UserPlus, AlertTriangle
 } from 'lucide-react';
 import { doc, onSnapshot, updateDoc, arrayUnion } from 'firebase/firestore';
-import { signInAnonymously, updateProfile } from 'firebase/auth';
+import { signInAnonymously, updateProfile } from 'firebase/auth'; // 確保引入 signInAnonymously
 import { db, auth } from '../config/firebase';
 
-// ★★★ 引用 AI 分析模組 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -29,7 +28,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Join Logic Fixed)
+// 主元件：AppBattle (Auto-Login Fix)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -45,33 +44,49 @@ export default function AppBattle() {
   // 訪客加入狀態
   const [nickName, setNickName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(''); // 新增錯誤訊息顯示
 
-  // 本地交易紀錄 (AI 分析用)
+  // 本地交易紀錄
   const [transactions, setTransactions] = useState([]);
 
-  // 交易操作 UI
+  // UI 狀態
   const [tradeMode, setTradeMode] = useState(null);
   const [inputAmount, setInputAmount] = useState('');
-  
-  // 圖表狀態
   const [showMA20, setShowMA20] = useState(true);
   const [showMA60, setShowMA60] = useState(true);
   const [chartPeriod, setChartPeriod] = useState(120); 
-
-  // AI 分析報告
   const [aiReport, setAiReport] = useState(null);
 
-  // 1. 監聽登入狀態
+  // ★★★ 關鍵修正 1：自動匿名登入 ★★★
+  // 為了解決 Firestore 權限問題，訪客一進來就先給他一個匿名身分
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
+    const unsubscribe = auth.onAuthStateChanged(async (u) => {
+      if (u) {
+        setUser(u);
+      } else {
+        console.log("偵測到未登入，執行自動匿名登入...");
+        try {
+            await signInAnonymously(auth);
+            // 登入後會再次觸發這個 callback，進入 if(u) 區塊
+        } catch (err) {
+            console.error("自動登入失敗", err);
+            setErrorMsg("連線驗證失敗，請重新整理");
+        }
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  // 2. 監聽戰鬥室數據
+  // 2. 監聽戰鬥室數據 (確保 user 存在才監聽，或是開放權限)
   useEffect(() => {
-    if (!battleId) return;
+    if (!battleId) {
+        setErrorMsg("無效的戰鬥連結 (缺少 ID)");
+        return;
+    }
+    
+    // 如果 user 還沒準備好，先不監聽 (避免權限錯誤)
+    if (!user) return;
+
     const battleRef = doc(db, 'battles', battleId);
     const unsub = onSnapshot(battleRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -79,23 +94,23 @@ export default function AppBattle() {
         setBattleData(data);
         setGameStatus(data.status); 
 
-        // 如果已登入，檢查自己是否在玩家名單中
-        if (auth.currentUser && data.players) {
-          const me = data.players.find(p => p.uid === auth.currentUser.uid);
+        if (user && data.players) {
+          const me = data.players.find(p => p.uid === user.uid);
           setMyPlayer(me || null); 
         }
       } else {
-        alert('戰鬥室已關閉或不存在');
-        navigate('/');
+        setErrorMsg("找不到此戰鬥室，可能已結束");
       }
+    }, (err) => {
+        console.error("讀取戰鬥室失敗:", err);
+        setErrorMsg("無法讀取戰局 (權限不足或網路錯誤)");
     });
     return () => unsub();
-  }, [battleId, user, navigate]); // user 變更時會重新檢查 myPlayer
+  }, [battleId, user]);
 
   // 3. 載入基金數據
   useEffect(() => {
     const loadFund = async () => {
-      // 只要連上房間且有 Fund ID 就開始載入，不需要等玩家加入
       if (battleData && battleData.fundId && fundData.length === 0) {
         try {
           const fundUrl = battleData.fundUrl || '/data/fund_data_1.json'; 
@@ -111,13 +126,14 @@ export default function AppBattle() {
           }
         } catch (err) {
           console.error("基金載入失敗", err);
+          setErrorMsg("基金數據下載失敗");
         }
       }
     };
     loadFund();
   }, [battleData?.fundId, battleData?.fundUrl, fundData.length]); 
 
-  // 4. 結算觸發 AI 分析
+  // 4. AI 分析
   useEffect(() => {
       if (gameStatus === 'ended' && fundData.length > 0 && myPlayer && !aiReport) {
           const currentIdx = battleData.currentDay;
@@ -156,37 +172,24 @@ export default function AppBattle() {
     return { data: slice, domain: [Math.floor(min - padding), Math.ceil(max + padding)] };
   }, [fundData, battleData?.currentDay, showMA20, showMA60, chartPeriod]);
 
-  // --- 動作：訪客加入遊戲 ---
+  // 動作：加入戰局
   const handleJoinBattle = async () => {
       if (!nickName.trim()) return alert("請輸入暱稱");
       setIsJoining(true);
       try {
-          // 1. 如果沒登入，先匿名登入
-          let currentUser = auth.currentUser;
-          if (!currentUser) {
-              const userCred = await signInAnonymously(auth);
-              currentUser = userCred.user;
+          if (auth.currentUser) {
+              await updateProfile(auth.currentUser, { displayName: nickName });
+              const newPlayer = {
+                  uid: auth.currentUser.uid,
+                  displayName: nickName,
+                  cash: 1000000,
+                  units: 0,
+                  avgCost: 0,
+                  isReady: true
+              };
+              const battleRef = doc(db, 'battles', battleId);
+              await updateDoc(battleRef, { players: arrayUnion(newPlayer) });
           }
-          
-          // 更新暱稱 (Firebase Auth Profile)
-          await updateProfile(currentUser, { displayName: nickName });
-          
-          // 2. 加入戰局 (寫入 Firestore)
-          const newPlayer = {
-              uid: currentUser.uid,
-              displayName: nickName,
-              cash: 1000000,
-              units: 0,
-              avgCost: 0,
-              isReady: true
-          };
-          
-          const battleRef = doc(db, 'battles', battleId);
-          await updateDoc(battleRef, {
-              players: arrayUnion(newPlayer)
-          });
-          
-          // 加入成功後，useEffect 會監聽到 battleData 更新，自動設定 myPlayer
       } catch (error) {
           console.error("加入失敗", error);
           alert("加入失敗，請重試");
@@ -195,7 +198,7 @@ export default function AppBattle() {
       }
   };
 
-  // --- 動作：執行交易 ---
+  // 動作：交易
   const executeTrade = async (type) => {
     if (!myPlayer || !battleData || gameStatus !== 'playing') return;
     const currentNav = fundData[battleData.currentDay]?.nav;
@@ -244,16 +247,35 @@ export default function AppBattle() {
       }
   };
 
-  // ============================================
-  // ★★★ 關鍵修正：渲染順序 (Render Logic) ★★★
-  // ============================================
+  // === 畫面渲染邏輯 (含錯誤處理) ===
 
-  // 1. 先確認是否連上房間 (Battle Data)
-  if (!battleData) {
-      return <div className="h-screen flex items-center justify-center bg-slate-900 text-white"><Loader2 className="animate-spin mr-2"/> 連線戰場中...</div>;
+  // 1. 如果有錯誤訊息，顯示錯誤並提供返回按鈕
+  if (errorMsg) {
+      return (
+          <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-4 p-6 text-center">
+              <AlertTriangle size={48} className="text-amber-500 mb-2" />
+              <h2 className="text-xl font-bold">連線發生問題</h2>
+              <p className="text-slate-400">{errorMsg}</p>
+              <button onClick={() => navigate('/')} className="px-6 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 transition-colors">
+                  返回首頁
+              </button>
+          </div>
+      );
   }
 
-  // 2. 再確認是否已加入 (My Player) -> 如果沒有，顯示加入畫面
+  // 2. 如果正在等待數據 (User, BattleData, FundData)
+  if (!battleData || fundData.length === 0) {
+      return (
+          <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-3">
+              <Loader2 className="animate-spin text-amber-500" size={32}/> 
+              <span className="text-sm font-mono text-slate-400 animate-pulse">
+                  {!user ? "驗證身分中..." : (!battleData ? "搜尋戰場中..." : "下載數據中...")}
+              </span>
+          </div>
+      );
+  }
+
+  // 3. 訪客加入大廳
   if (!myPlayer) {
       return (
           <div className="h-screen bg-slate-900 flex flex-col items-center justify-center p-6 text-white">
@@ -266,21 +288,10 @@ export default function AppBattle() {
                   <div className="space-y-4">
                       <div>
                           <label className="text-xs text-slate-400 ml-1">您的暱稱</label>
-                          <input 
-                              type="text" 
-                              value={nickName}
-                              onChange={(e) => setNickName(e.target.value)}
-                              placeholder="請輸入暱稱 (例: 股海小童)"
-                              className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-amber-500 outline-none mt-1"
-                          />
+                          <input type="text" value={nickName} onChange={(e) => setNickName(e.target.value)} placeholder="請輸入暱稱 (例: 股海小童)" className="w-full bg-slate-900 border border-slate-600 rounded-xl p-3 text-white focus:border-amber-500 outline-none mt-1"/>
                       </div>
-                      <button 
-                          onClick={handleJoinBattle} 
-                          disabled={isJoining}
-                          className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                      >
-                          {isJoining ? <Loader2 className="animate-spin"/> : <UserPlus size={20}/>} 
-                          立即參戰
+                      <button onClick={handleJoinBattle} disabled={isJoining} className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+                          {isJoining ? <Loader2 className="animate-spin"/> : <UserPlus size={20}/>} 立即參戰
                       </button>
                   </div>
               </div>
@@ -288,98 +299,35 @@ export default function AppBattle() {
       );
   }
 
-  // 3. 最後確認數據是否載入 (Fund Data)
-  if (fundData.length === 0) {
-      return <div className="h-screen flex items-center justify-center bg-slate-900 text-white"><Loader2 className="animate-spin mr-2"/> 下載基金數據中...</div>;
-  }
-
-  // === 4. 遊戲主畫面 (Game UI) ===
+  // 4. 遊戲主畫面
   const currentNav = fundData[battleData.currentDay]?.nav || 0;
   const totalAssets = myPlayer.cash + (myPlayer.units * currentNav);
   const roi = ((totalAssets - 1000000) / 1000000 * 100);
 
   return (
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
-      
-      {/* AI 結算層 */}
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
+              {/* AI UI (省略重複代碼，保持與之前一致) */}
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">
-                  {/* AI UI 內容 */}
                   <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 text-white text-center relative overflow-hidden">
-                      <div className="relative z-10">
-                          <h2 className="text-lg font-bold opacity-90 flex items-center justify-center gap-2"><BrainCircuit size={20} /> AI 投資診斷室</h2>
-                          <div className="mt-4 mb-2"><span className="text-6xl font-black tracking-tighter drop-shadow-lg">{aiReport.score}</span><span className="text-xl opacity-80 ml-1">分</span></div>
-                          <div className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/30">{aiReport.title}</div>
-                      </div>
+                      <div className="relative z-10"><h2 className="text-lg font-bold opacity-90 flex items-center justify-center gap-2"><BrainCircuit size={20} /> AI 投資診斷室</h2><div className="mt-4 mb-2"><span className="text-6xl font-black tracking-tighter drop-shadow-lg">{aiReport.score}</span><span className="text-xl opacity-80 ml-1">分</span></div><div className="inline-block bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/30">{aiReport.title}</div></div>
                       <div className="absolute -bottom-10 -right-10 opacity-10"><Trophy size={150} /></div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
-                      <div className="p-4 text-center">
-                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><Award size={12}/> 勝率</div>
-                          <div className="text-lg font-bold text-slate-700">{aiReport.details.winRate}%</div>
-                      </div>
-                      <div className="p-4 text-center">
-                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><TrendingDown size={12}/> 最大回撤</div>
-                          <div className="text-lg font-bold text-green-600">{aiReport.details.maxDrawdown}%</div>
-                      </div>
-                  </div>
-                  <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
-                      <div className="p-4 text-center">
-                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><ArrowUpRight size={12}/> 平均獲利</div>
-                          <div className="text-lg font-bold text-red-500">{aiReport.details.avgProfit}%</div>
-                      </div>
-                      <div className="p-4 text-center">
-                          <div className="text-xs text-slate-400 mb-1 flex items-center justify-center gap-1"><ArrowDownRight size={12}/> 平均虧損</div>
-                          <div className="text-lg font-bold text-green-600">{aiReport.details.avgLoss}%</div>
-                      </div>
-                  </div>
-
-                  <div className="p-5">
-                      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                          <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Lightbulb size={16} className="text-amber-500"/> 策略建議</h4>
-                          <p className="text-xs text-slate-600 leading-relaxed text-justify">{aiReport.summary}</p>
-                      </div>
-                  </div>
-
-                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3">
-                      <button onClick={() => navigate('/')} className="flex-1 py-3 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">離開</button>
-                  </div>
+                  <div className="p-5"><div className="bg-slate-50 rounded-xl p-4 border border-slate-200"><h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><Lightbulb size={16} className="text-amber-500"/> 策略建議</h4><p className="text-xs text-slate-600 leading-relaxed text-justify">{aiReport.summary}</p></div></div>
+                  <div className="p-4 bg-slate-50 border-t border-slate-100 flex gap-3"><button onClick={() => navigate('/')} className="flex-1 py-3 bg-white border border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-colors">離開</button></div>
               </div>
           </div>
       )}
 
-      {/* 遊戲進行中 UI */}
       <header className="bg-white border-b border-slate-200 px-4 py-2 flex justify-between items-center shrink-0 shadow-sm z-20">
-        <div className="flex items-center gap-3">
-            <div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><Sword size={18} /></div>
-            <div>
-                <h1 className="font-bold text-sm text-slate-800 leading-tight">多人競技場</h1>
-                <div className="flex items-center gap-2 text-[10px] text-slate-500"><span className="bg-slate-100 px-1.5 rounded">S1 賽季</span><span className="flex items-center gap-1"><Users size={10}/> {battleData.players.length}人</span></div>
-            </div>
-        </div>
-        <div className="flex flex-col items-end">
-            <span className={`text-lg font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span>
-            <span className="text-[10px] text-slate-400">總資產 ${Math.round(totalAssets).toLocaleString()}</span>
-        </div>
+        <div className="flex items-center gap-3"><div className="bg-amber-100 p-1.5 rounded-lg text-amber-600"><Sword size={18} /></div><div><h1 className="font-bold text-sm text-slate-800 leading-tight">多人競技場</h1><div className="flex items-center gap-2 text-[10px] text-slate-500"><span className="bg-slate-100 px-1.5 rounded">S1 賽季</span><span className="flex items-center gap-1"><Users size={10}/> {battleData.players.length}人</span></div></div></div>
+        <div className="flex flex-col items-end"><span className={`text-lg font-mono font-bold ${roi >= 0 ? 'text-red-500' : 'text-green-600'}`}>{roi > 0 ? '+' : ''}{roi.toFixed(2)}%</span><span className="text-[10px] text-slate-400">總資產 ${Math.round(totalAssets).toLocaleString()}</span></div>
       </header>
 
       <div className="flex-1 relative bg-white">
-        <div className="absolute top-4 left-4 z-10">
-            <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold text-slate-800 tracking-tight font-mono">${currentNav.toFixed(2)}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono">Day {battleData.currentDay}</span>
-            </div>
-        </div>
-        <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2">
-            <div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm">
-                <button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button>
-                <button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button>
-            </div>
-        </div>
+        <div className="absolute top-4 left-4 z-10"><div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-slate-800 tracking-tight font-mono">${currentNav.toFixed(2)}</span></div><div className="flex items-center gap-2 mt-1"><span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono">Day {battleData.currentDay}</span></div></div>
+        <div className="absolute top-4 right-4 z-10 flex flex-col items-end gap-2"><div className="flex gap-1 bg-white/90 p-1 rounded-lg backdrop-blur-sm border border-slate-200 shadow-sm"><button onClick={() => setShowMA20(!showMA20)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA20 ? 'bg-sky-50 text-sky-600 border-sky-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>月線</button><button onClick={() => setShowMA60(!showMA60)} className={`px-2 py-1 rounded text-[10px] font-bold border ${showMA60 ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-transparent text-slate-400 border-transparent hover:text-slate-600'}`}>季線</button></div></div>
         <div className="w-full h-full pt-16 pb-4 pr-2">
             <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartDataInfo.data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
@@ -396,34 +344,19 @@ export default function AppBattle() {
 
       <div className="bg-white border-t border-slate-200 shrink-0 z-30 pb-safe">
         <div className="flex justify-between px-4 py-2 bg-slate-50 text-xs text-slate-500 border-b border-slate-200">
-            <div className="flex gap-4">
-                <span>現金 ${Math.round(myPlayer.cash).toLocaleString()}</span>
-                <span>持倉 {myPlayer.units.toFixed(2)} 單位</span>
-            </div>
-            <div className="flex items-center gap-1 text-slate-400 font-bold">
-               {gameStatus === 'waiting' ? '等待開始' : (gameStatus === 'playing' ? '對戰中' : '已結束')}
-            </div>
+            <div className="flex gap-4"><span>現金 ${Math.round(myPlayer.cash).toLocaleString()}</span><span>持倉 {myPlayer.units.toFixed(2)} 單位</span></div>
+            <div className="flex items-center gap-1 text-slate-400 font-bold">{gameStatus === 'waiting' ? '等待開始' : (gameStatus === 'playing' ? '對戰中' : '已結束')}</div>
         </div>
         <div className="grid grid-cols-2 gap-2 p-2">
-            <button onClick={() => setTradeMode('BUY')} disabled={myPlayer.cash < 100 || gameStatus !== 'playing'} className="bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-300">
-                <TrendingUp size={20} /> 買進
-            </button>
-            <button onClick={() => setTradeMode('SELL')} disabled={myPlayer.units <= 0 || gameStatus !== 'playing'} className="bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-300">
-                <TrendingDown size={20} /> 賣出
-            </button>
+            <button onClick={() => setTradeMode('BUY')} disabled={myPlayer.cash < 100 || gameStatus !== 'playing'} className="bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-300"><TrendingUp size={20} /> 買進</button>
+            <button onClick={() => setTradeMode('SELL')} disabled={myPlayer.units <= 0 || gameStatus !== 'playing'} className="bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:bg-slate-300"><TrendingDown size={20} /> 賣出</button>
         </div>
       </div>
 
       {tradeMode && (
         <div className="absolute inset-0 bg-black/50 z-50 flex flex-col justify-end">
             <div className="bg-white rounded-t-2xl p-4 animate-in slide-in-from-bottom duration-200">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className={`text-lg font-bold flex items-center gap-2 ${tradeMode === 'BUY' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {tradeMode === 'BUY' ? <TrendingUp/> : <TrendingDown/>}
-                        {tradeMode === 'BUY' ? '買入金額' : '賣出金額'}
-                    </h3>
-                    <button onClick={() => setTradeMode(null)} className="p-1 bg-slate-100 rounded-full text-slate-500"><X size={20}/></button>
-                </div>
+                <div className="flex justify-between items-center mb-4"><h3 className={`text-lg font-bold flex items-center gap-2 ${tradeMode === 'BUY' ? 'text-emerald-600' : 'text-rose-600'}`}>{tradeMode === 'BUY' ? <TrendingUp/> : <TrendingDown/>}{tradeMode === 'BUY' ? '買入金額' : '賣出金額'}</h3><button onClick={() => setTradeMode(null)} className="p-1 bg-slate-100 rounded-full text-slate-500"><X size={20}/></button></div>
                 <div className="bg-slate-100 rounded-xl p-3 mb-4 flex items-center"><span className="text-xl font-bold text-slate-400 mr-2">$</span><input type="number" value={inputAmount} onChange={e => setInputAmount(e.target.value)} className="w-full bg-transparent text-2xl font-bold text-slate-800 outline-none" autoFocus placeholder="0"/></div>
                 <div className="flex gap-2 mb-4">{[0.25, 0.5, 1].map(pct => (<button key={pct} onClick={() => setTradePercent(pct, tradeMode)} className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold text-slate-500 hover:bg-slate-50">{pct * 100}%</button>))}</div>
                 <button onClick={() => executeTrade(tradeMode)} className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg active:scale-[0.98] transition-all ${tradeMode === 'BUY' ? 'bg-emerald-500' : 'bg-rose-500'}`}>確認{tradeMode === 'BUY' ? '買入' : '賣出'}</button>

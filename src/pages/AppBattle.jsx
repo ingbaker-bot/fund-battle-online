@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot 
+  Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart 
 } from 'recharts';
 import { 
-  TrendingUp, TrendingDown, Activity, X, 
-  Trophy, Users, Sword, Loader2, BrainCircuit, Target, Lightbulb,
-  Award, ArrowUpRight, ArrowDownRight
+  TrendingUp, TrendingDown, Users, Sword, Loader2, BrainCircuit, Lightbulb,
+  Award, ArrowUpRight, ArrowDownRight, Trophy
 } from 'lucide-react';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// ★★★ 關鍵修正：這裡名稱必須是 generateAIAnalysis，不能是 useAIAnalyst ★★★
+// ★★★ 關鍵修正：這裡名稱已改為 generateAIAnalysis，與 useAIAnalyst.js 一致 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -30,7 +29,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Final Fix)
+// 主元件：AppBattle (Import Fixed)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -118,6 +117,7 @@ export default function AppBattle() {
           const battleHistory = fundData.slice(0, currentIdx + 1);
           const finalAssets = myPlayer.cash + (myPlayer.units * fundData[currentIdx].nav);
           
+          // 呼叫 AI 分析函數
           const report = generateAIAnalysis(
               transactions,   
               battleHistory,  
@@ -237,7 +237,7 @@ export default function AppBattle() {
   return (
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
       
-      {/* 結算畫面 */}
+      {/* 結算畫面 (AI 分析層) */}
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">

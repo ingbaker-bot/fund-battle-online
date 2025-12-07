@@ -1,8 +1,7 @@
 // ==========================================
-// 檔案路徑：src/hooks/useAIAnalyst.js
+// 檔案位置：src/hooks/useAIAnalyst.js
 // ==========================================
 
-// 輔助：計算移動平均線 (MA)
 const calculateMA = (data, days, idx) => {
     if (idx < days - 1) return null;
     let sum = 0;
@@ -12,11 +11,9 @@ const calculateMA = (data, days, idx) => {
     return sum / days;
 };
 
-// 輔助：計算最大回撤 (Max Drawdown)
 const calculateMaxDrawdown = (data) => {
     let peak = -Infinity;
     let maxDrawdown = 0;
-    
     for (const point of data) {
         if (point.nav > peak) peak = point.nav;
         const drawdown = (peak - point.nav) / peak;
@@ -25,28 +22,24 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 關鍵：這裡使用的是 export const generateAIAnalysis ★★★
+// ★★★ 重點：這裡匯出的名稱是 generateAIAnalysis ★★★
 export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
     
-    // 1. 基礎績效計算
-    const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
-    
-    // 防呆：確保 historyData 有資料
+    // 防呆：如果沒有數據，直接回傳預設值，避免當機
     if (!historyData || historyData.length === 0) {
-        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: {} };
+        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: { winRate: 0, maxDrawdown: 0, avgProfit: 0, avgLoss: 0 } };
     }
 
+    const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
     const startNav = historyData[0].nav;
     const endNav = historyData[historyData.length - 1].nav;
     const marketRoi = ((endNav - startNav) / startNav * 100).toFixed(2);
 
-    // 2. 詳細交易統計
     let winCount = 0;
     let totalProfit = 0;
     let totalLoss = 0;
     let lossCount = 0;
 
-    // 確保 transactions 是陣列
     const safeTransactions = Array.isArray(transactions) ? transactions : [];
     const sellOrders = safeTransactions.filter(t => t.type === 'SELL');
     
@@ -66,7 +59,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     const avgLoss = lossCount > 0 ? (totalLoss / lossCount / initialCapital * 100).toFixed(1) : 0;
     const maxDrawdown = calculateMaxDrawdown(historyData); 
 
-    // 3. 市場趨勢判斷
+    // 市場趨勢判斷
     const lastIdx = historyData.length - 1;
     const ma60_end = calculateMA(historyData, 60, lastIdx) || endNav;
     const ma60_start = calculateMA(historyData, 60, Math.min(60, lastIdx)) || startNav;
@@ -75,7 +68,7 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (endNav > ma60_end && ma60_end > ma60_start * 1.02) marketType = "多頭趨勢";
     else if (endNav < ma60_end && ma60_end < ma60_start * 0.98) marketType = "空頭修正";
 
-    // 4. AI 評分邏輯
+    // 評分邏輯
     let score = 60; 
     if (parseFloat(playerRoi) > parseFloat(marketRoi)) score += 20; 
     if (parseFloat(playerRoi) > 0) score += 10; 
@@ -85,7 +78,6 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     if (score > 99) score = 99;
     if (score < 10) score = 10;
 
-    // 5. 生成評語
     let title = "股市見習生";
     let summary = "";
 

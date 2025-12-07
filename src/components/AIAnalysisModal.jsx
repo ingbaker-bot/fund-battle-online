@@ -1,4 +1,3 @@
-// src/components/AIAnalysisModal.jsx
 import React from 'react';
 import { 
   X, Sparkles, Trophy, TrendingUp, TrendingDown, 
@@ -6,7 +5,16 @@ import {
 } from 'lucide-react';
 
 const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) => {
+  // 1. 如果沒開，不渲染
   if (!isOpen) return null;
+
+  // 2. 安全檢查：確保 analysisResult 裡面的 details 存在，避免讀取錯誤
+  const safeDetails = analysisResult?.details || {
+      winRate: 0,
+      maxDrawdown: 0,
+      avgProfit: 0,
+      avgLoss: 0
+  };
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -27,7 +35,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
           <X size={20} />
         </button>
 
-        {/* 狀態 1: 載入中 (AI 思考中) */}
+        {/* ---------------- 狀態 1: 載入中 ---------------- */}
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-16 px-6 text-center space-y-4">
             <div className="relative">
@@ -41,14 +49,14 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
           </div>
         )}
 
-        {/* 狀態 2: 發生錯誤 */}
+        {/* ---------------- 狀態 2: 發生錯誤 ---------------- */}
         {!isLoading && error && (
           <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
               <Activity size={32} className="text-red-500" />
             </div>
             <h3 className="text-lg font-bold text-slate-800 mb-2">分析失敗</h3>
-            <p className="text-sm text-slate-500 mb-6">{error}</p>
+            <p className="text-sm text-slate-500 mb-6">{typeof error === 'object' ? '發生未預期的錯誤' : error}</p>
             <button 
               onClick={onClose}
               className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold"
@@ -58,7 +66,8 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
           </div>
         )}
 
-        {/* 狀態 3: 顯示結果 */}
+        {/* ---------------- 狀態 3: 顯示結果 ---------------- */}
+        {/* 關鍵修正：這裡絕對不能寫 {analysisResult}，必須取用屬性 */}
         {!isLoading && !error && analysisResult && (
           <div className="flex flex-col h-full max-h-[85vh] overflow-y-auto">
             
@@ -76,14 +85,16 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                 </div>
                 
                 <div className="flex items-baseline justify-center gap-1 mb-1">
+                  {/* 只顯示數字 */}
                   <span className="text-6xl font-black tracking-tighter drop-shadow-xl">
-                    {analysisResult.score}
+                    {analysisResult.score || 0}
                   </span>
                   <span className="text-xl opacity-80 font-bold">分</span>
                 </div>
                 
+                {/* 只顯示標題文字 */}
                 <h2 className="text-lg font-bold text-white/90">
-                  {analysisResult.title}
+                  {analysisResult.title || '分析完成'}
                 </h2>
               </div>
             </div>
@@ -95,7 +106,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   <Target size={12} /> 勝率
                 </div>
                 <div className="text-xl font-black text-slate-700">
-                  {analysisResult.details?.winRate || 0}%
+                  {safeDetails.winRate}%
                 </div>
               </div>
               <div className="p-4 text-center">
@@ -103,7 +114,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   <TrendingDown size={12} /> 最大回撤
                 </div>
                 <div className="text-xl font-black text-emerald-600">
-                  -{analysisResult.details?.maxDrawdown || 0}%
+                  -{safeDetails.maxDrawdown}%
                 </div>
               </div>
             </div>
@@ -114,7 +125,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   <TrendingUp size={12} /> 平均獲利
                 </div>
                 <div className="text-xl font-black text-rose-500">
-                  +{analysisResult.details?.avgProfit || 0}%
+                  +{safeDetails.avgProfit}%
                 </div>
               </div>
               <div className="p-4 text-center">
@@ -122,7 +133,7 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   <Activity size={12} /> 平均虧損
                 </div>
                 <div className="text-xl font-black text-emerald-600">
-                  -{analysisResult.details?.avgLoss || 0}%
+                  -{safeDetails.avgLoss}%
                 </div>
               </div>
             </div>
@@ -134,8 +145,9 @@ const AIAnalysisModal = ({ isOpen, onClose, isLoading, analysisResult, error }) 
                   <Lightbulb size={18} className="text-amber-500 fill-current" />
                   策略建議
                 </h4>
+                {/* 確保這裡是字串，不是物件 */}
                 <p className="text-sm text-slate-600 leading-relaxed text-justify">
-                  {analysisResult.summary}
+                  {typeof analysisResult.summary === 'string' ? analysisResult.summary : '分析資料格式有誤'}
                 </p>
               </div>
             </div>

@@ -1,5 +1,5 @@
 // ==========================================
-// AI 投資分析核心模組 (純邏輯層)
+// 檔案路徑：src/hooks/useAIAnalyst.js
 // ==========================================
 
 // 輔助：計算移動平均線 (MA)
@@ -25,12 +25,17 @@ const calculateMaxDrawdown = (data) => {
     return (maxDrawdown * 100).toFixed(2);
 };
 
-// ★★★ 核心導出函數：名稱必須與 AppBattle 引用的一致 ★★★
+// ★★★ 關鍵：這裡使用的是 export const generateAIAnalysis ★★★
 export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
     
     // 1. 基礎績效計算
     const playerRoi = ((finalAssets - initialCapital) / initialCapital * 100).toFixed(2);
     
+    // 防呆：確保 historyData 有資料
+    if (!historyData || historyData.length === 0) {
+        return { score: 0, title: "數據不足", marketRoi: 0, playerRoi: 0, summary: "數據不足", details: {} };
+    }
+
     const startNav = historyData[0].nav;
     const endNav = historyData[historyData.length - 1].nav;
     const marketRoi = ((endNav - startNav) / startNav * 100).toFixed(2);
@@ -41,7 +46,9 @@ export const generateAIAnalysis = (transactions, historyData, initialCapital, fi
     let totalLoss = 0;
     let lossCount = 0;
 
-    const sellOrders = transactions.filter(t => t.type === 'SELL');
+    // 確保 transactions 是陣列
+    const safeTransactions = Array.isArray(transactions) ? transactions : [];
+    const sellOrders = safeTransactions.filter(t => t.type === 'SELL');
     
     sellOrders.forEach(t => {
         if (t.pnl > 0) {

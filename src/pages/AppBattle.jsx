@@ -11,7 +11,7 @@ import {
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// ★★★ 關鍵修正：這裡必須是用 { generateAIAnalysis }，名稱要跟 useAIAnalyst.js 裡面的一樣 ★★★
+// ★★★ 關鍵修正：這裡名稱必須是 generateAIAnalysis，不能是 useAIAnalyst ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -30,7 +30,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle
+// 主元件：AppBattle (Final Fix)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -237,7 +237,7 @@ export default function AppBattle() {
   return (
     <div className="h-screen bg-slate-50 flex flex-col font-sans text-slate-800 relative">
       
-      {/* 結算畫面 (AI 分析層) */}
+      {/* 結算畫面 */}
       {gameStatus === 'ended' && aiReport && (
           <div className="absolute inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 animate-in fade-in duration-500 overflow-y-auto">
               <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200 my-auto">

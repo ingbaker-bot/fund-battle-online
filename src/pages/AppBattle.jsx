@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react'; // 移除 useRef
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Line, XAxis, YAxis, CartesianGrid, ReferenceLine, ResponsiveContainer, ComposedChart, ReferenceDot 
-} from 'recharts'; // 移除 LineChart (改用 ComposedChart)
+} from 'recharts';
 import { 
   TrendingUp, TrendingDown, Activity, X, 
   Trophy, Users, Sword, Loader2, BrainCircuit, Target, Lightbulb,
   Award, ArrowUpRight, ArrowDownRight
-} from 'lucide-react'; // 移除 MousePointer2, LogOut, AlertCircle, Percent, BarChart3 (未使用)
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore'; // 移除 getDoc
+} from 'lucide-react';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
-// 引入標準化 AI 分析模組 (請確認 src/hooks/useAIAnalyst.js 檔案存在)
+// ★★★ 請確認此路徑正確，若檔案在 src/services 則需修改 ★★★
 import { generateAIAnalysis } from '../hooks/useAIAnalyst';
 
 // ============================================
@@ -30,7 +30,7 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // ============================================
-// 主元件：AppBattle (Clean Build Version)
+// 主元件：AppBattle (Fixed Build Version)
 // ============================================
 export default function AppBattle() {
   const { battleId } = useParams();
@@ -109,7 +109,7 @@ export default function AppBattle() {
       }
     };
     loadFund();
-  }, [battleData?.fundId, battleData?.fundUrl, fundData.length]); // 修正 dependency
+  }, [battleData?.fundId, battleData?.fundUrl, fundData.length]); 
 
   // 4. 結算觸發 AI 分析
   useEffect(() => {
@@ -347,8 +347,6 @@ export default function AppBattle() {
                     {showMA20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     {showMA60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.8} />}
                     <Line type="monotone" dataKey="nav" stroke="#1e293b" strokeWidth={2} dot={false} isAnimationActive={false} animationDuration={300} />
-                    
-                    {/* 這裡不再顯示交叉訊號，確保遊戲中無 AI 輔助 */}
                 </ComposedChart>
             </ResponsiveContainer>
         </div>

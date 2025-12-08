@@ -15,8 +15,7 @@ import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
 // --- AI 分析模組 ---
-// 加入新的
-import AIResultModal from '../components/AIResultModal';
+import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 import { 
@@ -904,13 +903,14 @@ if (gameStatus === 'setup') {
             </div>
         )}
 
-<AIResultModal 
-    isOpen={showModal}
-    onClose={closeModal}
-    isLoading={isAnalyzing}
-    analysisResult={analysisResult}
-    error={aiError} // 注意：單機版的變數名稱可能是 error 或 aiError，請根據您的 useAIAnalyst 回傳值調整
-/>        
+        <AIAnalysisModal 
+            isOpen={showModal}
+            onClose={closeModal}
+            isLoading={isAnalyzing}
+            analysisResult={analysisResult}
+            error={aiError}
+        />
+        
         {/* 隱藏的戰報生成卡片 */}
         <ResultCard 
             ref={resultCardRef} 

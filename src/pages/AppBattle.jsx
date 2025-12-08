@@ -859,12 +859,13 @@ export default function AppBattle() {
         )}
 
         {/* ★★★ 7. 掛載 AI 分析 Modal ★★★ */}
-<GameResultModal 
+{/* 正確：改成與上方 import 一致的名稱 */}
+<AIAnalysisModal 
     isOpen={showModal}
     onClose={closeModal}
     isLoading={isAnalyzing}
     analysisResult={analysisResult}
-    error={aiError} // 注意：單機版的變數名稱可能是 error 或 aiError，請根據您的 useAIAnalyst 回傳值調整
+    error={aiError} 
 />
     </div>
   );

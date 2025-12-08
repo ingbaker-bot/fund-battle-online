@@ -17,7 +17,7 @@ import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
 // ★★★ 1. 引入 AI 相關模組 ★★★
-import GameResultModal from '../components/GameResultModal';
+import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 const processRealData = (rawData) => {

@@ -1,4 +1,5 @@
 // 2025v11.0 - 玩家端 (修正黃金交叉 + AI 分析整合版)
+// Update AI feature v30
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -16,7 +17,7 @@ import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
 // ★★★ 1. 引入 AI 相關模組 ★★★
-import AIAnalysisModal from '../components/AIAnalysisModal';
+import AIResultModal from '../components/AIResultModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 const processRealData = (rawData) => {
@@ -858,13 +859,13 @@ export default function AppBattle() {
         )}
 
         {/* ★★★ 7. 掛載 AI 分析 Modal ★★★ */}
-        <AIAnalysisModal 
-            isOpen={showModal}
-            onClose={closeModal}
-            isLoading={isAnalyzing}
-            analysisResult={analysisResult}
-            error={aiError}
-        />
+<AIResultModal 
+    isOpen={showModal}
+    onClose={closeModal}
+    isLoading={isAnalyzing}
+    analysisResult={analysisResult}
+    error={aiError} // 注意：單機版的變數名稱可能是 error 或 aiError，請根據您的 useAIAnalyst 回傳值調整
+/>
     </div>
   );
 }

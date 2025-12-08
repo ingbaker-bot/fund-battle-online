@@ -1,16 +1,16 @@
-// src/components/AIResultModal.jsx
+// src/components/GameResultModal.jsx
 import React, { useState } from 'react';
 import { 
   X, Sparkles, Trophy, TrendingUp, TrendingDown, 
   Activity, Target, Lightbulb, Loader2, Share2, Copy, Check 
 } from 'lucide-react';
 
-const AIResultModal = ({ isOpen, onClose, isLoading, analysisResult, error }) => {
+const GameResultModal = ({ isOpen, onClose, isLoading, analysisResult, error }) => {
   const [isCopied, setIsCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  // 安全檢查：處理舊版字串或新版物件
+  // 安全檢查
   const isStringResult = typeof analysisResult === 'string';
   
   const safeDetails = (analysisResult && !isStringResult && analysisResult.details) ? analysisResult.details : {
@@ -21,7 +21,7 @@ const AIResultModal = ({ isOpen, onClose, isLoading, analysisResult, error }) =>
   const displayTitle = (analysisResult && !isStringResult) ? analysisResult.title : '分析完成';
   const displaySummary = isStringResult ? analysisResult : (analysisResult?.summary || '無分析資料');
 
-  // 產生分享文字
+  // 分享文字
   const generateShareText = () => {
       if (!analysisResult) return '';
       if (isStringResult) return analysisResult;
@@ -150,4 +150,4 @@ ${displaySummary}
   );
 };
 
-export default AIResultModal;
+export default GameResultModal;

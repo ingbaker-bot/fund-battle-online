@@ -17,7 +17,7 @@ import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
 // ★★★ 1. 引入 AI 相關模組 ★★★
-import AIResultModal from '../components/AIResultModal';
+import GameResultModal from '../components/GameResultModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
 const processRealData = (rawData) => {
@@ -859,7 +859,7 @@ export default function AppBattle() {
         )}
 
         {/* ★★★ 7. 掛載 AI 分析 Modal ★★★ */}
-<AIResultModal 
+<GameResultModal 
     isOpen={showModal}
     onClose={closeModal}
     isLoading={isAnalyzing}

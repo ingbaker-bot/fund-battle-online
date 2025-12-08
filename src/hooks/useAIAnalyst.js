@@ -1,33 +1,60 @@
-// 檔案位置: src/hooks/useAIAnalyst.js
 import { useState } from 'react';
 
-// 本地模擬分析產生器
+// --- 本地模擬分析產生器 (內容優化版) ---
 const generateLocalAnalysisData = (gameData) => {
     const { roi, nickname, fundName, transactions } = gameData;
-    const winRate = transactions && transactions.length > 0 
-        ? Math.round((transactions.filter(t => t.pnl > 0).length / transactions.filter(t => t.type === 'SELL').length) * 100) || 0 
-        : 0;
     
-    let title, summary, score;
-    const positiveComments = ["簡直是交易天才！", "這波操作行雲流水。", "大盤都被你甩在後頭了。"];
-    const negativeComments = ["別灰心，市場是殘酷的。", "這筆學費繳得有點貴啊。", "下次試著多看少做？"];
+    // 1. 基礎數據計算
+    const totalTrades = transactions ? transactions.length : 0;
+    const winTrades = transactions ? transactions.filter(t => t.pnl > 0).length : 0;
+    const sellTrades = transactions ? transactions.filter(t => t.type === 'SELL').length : 0;
+    
+    // 計算勝率
+    const winRate = sellTrades > 0 ? Math.round((winTrades / sellTrades) * 100) : 0;
+
+    // 2. 計算「操作智商」 (趣味指標：基礎 80 + ROI加權 + 勝率加權)
+    let iqScore = 80 + Math.floor(roi * 1.5) + Math.floor((winRate - 50) * 0.5);
+    if (iqScore > 150) iqScore = 150;
+    if (iqScore < 60) iqScore = 60;
+
+    // 3. 定義評語模組
+    let title, summary, styleComment, keyMove, advice;
 
     if (roi >= 20) {
         title = "👑 投資之神降臨";
-        score = 95 + Math.floor(Math.random() * 5);
-        summary = `嘿 ${nickname}！你在「${fundName}」的表現簡直不可思議！ROI 高達 ${roi.toFixed(2)}%，${positiveComments[0]} 你的進出場點位抓得非常精準。`;
+        styleComment = "你簡直是「多頭市場的幸運兒」，敢在低點佈局並抱得住，這心臟不是普通的大啊！";
+        keyMove = `最精彩的是你在交易中展現了絕佳的耐心，${winRate}% 的勝率證明了你不是靠運氣。`;
+        advice = "下次遇到震盪時，記得適度獲利了結，別讓紙上富貴飛走了。保留現金等待下一次黑天鵝。";
     } else if (roi > 0) {
         title = "🚀 穩健獲利的贏家";
-        score = 80 + Math.floor(Math.random() * 15);
-        summary = `不錯喔 ${nickname}，在「${fundName}」這場戰役中，你守住了獲利，最終成績 ${roi.toFixed(2)}%。穩健才是長久生存之道，勝率約為 ${winRate}%。`;
+        styleComment = "你的風格屬於「穩健防守型」。雖然沒有暴利，但在這波動盪的市場中能全身而退，已經贏過 80% 的人了。";
+        keyMove = `你的操作頻率${totalTrades > 10 ? '頗高，屬於積極換股的操作' : '偏低，展現了波段持有的定力'}，成功守住了正報酬。`;
+        advice = "可以嘗試在趨勢明確時放大部位，別太早下車。複利是你最好的朋友，繼續保持這份紀律！";
+    } else if (roi > -10) {
+        title = "🛡️ 稍遇亂流的戰士";
+        styleComment = "運氣稍微差了一點，或者是在盤整區間被磨掉了耐心。你的操作邏輯沒大問題，只是進場點位稍嫌急躁。";
+        keyMove = `在市場下跌時你似乎${totalTrades > 5 ? '試圖頻繁抄底' : '沒有及時停損'}，導致了輕微的虧損。`;
+        advice = "別灰心，這點學費很值得。下次試著多看少做，等待均線黃金交叉確認後再進場，勝率會大幅提升。";
     } else {
         title = "❤️ 需要秀秀的韭菜";
-        score = 40 + Math.floor(Math.random() * 20);
-        summary = `沒事的 ${nickname}，失敗為成功之母。這次在「${fundName}」跌了 ${roi.toFixed(2)}%，${negativeComments[0]} 記得檢討是否追高殺低？`;
+        styleComment = "這波市場對你太殘酷了...你看起來像是「逆勢攤平」的信徒，但在空頭趨勢中接刀子是很危險的。";
+        keyMove = "關鍵敗筆可能在於沒有嚴格執行停損，或者是一次性 All In 了所有資金，導致沒有加碼的空間。";
+        advice = "先休息一下吧！市場永遠都在。下次記得：本金第一，獲利第二。嚴格設定停損點，別讓情緒主導交易。";
     }
 
+    summary = `嘿！${nickname || '操盤手'}，我看了一下你在「${fundName}」的操作：
+
+1. **風格點評**：${styleComment}
+2. **關鍵操作**：${keyMove}
+3. **暖心建議**：${advice}
+4. **操作智商**：${iqScore} 分
+
+(此為 AI 導師模擬覆盤分析)`;
+
     return {
-        title, score, summary,
+        title, 
+        score: iqScore, 
+        summary,
         details: {
             winRate,
             maxDrawdown: (Math.random() * 15 + 5).toFixed(1),
@@ -37,15 +64,6 @@ const generateLocalAnalysisData = (gameData) => {
     };
 };
 
-// 給 AppBattle 用的 helper
-export const generateAIAnalysis = (transactions, historyData, initialCapital, finalAssets) => {
-    const roi = initialCapital > 0 ? ((finalAssets - initialCapital) / initialCapital) * 100 : 0;
-    return generateLocalAnalysisData({
-        roi, nickname: '玩家', fundName: '本場基金', transactions: transactions 
-    });
-};
-
-// 主要 Hook
 export const useAIAnalyst = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -58,18 +76,17 @@ export const useAIAnalyst = () => {
     setAnalysisResult(null);
     setShowModal(true);
 
-    // 模擬延遲
     setTimeout(() => {
         try {
             const result = generateLocalAnalysisData(gameData);
             setAnalysisResult(result);
         } catch (err) {
-            console.error(err);
+            console.error("AI Generation Error:", err);
             setError("生成分析報告時發生錯誤。");
         } finally {
             setIsAnalyzing(false);
         }
-    }, 1500);
+    }, 2000);
   };
 
   const closeModal = () => setShowModal(false);

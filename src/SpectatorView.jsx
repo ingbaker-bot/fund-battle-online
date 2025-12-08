@@ -372,20 +372,47 @@ export default function SpectatorView() {
     }
   };
 
+// 修改後的結算函式：主動抓取最新數據，確保冠軍準確
   const handleEndGame = async () => {
+    // 1. 停止自動播放
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
+
     let winnerInfo = null;
-    if (players.length > 0) {
-        const champion = players[0];
-        winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
-    }
+
     if (roomId) {
-        await updateDoc(doc(db, "battle_rooms", roomId), { status: 'ended', finalWinner: winnerInfo });
+        try {
+            // ★★★ 關鍵修正：不依賴畫面上的 players 狀態，而是直接從資料庫抓最新數據 ★★★
+            const playersRef = collection(db, "battle_rooms", roomId, "players");
+            const snapshot = await getDocs(playersRef);
+            
+            const latestPlayers = [];
+            snapshot.forEach((doc) => {
+                latestPlayers.push({ id: doc.id, ...doc.data() });
+            });
+
+            // 重新排序 (由高到低)
+            latestPlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
+
+            // 如果有玩家，取出第一名
+            if (latestPlayers.length > 0) {
+                const champion = latestPlayers[0];
+                winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
+            }
+
+            // 2. 寫入結算狀態與冠軍資訊
+            await updateDoc(doc(db, "battle_rooms", roomId), { 
+                status: 'ended', 
+                finalWinner: winnerInfo 
+            });
+
+        } catch (error) {
+            console.error("結算時發生錯誤:", error);
+        }
     }
+
     setGameStatus('ended');
   };
-
   const handleResetRoom = async () => {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');

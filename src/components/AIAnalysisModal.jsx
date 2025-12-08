@@ -1,6 +1,6 @@
 // src/components/AIAnalysisModal.jsx
 import React from 'react';
-import { X, Sparkles, BrainCircuit, Loader2,Share2, Copy, Check } from 'lucide-react';
+import { X, Sparkles, BrainCircuit, Loader2, Share2, Copy, Check } from 'lucide-react';
 
 export default function AIAnalysisModal({ isOpen, onClose, isLoading, analysisResult, error }) {
   if (!isOpen) return null;

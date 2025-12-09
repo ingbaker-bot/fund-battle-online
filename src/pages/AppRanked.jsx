@@ -150,13 +150,20 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-const handleAIAnalysis = () => {
+// 在 src/pages/AppRanked.jsx 中找到這段
+  const handleAIAnalysis = () => {
+      // 檢查 fullData 是否有資料，避免傳送空陣列導致錯誤
+      if (!fullData || fullData.length === 0) {
+          alert("尚未載入數據，無法分析");
+          return;
+      }
+
       analyzeGame({
           fundName: currentFundName,
           roi: roi,
           transactions: transactions,
-          // ★★★ 新增：把歷史股價傳給 AI，讓它能算技術指標 ★★★
-          historyData: fullData, 
+          // ★★★ 關鍵修正：這裡不需要宣告 const historyData，而是直接指定屬性名稱 ★★★
+          historyData: fullData, // 把元件既有的 fullData 狀態傳過去
           nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家')
       });
   };

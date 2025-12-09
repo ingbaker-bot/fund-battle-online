@@ -1,81 +1,88 @@
 import { useState } from 'react';
 
-// --- 內部小工具：計算均線 (與主程式邏輯一致) ---
+// --- 內部小工具：計算均線 (增加防呆機制) ---
 const calcMA = (data, day, period) => {
-    if (!data || day < period) return null;
+    // 安全檢查：如果沒有資料，或天數不足，直接回傳 null，不要硬算
+    if (!data || !Array.isArray(data) || day < period || !data[day]) return null;
+    
     let sum = 0;
     for (let i = 0; i < period; i++) {
-        sum += data[day - i]?.nav || 0;
+        // 確保每一筆資料都存在
+        const val = data[day - i]?.nav;
+        if (val === undefined || isNaN(val)) return null;
+        sum += val;
     }
     return sum / period;
 };
 
-// --- 本地模擬分析產生器 (技術分析增強版) ---
 const generateLocalAnalysisData = (gameData) => {
-    const { roi, nickname, fundName, transactions, historyData } = gameData;
+    // 解構時給予預設值，防止 undefined 錯誤
+    const { roi, nickname, fundName, transactions, historyData = [] } = gameData;
     
-    // 1. 基礎數據計算
+    // 1. 基礎數據
     const totalTrades = transactions ? transactions.length : 0;
     const winTrades = transactions ? transactions.filter(t => t.pnl > 0).length : 0;
     const sellTrades = transactions ? transactions.filter(t => t.type === 'SELL').length : 0;
     const winRate = sellTrades > 0 ? Math.round((winTrades / sellTrades) * 100) : 0;
 
-    // 2. ★★★ 技術面深度分析 (Technical Analysis) ★★★
+    // 2. 技術面深度分析 (加入 Try-Catch 防止崩潰)
     let technicalComment = "";
-    let goodMoves = 0; // 計算好操作次數 (加分用)
+    let goodMoves = 0;
 
-    if (historyData && transactions && transactions.length > 0) {
-        let trendFollowCount = 0;
-        let counterTrendCount = 0;
-        let goldenCrossBuy = 0;
+    try {
+        if (historyData && historyData.length > 0 && transactions && transactions.length > 0) {
+            let trendFollowCount = 0;
+            let counterTrendCount = 0;
+            let goldenCrossBuy = 0;
 
-        transactions.forEach(tx => {
-            const day = tx.day;
-            const ma20 = calcMA(historyData, day, 20);
-            const ma60 = calcMA(historyData, day, 60);
-            
-            // 判斷買進時機
-            if (tx.type === 'BUY' && ma20 && ma60) {
-                // 順勢交易 (月線 > 季線)
-                if (ma20 > ma60) {
-                    trendFollowCount++;
-                    // 檢查是否剛好在黃金交叉附近 (5天內)
-                    const prev5_ma20 = calcMA(historyData, day - 5, 20);
-                    const prev5_ma60 = calcMA(historyData, day - 5, 60);
-                    if (prev5_ma20 <= prev5_ma60) {
-                        goldenCrossBuy++; // 抓到起漲點
+            transactions.forEach(tx => {
+                const day = tx.day;
+                // 只有在資料足夠時才計算
+                if (day > 60) {
+                    const ma20 = calcMA(historyData, day, 20);
+                    const ma60 = calcMA(historyData, day, 60);
+                    
+                    if (tx.type === 'BUY' && ma20 && ma60) {
+                        if (ma20 > ma60) {
+                            trendFollowCount++;
+                            // 檢查黃金交叉
+                            const prev5_ma20 = calcMA(historyData, day - 5, 20);
+                            const prev5_ma60 = calcMA(historyData, day - 5, 60);
+                            if (prev5_ma20 && prev5_ma60 && prev5_ma20 <= prev5_ma60) {
+                                goldenCrossBuy++;
+                                goodMoves++;
+                            }
+                        } else {
+                            counterTrendCount++;
+                        }
+                    }
+                    if (tx.type === 'SELL' && ma20 && ma60 && tx.pnl > 0) {
                         goodMoves++;
                     }
-                } else {
-                    counterTrendCount++; // 逆勢抄底
                 }
-            }
-            // 判斷賣出時機
-            if (tx.type === 'SELL' && ma20 && ma60) {
-                // 聰明停利 (乖離過大或趨勢轉弱)
-                if (tx.pnl > 0) goodMoves++;
-            }
-        });
+            });
 
-        // 根據數據生成「技術評語」
-        if (goldenCrossBuy > 0) {
-            technicalComment = `最讓我驚豔的是，你有 ${goldenCrossBuy} 次買進剛好抓到「黃金交叉」的起漲點，這絕對是高手的盤感！`;
-        } else if (trendFollowCount > counterTrendCount) {
-            technicalComment = "你的操作風格偏向「順勢交易」，喜歡在多頭排列時進場，這是勝率最高的穩健打法。";
-        } else if (counterTrendCount > 0) {
-            technicalComment = "你似乎偏愛「左側交易」，喜歡在空頭排列時逆勢抄底。雖然風險高，但只要抓對一次就是暴利。";
+            if (goldenCrossBuy > 0) {
+                technicalComment = `最讓我驚豔的是，你有 ${goldenCrossBuy} 次買進剛好抓到「黃金交叉」的起漲點，這絕對是高手的盤感！`;
+            } else if (trendFollowCount > counterTrendCount) {
+                technicalComment = "你的操作風格偏向「順勢交易」，喜歡在多頭排列時進場，這是勝率最高的穩健打法。";
+            } else if (counterTrendCount > 0) {
+                technicalComment = "你似乎偏愛「左側交易」，喜歡在空頭排列時逆勢抄底。雖然風險高，但只要抓對一次就是暴利。";
+            }
         }
+    } catch (err) {
+        console.warn("AI 技術分析運算略過:", err);
+        // 發生錯誤不崩潰，只留空字串
     }
 
-    // 3. 計算「操作智商」 (加入技術面加權)
+    // 3. 計算分數
     let iqScore = 80 + Math.floor(roi * 1.5) + Math.floor((winRate - 50) * 0.5) + (goodMoves * 2);
     if (iqScore > 150) iqScore = 150;
     if (iqScore < 60) iqScore = 60;
 
-    // 4. 定義評語模組
+    // 4. 定義評語
     let title, summary, styleComment, keyMove, advice;
 
-    // --- 情境判斷 ---
     if (roi >= 20) {
         title = "👑 投資之神降臨";
         styleComment = "你簡直是「多頭市場的幸運兒」，敢在低點佈局並抱得住，這心臟不是普通的大啊！";
@@ -132,14 +139,13 @@ export const useAIAnalyst = () => {
     setAnalysisResult(null);
     setShowModal(true);
 
-    // 模擬 AI 思考時間
     setTimeout(() => {
         try {
             const result = generateLocalAnalysisData(gameData);
             setAnalysisResult(result);
         } catch (err) {
-            console.error("AI Generation Error:", err);
-            setError("生成分析報告時發生錯誤。");
+            console.error("AI Error:", err);
+            setError("生成分析報告時發生錯誤");
         } finally {
             setIsAnalyzing(false);
         }

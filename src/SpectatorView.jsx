@@ -372,47 +372,61 @@ export default function SpectatorView() {
     }
   };
 
-// 修改後的結算函式：主動抓取最新數據，確保冠軍準確
+// 修改後的結算函式：加入緩衝時間，解決冠軍數據不同步問題
   const handleEndGame = async () => {
-    // 1. 停止自動播放
+    // 1. 第一步：立刻停止現場的自動播放與倒數，凍結畫面
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
+    setGameEndTime(null); // 清除倒數計時，避免重複觸發
 
-    let winnerInfo = null;
+    console.log("⏳ 比賽結束，等待數據同步中 (緩衝 2 秒)...");
 
-    if (roomId) {
-        try {
-            // ★★★ 關鍵修正：不依賴畫面上的 players 狀態，而是直接從資料庫抓最新數據 ★★★
-            const playersRef = collection(db, "battle_rooms", roomId, "players");
-            const snapshot = await getDocs(playersRef);
-            
-            const latestPlayers = [];
-            snapshot.forEach((doc) => {
-                latestPlayers.push({ id: doc.id, ...doc.data() });
-            });
+    // 2. 第二步：給予 2 秒的「數據同步緩衝期」
+    // 這段時間是為了讓所有玩家端最新的 ROI 能夠寫入 Firebase
+    setTimeout(async () => {
+        let winnerInfo = null;
 
-            // 重新排序 (由高到低)
-            latestPlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
+        if (roomId) {
+            try {
+                console.log("✅ 開始抓取最終排名...");
+                // 主動從資料庫抓取最新玩家名單
+                const playersRef = collection(db, "battle_rooms", roomId, "players");
+                const snapshot = await getDocs(playersRef);
+                
+                const latestPlayers = [];
+                snapshot.forEach((doc) => {
+                    latestPlayers.push({ id: doc.id, ...doc.data() });
+                });
 
-            // 如果有玩家，取出第一名
-            if (latestPlayers.length > 0) {
-                const champion = latestPlayers[0];
-                winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
+                // 重新排序 (由高到低)
+                // 這裡加入 || -999 防止沒有 roi 欄位時排序錯誤
+                latestPlayers.sort((a, b) => (b.roi || -999) - (a.roi || -999));
+
+                // 如果有玩家，取出第一名
+                if (latestPlayers.length > 0) {
+                    const champion = latestPlayers[0];
+                    console.log("🏆 冠軍產生:", champion.nickname, champion.roi);
+                    winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
+                }
+
+                // 3. 第三步：寫入結算狀態與冠軍資訊
+                await updateDoc(doc(db, "battle_rooms", roomId), { 
+                    status: 'ended', 
+                    finalWinner: winnerInfo 
+                });
+
+            } catch (error) {
+                console.error("結算時發生錯誤:", error);
             }
-
-            // 2. 寫入結算狀態與冠軍資訊
-            await updateDoc(doc(db, "battle_rooms", roomId), { 
-                status: 'ended', 
-                finalWinner: winnerInfo 
-            });
-
-        } catch (error) {
-            console.error("結算時發生錯誤:", error);
         }
-    }
 
-    setGameStatus('ended');
+        // 最後才設定本地狀態，顯示結算畫面
+        setGameStatus('ended');
+        
+    }, 2000); // ★ 這裡設定延遲 2000 毫秒 (2秒)，確保數據絕對同步
   };
+
+
   const handleResetRoom = async () => {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');

@@ -150,14 +150,13 @@ export default function AppRanked() {
   const [authLoading, setAuthLoading] = useState(true); 
   const navigate = useNavigate();
 
-  // AI 分析
-  const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
-
-  const handleAIAnalysis = () => {
+const handleAIAnalysis = () => {
       analyzeGame({
           fundName: currentFundName,
           roi: roi,
-          transactions: transactions, 
+          transactions: transactions,
+          // ★★★ 新增：把歷史股價傳給 AI，讓它能算技術指標 ★★★
+          historyData: fullData, 
           nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家')
       });
   };

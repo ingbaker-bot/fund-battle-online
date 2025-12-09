@@ -1,12 +1,11 @@
-// 2025v11.0 - 玩家端 (修正黃金交叉 + AI 分析整合版)
-// Update AI feature v30
+// 2025v11.0 - 玩家端 (修正黃金交叉 + AI 分析整合版 + 共享交易熱絡模式)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, 
   AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2, Timer, 
-  LogOut, Lock, RotateCcw, Sparkles // ★ 新增 Sparkles 圖示
+  LogOut, Lock, RotateCcw, Sparkles 
 } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
@@ -16,7 +15,7 @@ import { FUNDS_LIBRARY } from '../config/funds';
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
-// ★★★ 1. 引入 AI 相關模組 ★★★
+// 引入 AI 模組
 import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
@@ -88,7 +87,6 @@ export default function AppBattle() {
   const urlRoomId = searchParams.get('room');
 
   // --- AI 分析模組 Hook ---
-  // ★★★ 2. 啟用 AI Hook ★★★
   const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
 
   // --- 戰報圖片生成邏輯 ---
@@ -156,7 +154,6 @@ export default function AppBattle() {
   const [initialCapital] = useState(1000000);
   const [resetCount, setResetCount] = useState(() => getSavedState('battle_resetCount', 0));
   
-  // ★★★ 3. 新增交易紀錄狀態 (給 AI 用) ★★★
   const [transactions, setTransactions] = useState([]); 
 
   const [inputAmount, setInputAmount] = useState('');
@@ -171,6 +168,10 @@ export default function AppBattle() {
   const [gameEndTime, setGameEndTime] = useState(null);
   const [remainingTime, setRemainingTime] = useState(0);
   const [isTimeUp, setIsTimeUp] = useState(false);
+
+  // ★★★ [修改點 1] 新增：共享交易暫停狀態 ★★★
+  const [activeRequests, setActiveRequests] = useState([]); 
+  const [pauseCountdown, setPauseCountdown] = useState(15); 
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
@@ -200,7 +201,34 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // 監聽房間資訊
+  // ★★★ [修改點 1] 新增：監聽請求與倒數 (放在監聽房間資訊之前) ★★★
+  useEffect(() => {
+      if (!roomId) return;
+      // 監聽 requests 子集合，以顯示市場暫停狀態
+      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
+          const reqs = [];
+          snapshot.forEach(doc => reqs.push(doc.data()));
+          setActiveRequests(reqs);
+          
+          // 如果有請求，重置倒數 (這裡假設固定15秒，與主持人端同步)
+          if (reqs.length > 0) {
+              setPauseCountdown(15); 
+          }
+      });
+      return () => unsubscribe();
+  }, [roomId]);
+
+  useEffect(() => {
+      let timer;
+      if (activeRequests.length > 0 && pauseCountdown > 0) {
+          timer = setInterval(() => {
+              setPauseCountdown((prev) => Math.max(0, prev - 1));
+          }, 1000);
+      }
+      return () => clearInterval(timer);
+  }, [activeRequests.length, pauseCountdown]);
+
+  // 監聽房間資訊 (主邏輯)
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -346,7 +374,7 @@ export default function AppBattle() {
       }
   };
   
-  // ★★★ 4. 觸發 AI 分析的函式 ★★★
+  // 觸發 AI 分析的函式
   const handleAIAnalysis = () => {
       analyzeGame({
           fundName: fundName,
@@ -358,6 +386,7 @@ export default function AppBattle() {
 
   const handleRequestTrade = async () => {
       if (isTimeUp) { alert("比賽時間已到，停止交易！"); return; } 
+      // ★★★ [修改點] 移除了阻擋邏輯，允許隨時加入交易 ★★★
       setIsTrading(true); setTradeType(null); 
       try { await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), { nickname: nickname, timestamp: serverTimestamp() }); } catch (e) { console.error(e); }
   };
@@ -451,7 +480,6 @@ export default function AppBattle() {
           };
       }
       
-      // ★★★ 5. 寫入交易紀錄到 State ★★★
       if (transactionRecord) {
           setTransactions(prev => [...prev, transactionRecord]);
       }
@@ -632,6 +660,27 @@ export default function AppBattle() {
               </div>
           </div>
 
+          {/* ★★★ [修改點 2] 新增：市場暫停通知條 (Header 下方) ★★★ */}
+          {activeRequests.length > 0 && !isTrading && (
+              <div className="bg-yellow-400 text-slate-900 px-4 py-2 flex items-center justify-between shadow-md animate-in slide-in-from-top duration-300 relative z-30">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                      <Loader2 size={18} className="animate-spin text-slate-800 shrink-0"/>
+                      <div className="flex flex-col leading-none">
+                          <span className="font-bold text-sm">市場暫停中 🔥</span>
+                          <span className="text-[10px] opacity-80 truncate max-w-[180px]">
+                              {activeRequests.map(r => r.nickname).join(', ')} 正在操作...
+                          </span>
+                      </div>
+                  </div>
+                  <div className="flex items-center gap-2 bg-black/10 px-2 py-1 rounded">
+                       <span className="text-[10px] font-bold text-slate-800">倒數</span>
+                       <span className="font-mono font-black text-lg text-slate-900 leading-none">
+                          {pauseCountdown}s
+                       </span>
+                  </div>
+              </div>
+          )}
+
           <div className="flex-1 relative bg-white min-h-0">
              <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chartData}>
@@ -689,15 +738,34 @@ export default function AppBattle() {
 
               {!isTrading ? (
                   <div className="px-4 pb-1">
+                      {/* ★★★ [修改點 3] 修改按鈕邏輯：不鎖定，改為變色鼓勵加入 ★★★ */}
                       <button 
                           onClick={handleRequestTrade} 
-                          disabled={isTimeUp}
-                          className={`w-full py-4 transition-all text-white rounded-xl font-black text-2xl shadow-lg flex items-center justify-center gap-2 ${isTimeUp ? 'bg-slate-400 cursor-not-allowed' : 'bg-slate-800 hover:bg-slate-700 active:scale-95 animate-pulse'}`}
+                          disabled={isTimeUp} // 只在「時間到」時鎖定
+                          className={`w-full py-4 transition-all text-white rounded-xl font-black text-2xl shadow-lg flex items-center justify-center gap-2 
+                          ${isTimeUp 
+                              ? 'bg-slate-400 cursor-not-allowed' 
+                              : activeRequests.length > 0 
+                                  ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 animate-pulse' // ★ 有人交易時，按鈕變橘紅色閃爍
+                                  : 'bg-slate-800 hover:bg-slate-700 active:scale-95'
+                          }`}
                       >
                           {isTimeUp ? <Lock size={24}/> : <Hand size={24} className="text-yellow-400"/>} 
-                          {isTimeUp ? '比賽結束' : '請求交易'}
+                          
+                          {/* 文字顯示邏輯 */}
+                          {isTimeUp 
+                              ? '比賽結束' 
+                              : activeRequests.length > 0 
+                                  ? `加入交易戰局！(${pauseCountdown}s)` // ★ 顯示倒數，催促玩家
+                                  : '請求交易'
+                          }
                       </button>
-                      <p className="text-center text-[10px] text-slate-400 mt-1">{isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策'}</p>
+                      <p className="text-center text-[10px] text-slate-400 mt-1">
+                          {activeRequests.length > 0 
+                              ? `${activeRequests.length} 位玩家正在交易中，市場暫停...` 
+                              : (isTimeUp ? '交易通道已關閉，請等待主持人結算' : '按下後行情將暫停，供您思考決策')
+                          }
+                      </p>
                   </div>
               ) : (
                   <>
@@ -808,7 +876,6 @@ export default function AppBattle() {
             </div>
         )}
         
-        {/* ★★★ 6. AI 分析按鈕 (新增部分) ★★★ */}
         <button 
             onClick={handleAIAnalysis}
             disabled={isAnalyzing}
@@ -858,15 +925,14 @@ export default function AppBattle() {
             </div>
         )}
 
-        {/* ★★★ 7. 掛載 AI 分析 Modal ★★★ */}
-{/* 正確：改成與上方 import 一致的名稱 */}
-<AIAnalysisModal 
-    isOpen={showModal}
-    onClose={closeModal}
-    isLoading={isAnalyzing}
-    analysisResult={analysisResult}
-    error={aiError} 
-/>
+        {/* 掛載 AI 分析 Modal */}
+        <AIAnalysisModal 
+            isOpen={showModal}
+            onClose={closeModal}
+            isLoading={isAnalyzing}
+            analysisResult={analysisResult}
+            error={aiError} 
+        />
     </div>
   );
 }

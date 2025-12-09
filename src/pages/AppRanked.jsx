@@ -153,11 +153,25 @@ export default function AppRanked() {
   // AI 分析
   const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
 
-  const handleAIAnalysis = () => {
+const handleAIAnalysis = () => {
+      // 1. 顯式宣告：將 State 中的 fullData 指定給一個明確的變數
+      const currentHistory = fullData;
+
+      // 2. 防呆檢查：如果資料不存在或為空，阻擋執行，避免黑屏
+      if (!currentHistory || currentHistory.length === 0) {
+          alert("尚未載入歷史數據，AI 無法分析技術指標。");
+          return;
+      }
+
+      // 3. 呼叫 AI 分析
       analyzeGame({
           fundName: currentFundName,
           roi: roi,
-          transactions: transactions, 
+          transactions: transactions,
+          
+          // ★★★ 修正後：使用明確宣告的變數 ★★★
+          historyData: currentHistory, 
+          
           nickname: myNickname || (user && user.email ? user.email.split('@')[0] : '匿名玩家')
       });
   };

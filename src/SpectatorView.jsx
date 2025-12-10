@@ -494,7 +494,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
- // ★★★ V11.8 核心升級：盤整過濾加強版 (同步單機版邏輯) ★★★
+// ★★★ V11.8 核心升級：盤整過濾加強版 (同步單機版邏輯) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -518,63 +518,60 @@ export default function SpectatorView() {
           let riverBottom = null;
           if (ma60) { riverTop = ma60 * 1.1; riverBottom = ma60 * 0.9; }
 
-          // 訊號判斷邏輯 (Filter Logic)
+          // --- 訊號判斷邏輯 (Filter Logic) ---
           let crossSignal = null;
           
-          if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+          // 注意：這裡改用 prev10Idx 來抓 10 天前的季線，跟單機版同步
+          const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
+          const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
+          
+          if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 計算斜率
+              // 1. 計算月線斜率 (維持 1 天變化)
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
-              const slope60 = refInd60.ma ? (ma60 - refInd60.ma) / refInd60.ma : 0;
 
-              // 計算乖離率
+              // 2. 計算 10 天前的季線斜率 (關鍵修改！)
+              const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
+
+              // 3. 計算乖離率
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
               // 門檻設定 (與單機版同步)
-              const STRICT_THRESHOLD = 0.001; // 0.1%
-              const WEAK_THRESHOLD = 0.0005;  // 0.05%
+              const TREND_THRESHOLD = 0.0015; // 0.15%
 
               if (isGoldCross) {
-                  // A. 強勢多頭 (季線斜率 > 0.1%)
-                  if (slope60 > STRICT_THRESHOLD) {
+                  // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
+                  if (slope60 > TREND_THRESHOLD) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // B. 緩升/盤整偏多 (需站上季線 1.5% 確認)
-                  else if (slope60 > WEAK_THRESHOLD && bias60 > 0.015) {
+                  // B. 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
+                  else if (slope60 > 0 && bias60 > 0.02) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // C. V轉急漲 (月線急拉 > 0.3%)
-                  else if (slope20 > 0.003) {
+                  // C. V轉急漲 (月線單日噴出 > 0.5%)
+                  else if (slope20 > 0.005) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // D. 逆勢/盤整 -> 空心紅 (僅反彈)
+                  // D. 雜訊 (不顯示，或顯示空心)
                   else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  // A. 標準空頭
-                  if (slope60 < -STRICT_THRESHOLD) {
+                  // A. 真跌破
+                  if (slope60 < -TREND_THRESHOLD) {
                       crossSignal = { type: 'death', style: 'solid' };
                   }
                   // B. 急跌修正
-                  else if (slope20 < -0.003) {
+                  else if (slope20 < -0.005) {
                       crossSignal = { type: 'death', style: 'solid' };
                   }
-                  // C. 多頭回檔 -> 空心綠
+                  // C. 多頭回檔
                   else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
-              }
-              
-              // 補償訊號 (延遲確認)
-              if (!crossSignal && ma20 > ma60 && slope60 > STRICT_THRESHOLD) {
-                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma;
-                   if (prevSlope60 <= STRICT_THRESHOLD) {
-                       crossSignal = { type: 'gold', style: 'solid' };
-                   }
               }
           }
 
@@ -584,7 +581,6 @@ export default function SpectatorView() {
           };
       });
   }, [fullData, currentDay]);
-
 
           return { 
               ...d, 

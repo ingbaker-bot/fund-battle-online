@@ -698,14 +698,7 @@ export default function SpectatorView() {
         {/* 1. 網格與軸線 */}
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
         <XAxis dataKey="date" hide />
-   <YAxis 
-    domain={['auto', 'auto']} 
-    orientation="right" 
-    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
-    width={45} // ★ 給予足夠寬度顯示數字
-    tickFormatter={(v) => Math.round(v)} // 取整數，保持整潔
-    interval="preserveStartEnd"
-/>
+        <YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
         
         {/* 2. 扣抵值標註 */}
         {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}

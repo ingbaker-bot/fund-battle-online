@@ -636,26 +636,39 @@ export default function AppBattle() {
                  </div>
               </div>
               
-              <div className="bg-white px-2 py-1 grid grid-cols-3 gap-1 items-center border-b border-slate-200">
-                 <div className="flex flex-col items-center border-r border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
-                    <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
-                        {trendSignal.char}
-                    </div>
-                 </div>
+<div className="bg-white px-2 py-1 grid grid-cols-4 gap-1 items-center border-b border-slate-200">
+    {/* 1. 新增：基金淨值 */}
+    <div className="flex flex-col items-center border-r border-slate-100">
+       <div className="text-[10px] text-slate-400 font-bold mb-0.5">目前淨值</div>
+       <div className="text-lg font-mono font-black leading-none h-5 flex items-center text-slate-800">
+           {currentNav.toFixed(2)}
+       </div>
+    </div>
 
-                 <div className="flex flex-col items-center border-r border-slate-100">
-                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
-                    <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
-                    </div>
-                 </div>
+    {/* 2. 趨勢 */}
+    <div className="flex flex-col items-center border-r border-slate-100">
+       <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
+       <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
+           {trendSignal.char}
+       </div>
+    </div>
 
-                 <div className="flex flex-col items-center">
-                    <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
-                    <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                        {Math.floor(totalAssets).toLocaleString()}
-                    </div>
+    {/* 3. 報酬率 */}
+    <div className="flex flex-col items-center border-r border-slate-100">
+       <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
+       <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+           {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
+       </div>
+    </div>
+
+    {/* 4. 總資產 */}
+    <div className="flex flex-col items-center">
+       <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
+       <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+           {Math.floor(totalAssets).toLocaleString()}
+       </div>
+    </div>
+</div>
                  </div>
               </div>
           </div>
@@ -699,8 +712,14 @@ export default function AppBattle() {
                     )}                    
 
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
-                    <YAxis domain={['auto', 'auto']} hide />
-
+<YAxis 
+    domain={['auto', 'auto']} 
+    orientation="right" 
+    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
+    width={45} // 給予足夠寬度
+    tickFormatter={(v) => Math.round(v)} 
+    interval="preserveStartEnd" 
+/>
                     {showIndicators.trend && chartData.map((entry, index) => {
                         if (entry.crossSignal) {
                             return (

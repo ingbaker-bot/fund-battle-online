@@ -494,7 +494,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
-// ★★★ V11.8 核心升級：盤整過濾加強版 (同步單機版邏輯) ★★★
+// ★★★ V11.9 核心升級：盤整過濾加強版 (主持人端同步) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -511,8 +511,13 @@ export default function SpectatorView() {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
-          const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
+          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算斜率)
+          const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
+          const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
+
+          // 繪製扣抵值用的參考點 (維持 60 天前)
+          const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
+          const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
           
           let riverTop = null; 
           let riverBottom = null;
@@ -521,25 +526,21 @@ export default function SpectatorView() {
           // --- 訊號判斷邏輯 (Filter Logic) ---
           let crossSignal = null;
           
-          // 注意：這裡改用 prev10Idx 來抓 10 天前的季線，跟單機版同步
-          const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
-          const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
-          
           if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 1. 計算月線斜率 (維持 1 天變化)
+              // 1. 計算月線斜率 (維持 1 天變化，抓急漲急跌)
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
 
-              // 2. 計算 10 天前的季線斜率 (關鍵修改！)
+              // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
               const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
 
               // 3. 計算乖離率
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
-              // 門檻設定 (與單機版同步)
+              // ★ 關鍵修正 3: 設定盤整濾網門檻
               const TREND_THRESHOLD = 0.0015; // 0.15%
 
               if (isGoldCross) {
@@ -577,7 +578,7 @@ export default function SpectatorView() {
 
           return { 
               ...d, 
-              ma20, ma60, riverTop, riverBottom, crossSignal
+              ma20, ma60, riverTop, riverBottom, crossSignal, deduction20, deduction60
           };
       });
   }, [fullData, currentDay]);

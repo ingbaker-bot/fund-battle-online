@@ -494,7 +494,8 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
-// ★★★ V11.9 核心升級：盤整過濾加強版 (主持人端同步) ★★★
+
+// ★★★ V11.9 核心升級：盤整過濾加強版 (SpectatorView 同步) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -511,11 +512,11 @@ export default function SpectatorView() {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算斜率)
+          // ★ 關鍵修正 1: 改用 10 天前的索引 (計算更穩定的斜率)
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
 
-          // 繪製扣抵值用的參考點 (維持 60 天前)
+          // 扣抵值點位 (主持人端需要繪製)
           const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
           const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
           
@@ -534,14 +535,15 @@ export default function SpectatorView() {
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
 
               // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
+              // 公式：(今日季線 - 10天前季線) / 10天前季線
               const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
 
               // 3. 計算乖離率
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
-              // ★ 關鍵修正 3: 設定盤整濾網門檻
-              const TREND_THRESHOLD = 0.0015; // 0.15%
+              // ★ 關鍵修正 3: 設定盤整濾網門檻 (0.15%)
+              const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
                   // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
@@ -556,7 +558,7 @@ export default function SpectatorView() {
                   else if (slope20 > 0.005) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // D. 雜訊 (不顯示，或顯示空心)
+                  // D. 雜訊 (顯示空心或過濾)
                   else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
@@ -573,6 +575,14 @@ export default function SpectatorView() {
                   else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
+              }
+              
+              // 補償訊號 (延遲確認)
+              if (!crossSignal && ma20 > ma60 && slope60 > TREND_THRESHOLD) {
+                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; 
+                   if (prevSlope60 <= TREND_THRESHOLD) {
+                       crossSignal = { type: 'gold', style: 'solid' };
+                   }
               }
           }
 

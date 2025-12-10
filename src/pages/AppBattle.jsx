@@ -518,9 +518,8 @@ export default function AppBattle() {
       return `${year}-${month}-${day}`;
   };
 
-  // ★★★ V11.9 核心升級：盤整過濾加強版 (AppBattle 修正版) ★★★
+// ★★★ V11.9 核心升級：盤整過濾加強版 (AppBattle 同步) ★★★
   const chartData = useMemo(() => {
-      // 1. 基礎檢查：如果沒有數據，回傳空陣列
       if (!fullData || fullData.length === 0) return [];
 
       const start = Math.max(0, currentDay - 330); 
@@ -536,13 +535,15 @@ export default function AppBattle() {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
+          // 這裡保留 refRealIdx (5天前) 僅作相容，主要邏輯改用下面的 prev10Idx
           const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
           const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
 
-          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算更穩定的斜率)
+          // ★ 關鍵修正 1: 計算 10 天前的索引
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
 
+          // 玩家端如果沒畫扣抵值，這裡可以留著計算但不回傳，或保留以備未來擴充
           const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
           const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
 
@@ -557,14 +558,13 @@ export default function AppBattle() {
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 1. 計算月線斜率 (維持 1 天變化，抓急漲急跌)
+              // 1. 計算月線斜率
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
 
               // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
-              // 公式：(今日季線 - 10天前季線) / 10天前季線
               const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
 
-              // 3. 計算乖離率 (Bias)
+              // 3. 計算乖離率
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
@@ -572,41 +572,28 @@ export default function AppBattle() {
               const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
-                  // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
                   if (slope60 > TREND_THRESHOLD) {
                       crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  // B. 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
-                  else if (slope60 > 0 && bias60 > 0.02) {
+                  } else if (slope60 > 0 && bias60 > 0.02) {
                       crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  // C. V轉急漲 (月線單日噴出 > 0.5%)
-                  else if (slope20 > 0.005) {
+                  } else if (slope20 > 0.005) {
                       crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  // D. 雜訊 (不顯示，或顯示空心)
-                  else {
+                  } else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  // A. 真跌破
                   if (slope60 < -TREND_THRESHOLD) {
                       crossSignal = { type: 'death', style: 'solid' };
-                  }
-                  // B. 急跌修正
-                  else if (slope20 < -0.005) {
+                  } else if (slope20 < -0.005) {
                       crossSignal = { type: 'death', style: 'solid' };
-                  }
-                  // C. 多頭回檔
-                  else {
+                  } else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
               }
               
-              // 補償訊號 (延遲確認)
+              // 補償訊號
               if (!crossSignal && ma20 > ma60 && slope60 > TREND_THRESHOLD) {
-                   // 檢查前一天是否還未達標，今天是第一天達標
-                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; // 簡化估算
+                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; 
                    if (prevSlope60 <= TREND_THRESHOLD) {
                        crossSignal = { type: 'gold', style: 'solid' };
                    }

@@ -687,40 +687,62 @@ export default function AppBattle() {
                  </div>
               </div>
               
-<div className="bg-white px-2 py-1 grid grid-cols-4 gap-1 items-center border-b border-slate-200">
-    {/* 1. 新增：基金淨值 */}
-    <div className="flex flex-col items-center border-r border-slate-100">
-       <div className="text-[10px] text-slate-400 font-bold mb-0.5">目前淨值</div>
-       <div className="text-lg font-mono font-black leading-none h-5 flex items-center text-slate-800">
-           {currentNav.toFixed(2)}
-       </div>
-    </div>
-
-    {/* 2. 趨勢 */}
-    <div className="flex flex-col items-center border-r border-slate-100">
-       <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
-       <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
-           {trendSignal.char}
-       </div>
-    </div>
-
-    {/* 3. 報酬率 */}
-    <div className="flex flex-col items-center border-r border-slate-100">
-       <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
-       <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-           {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
-       </div>
-    </div>
-
-    {/* 4. 總資產 */}
-    <div className="flex flex-col items-center">
-       <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
-       <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-           {Math.floor(totalAssets).toLocaleString()}
-       </div>
-    </div>
-</div>
+{/* Header */}
+          <div className="sticky top-0 z-20 shadow-sm">
+              {/* 上半部：按鈕與標題 */}
+              <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-lg font-black text-slate-700 h-12">
+                 <div className="flex items-center gap-2 w-1/3">
+                     <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
+                         <LogOut size={16} />
+                     </button>
+                     <div className={`flex items-center gap-1 font-mono font-bold text-sm ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
+                         <Timer size={14} />
+                         {formatTime(remainingTime)}
+                     </div>
                  </div>
+
+                 <div className="w-1/3 text-center">
+                     <span className="truncate max-w-full font-bold text-base">{fundName}</span>
+                 </div>
+
+                 <div className="w-1/3 text-right">
+                     <span className="font-mono tracking-wider text-xs text-slate-500">{currentDisplayDate}</span>
+                 </div>
+              </div>
+              
+              {/* 下半部：資訊列 (4欄位) */}
+              <div className="bg-white px-2 py-1 grid grid-cols-4 gap-1 items-center border-b border-slate-200">
+                  {/* 1. 淨值 */}
+                  <div className="flex flex-col items-center border-r border-slate-100">
+                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">目前淨值</div>
+                     <div className="text-lg font-mono font-black leading-none h-5 flex items-center text-slate-800">
+                         {currentNav.toFixed(2)}
+                     </div>
+                  </div>
+
+                  {/* 2. 趨勢 */}
+                  <div className="flex flex-col items-center border-r border-slate-100">
+                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
+                     <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
+                         {trendSignal.char}
+                     </div>
+                  </div>
+
+                  {/* 3. 報酬率 */}
+                  <div className="flex flex-col items-center border-r border-slate-100">
+                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
+                     <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                         {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}<span className="text-[9px] ml-0.5">%</span>
+                     </div>
+                  </div>
+
+                  {/* 4. 總資產 */}
+                  <div className="flex flex-col items-center">
+                     <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
+                     <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                         {Math.floor(totalAssets).toLocaleString()}
+                     </div>
+                  </div>
               </div>
           </div>
 

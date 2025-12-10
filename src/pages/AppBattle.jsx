@@ -1,4 +1,4 @@
-// 2025v11.0 - 玩家端 (修正黃金交叉 + AI 分析整合版 + 共享交易熱絡模式)
+// 2025v11.9 - 玩家端 (盤整濾網 V2 + UI 修復 + Y軸刻度 + 頂部淨值)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -169,7 +169,7 @@ export default function AppBattle() {
   const [remainingTime, setRemainingTime] = useState(0);
   const [isTimeUp, setIsTimeUp] = useState(false);
 
-  // ★★★ [修改點 1] 新增：共享交易暫停狀態 ★★★
+  // 共享交易暫停狀態
   const [activeRequests, setActiveRequests] = useState([]); 
   const [pauseCountdown, setPauseCountdown] = useState(15); 
 
@@ -201,7 +201,7 @@ export default function AppBattle() {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // ★★★ [修改點 1] 新增：監聽請求與倒數 (放在監聽房間資訊之前) ★★★
+  // 監聽請求與倒數
   useEffect(() => {
       if (!roomId) return;
       // 監聽 requests 子集合，以顯示市場暫停狀態
@@ -374,19 +374,29 @@ export default function AppBattle() {
       }
   };
   
-  // 觸發 AI 分析的函式
+  // 觸發 AI 分析的函式 (修正版)
   const handleAIAnalysis = () => {
+      // 1. 顯式宣告
+      const currentHistory = fullData;
+
+      // 2. 防呆檢查
+      if (!currentHistory || currentHistory.length === 0) {
+          alert("尚未載入歷史數據，AI 無法分析技術指標。");
+          return;
+      }
+
+      // 3. 呼叫 AI 分析
       analyzeGame({
           fundName: fundName,
           roi: displayRoi,
-          transactions: transactions, 
+          transactions: transactions,
+          historyData: currentHistory, // 確保傳遞資料
           nickname: nickname || '玩家'
       });
   };
 
   const handleRequestTrade = async () => {
       if (isTimeUp) { alert("比賽時間已到，停止交易！"); return; } 
-      // ★★★ [修改點] 移除了阻擋邏輯，允許隨時加入交易 ★★★
       setIsTrading(true); setTradeType(null); 
       try { await setDoc(doc(db, "battle_rooms", roomId, "requests", userId), { nickname: nickname, timestamp: serverTimestamp() }); } catch (e) { console.error(e); }
   };
@@ -508,7 +518,7 @@ export default function AppBattle() {
       return `${year}-${month}-${day}`;
   };
 
-// ★★★ V11.9 核心升級：盤整過濾加強版 (AppBattle 修正版) ★★★
+  // ★★★ V11.9 核心升級：盤整過濾加強版 (AppBattle 修正版) ★★★
   const chartData = useMemo(() => {
       // 1. 基礎檢查：如果沒有數據，回傳空陣列
       if (!fullData || fullData.length === 0) return [];
@@ -532,6 +542,9 @@ export default function AppBattle() {
           // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算更穩定的斜率)
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
+
+          const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
+          const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
 
           let riverTop = null; 
           let riverBottom = null;
@@ -602,7 +615,7 @@ export default function AppBattle() {
 
           return { 
               ...d, 
-              ma20, ma60, riverTop, riverBottom, crossSignal 
+              ma20, ma60, riverTop, riverBottom, crossSignal, deduction20, deduction60 
           };
       });
   }, [fullData, currentDay]);
@@ -687,29 +700,6 @@ export default function AppBattle() {
                  </div>
               </div>
               
-{/* Header */}
-          <div className="sticky top-0 z-20 shadow-sm">
-              {/* 上半部：按鈕與標題 */}
-              <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-lg font-black text-slate-700 h-12">
-                 <div className="flex items-center gap-2 w-1/3">
-                     <button onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} className="p-1.5 bg-slate-200 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-500 transition-colors">
-                         <LogOut size={16} />
-                     </button>
-                     <div className={`flex items-center gap-1 font-mono font-bold text-sm ${remainingTime < 30000 ? 'text-red-600 animate-pulse' : 'text-slate-600'}`}>
-                         <Timer size={14} />
-                         {formatTime(remainingTime)}
-                     </div>
-                 </div>
-
-                 <div className="w-1/3 text-center">
-                     <span className="truncate max-w-full font-bold text-base">{fundName}</span>
-                 </div>
-
-                 <div className="w-1/3 text-right">
-                     <span className="font-mono tracking-wider text-xs text-slate-500">{currentDisplayDate}</span>
-                 </div>
-              </div>
-              
               {/* 下半部：資訊列 (4欄位) */}
               <div className="bg-white px-2 py-1 grid grid-cols-4 gap-1 items-center border-b border-slate-200">
                   {/* 1. 淨值 */}
@@ -746,7 +736,7 @@ export default function AppBattle() {
               </div>
           </div>
 
-          {/* ★★★ [修改點 2] 新增：市場暫停通知條 (Header 下方) ★★★ */}
+          {/* 市場暫停通知條 */}
           {activeRequests.length > 0 && !isTrading && (
               <div className="bg-yellow-400 text-slate-900 px-4 py-2 flex items-center justify-between shadow-md animate-in slide-in-from-top duration-300 relative z-30">
                   <div className="flex items-center gap-2 overflow-hidden">
@@ -785,14 +775,16 @@ export default function AppBattle() {
                     )}                    
 
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
-<YAxis 
-    domain={['auto', 'auto']} 
-    orientation="right" 
-    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
-    width={45} // 給予足夠寬度
-    tickFormatter={(v) => Math.round(v)} 
-    interval="preserveStartEnd" 
-/>
+                    {/* Y軸設定 */}
+                    <YAxis 
+                        domain={['auto', 'auto']} 
+                        orientation="right" 
+                        tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
+                        width={45} 
+                        tickFormatter={(v) => Math.round(v)} 
+                        interval="preserveStartEnd" 
+                    />
+                    
                     {showIndicators.trend && chartData.map((entry, index) => {
                         if (entry.crossSignal) {
                             return (
@@ -830,25 +822,24 @@ export default function AppBattle() {
 
               {!isTrading ? (
                   <div className="px-4 pb-1">
-                      {/* ★★★ [修改點 3] 修改按鈕邏輯：不鎖定，改為變色鼓勵加入 ★★★ */}
+                      {/* 按鈕邏輯 */}
                       <button 
                           onClick={handleRequestTrade} 
-                          disabled={isTimeUp} // 只在「時間到」時鎖定
+                          disabled={isTimeUp} 
                           className={`w-full py-4 transition-all text-white rounded-xl font-black text-2xl shadow-lg flex items-center justify-center gap-2 
                           ${isTimeUp 
                               ? 'bg-slate-400 cursor-not-allowed' 
                               : activeRequests.length > 0 
-                                  ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 animate-pulse' // ★ 有人交易時，按鈕變橘紅色閃爍
+                                  ? 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 animate-pulse' 
                                   : 'bg-slate-800 hover:bg-slate-700 active:scale-95'
                           }`}
                       >
                           {isTimeUp ? <Lock size={24}/> : <Hand size={24} className="text-yellow-400"/>} 
                           
-                          {/* 文字顯示邏輯 */}
                           {isTimeUp 
                               ? '比賽結束' 
                               : activeRequests.length > 0 
-                                  ? `加入交易戰局！(${pauseCountdown}s)` // ★ 顯示倒數，催促玩家
+                                  ? `加入交易戰局！(${pauseCountdown}s)` 
                                   : '請求交易'
                           }
                       </button>

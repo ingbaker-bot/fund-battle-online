@@ -391,57 +391,58 @@ const handleAIAnalysis = () => {
             }
         }
 
-// 4. 訊號判斷：三合一邏輯 (斜率 + 乖離 + 趨勢)
+// 4. 訊號判斷：嚴格順勢邏輯 (Strict Trend Following)
         let crossSignal = null;
         
         if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
             const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
             const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-            // 計算斜率 (Slope)
-            const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
+            // 計算季線斜率
             const slope60 = refInd60.ma ? (ma60 - refInd60.ma) / refInd60.ma : 0;
+            // 計算月線斜率 (用於捕捉急殺)
+            const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
 
-            // 計算乖離率 (Bias) - 股價相對於季線的位置
-            const currentPrice = d.nav; // 取得當前股價
-            const bias60 = (currentPrice - ma60) / ma60;
-
-            // 過濾門檻
-            const THRESHOLD = 0.001; 
+            // 設定嚴格的斜率門檻 (必須大於 0 才算轉正)
+            const POSITIVE_THRESHOLD = 0.0005; // 微幅向上也算
+            const NEGATIVE_THRESHOLD = -0.001; 
 
             if (isGoldCross) {
-                // 情境 A: 標準多頭 (季線向上) -> 實心紅
-                if (slope60 > THRESHOLD) {
+                // 情境 A: 標準多頭 (季線已經翻揚向上) -> ★ 實心紅 (最佳買點)
+                if (slope60 > POSITIVE_THRESHOLD) {
                     crossSignal = { type: 'gold', style: 'solid' };
                 } 
-                // 情境 B: V轉急漲 (改良版)
-                // 條件：(月線急拉) OR (股價已經強勢站上季線 3% 以上，確認突破)
-                else if (slope20 > 0.003 || bias60 > 0.03) {
-                    crossSignal = { type: 'gold', style: 'solid' }; // ★ 修正左邊紅圈漏標問題
-                }
-                // 情境 C: 逆勢反彈 (季線還在向下) -> 空心紅
-                else if (slope60 < -THRESHOLD) {
+                // 情境 B: 逆勢交叉 (季線還在向下或走平) -> ★ 改為空心紅 (僅反彈，非回升)
+                else {
                     crossSignal = { type: 'gold', style: 'hollow' };
                 }
             } 
             else if (isDeathCross) {
                 // 情境 A: 標準空頭 (季線向下) -> 實心綠
-                if (slope60 < -THRESHOLD) {
+                if (slope60 < NEGATIVE_THRESHOLD) {
                     crossSignal = { type: 'death', style: 'solid' };
                 } 
-                // 情境 B: 急跌修正 (改良版)
-                // 條件：(月線急殺) AND (季線沒有強力向上支撐)
-                // 如果季線還在強力向上 (slope60 > 0.001)，就不給實心綠，只給空心
-                else if (slope20 < -0.003 && slope60 < THRESHOLD) { 
+                // 情境 B: 急跌修正 (月線急殺，不管季線怎樣都先跑) -> 實心綠
+                else if (slope20 < -0.003) {
                     crossSignal = { type: 'death', style: 'solid' };
                 }
-                // 情境 C: 多頭回檔 (季線向上) -> 空心綠
-                else if (slope60 > 0) { // 只要季線是大於 0 (包含微幅向上)，都視為回檔
-                    crossSignal = { type: 'death', style: 'hollow' }; // ★ 修正右邊紅圈誤標問題
+                // 情境 C: 多頭回檔 (季線還在向上) -> 空心綠 (找買點)
+                else {
+                    crossSignal = { type: 'death', style: 'hollow' };
                 }
             }
+            
+            // ★★★ 新增邏輯：補償「延遲確認」訊號 ★★★
+            // 如果不是交叉當天，但季線「剛剛」轉正 (ex: 3天內)，且目前是黃金交叉狀態 -> 補一個實心紅
+            // 這就是您提到的「等待後面的判斷」
+            if (!crossSignal && ma20 > ma60 && slope60 > POSITIVE_THRESHOLD) {
+                 // 檢查前一天斜率是否還在盤整或向下 (代表今天是轉折確認的第一天)
+                 const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; // 簡化估算
+                 if (prevSlope60 <= POSITIVE_THRESHOLD) {
+                     crossSignal = { type: 'gold', style: 'solid' };
+                 }
+            }
         }
-
         return { ...d, displayDate: getDisplayDate(d.date), ma20, ma60, riverTop, riverBottom, crossSignal };
     });
 

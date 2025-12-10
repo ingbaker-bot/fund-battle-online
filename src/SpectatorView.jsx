@@ -582,17 +582,6 @@ export default function SpectatorView() {
       });
   }, [fullData, currentDay]);
 
-          return { 
-              ...d, 
-              ma20: ind20.ma, 
-              ma60: ind60.ma, 
-              riverTop, 
-              riverBottom,
-              crossSignal
-          };
-      });
-  }, [fullData, currentDay]);
-
   const { totalInvestedAmount, positionRatio } = useMemo(() => {
       let totalAssets = 0; let totalInvested = 0;
       players.forEach(p => {

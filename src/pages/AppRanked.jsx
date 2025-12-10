@@ -391,23 +391,42 @@ const handleAIAnalysis = () => {
             }
         }
 
-        // 4. 訊號判斷：雙重邏輯 (順勢實心 / 逆勢空心)
+// ... (前略)
+        // 4. 訊號判斷：雙重邏輯 + 斜率濾網
         let crossSignal = null;
         
         if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
             const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
             const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-            // 季線趨勢 (今日 vs 5天前)
-            const isTrendUp = ma60 >= refInd60.ma;
-            const isTrendDown = ma60 < refInd60.ma;
+            // 計算季線斜率 (Slope)
+            // 公式：(今日季線 - 5天前季線) / 5天前季線
+            const slope = (ma60 - refInd60.ma) / refInd60.ma;
+            
+            // 設定一個過濾門檻 (例如 0.001 = 0.1%)
+            // 只有斜率絕對值大於這個門檻，才視為有趨勢
+            const THRESHOLD = 0.001; 
 
             if (isGoldCross) {
-                // 順勢(季線向上) -> 實心；逆勢(季線向下) -> 空心
-                crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
-            } else if (isDeathCross) {
-                // 順勢(季線向下) -> 實心；逆勢(季線向上) -> 空心
-                crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
+                if (slope > THRESHOLD) {
+                    // 強勢順勢黃金交叉 (季線明顯向上) -> 顯示實心紅三角
+                    crossSignal = { type: 'gold', style: 'solid' };
+                } else if (slope < -THRESHOLD) {
+                    // 逆勢反彈 (季線明顯向下) -> 顯示空心紅三角
+                    crossSignal = { type: 'gold', style: 'hollow' };
+                }
+                // ★ 注意：如果 slope 在 -0.001 ~ 0.001 之間 (盤整)，這裡什麼都不做 (crossSignal = null)
+                // 這樣就能過濾掉盤整區的無效訊號！
+            } 
+            else if (isDeathCross) {
+                if (slope < -THRESHOLD) {
+                    // 強勢順勢死亡交叉 (季線明顯向下) -> 顯示實心綠三角
+                    crossSignal = { type: 'death', style: 'solid' };
+                } else if (slope > THRESHOLD) {
+                    // 上升回檔 (季線明顯向上) -> 顯示空心綠三角
+                    crossSignal = { type: 'death', style: 'hollow' };
+                }
+                // 同樣過濾掉盤整訊號
             }
         }
 

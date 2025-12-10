@@ -508,16 +508,20 @@ export default function AppBattle() {
       return `${year}-${month}-${day}`;
   };
 
+// ★★★ V11.9 核心升級：盤整過濾加強版 (AppBattle 修正版) ★★★
   const chartData = useMemo(() => {
+      // 1. 基礎檢查：如果沒有數據，回傳空陣列
+      if (!fullData || fullData.length === 0) return [];
+
       const start = Math.max(0, currentDay - 330); 
       const end = currentDay + 1;
       
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
-          
-          const ind20 = calculateIndicators(fullData, 20, realIdx); 
+          const ind20 = calculateIndicators(fullData, 20, realIdx);
           const ind60 = calculateIndicators(fullData, 60, realIdx);
-          
+          const ma20 = ind20.ma; const ma60 = ind60.ma;
+
           const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
@@ -525,33 +529,80 @@ export default function AppBattle() {
           const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
           const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
 
+          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算更穩定的斜率)
+          const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
+          const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
+
           let riverTop = null; 
-          let riverBottom = null; 
-          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
+          let riverBottom = null;
+          if (ma60) { riverTop = ma60 * 1.1; riverBottom = ma60 * 0.9; }
 
-          let crossSignal = null; 
+          // --- 訊號判斷邏輯 (Filter Logic) ---
+          let crossSignal = null;
           
-          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
-              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
-              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
+          if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
+              const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
+              const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              const isTrendUp = ind60.ma >= refInd60.ma;
-              const isTrendDown = ind60.ma < refInd60.ma;
+              // 1. 計算月線斜率 (維持 1 天變化，抓急漲急跌)
+              const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
+
+              // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
+              // 公式：(今日季線 - 10天前季線) / 10天前季線
+              const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
+
+              // 3. 計算乖離率 (Bias)
+              const currentPrice = d.nav;
+              const bias60 = (currentPrice - ma60) / ma60;
+
+              // ★ 關鍵修正 3: 設定盤整濾網門檻 (0.15%)
+              const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
-                  crossSignal = { type: 'gold', style: isTrendUp ? 'solid' : 'hollow' };
+                  // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
+                  if (slope60 > TREND_THRESHOLD) {
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  }
+                  // B. 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
+                  else if (slope60 > 0 && bias60 > 0.02) {
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  }
+                  // C. V轉急漲 (月線單日噴出 > 0.5%)
+                  else if (slope20 > 0.005) {
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  }
+                  // D. 雜訊 (不顯示，或顯示空心)
+                  else {
+                      crossSignal = { type: 'gold', style: 'hollow' };
+                  }
               } else if (isDeathCross) {
-                  crossSignal = { type: 'death', style: isTrendDown ? 'solid' : 'hollow' };
+                  // A. 真跌破
+                  if (slope60 < -TREND_THRESHOLD) {
+                      crossSignal = { type: 'death', style: 'solid' };
+                  }
+                  // B. 急跌修正
+                  else if (slope20 < -0.005) {
+                      crossSignal = { type: 'death', style: 'solid' };
+                  }
+                  // C. 多頭回檔
+                  else {
+                      crossSignal = { type: 'death', style: 'hollow' };
+                  }
+              }
+              
+              // 補償訊號 (延遲確認)
+              if (!crossSignal && ma20 > ma60 && slope60 > TREND_THRESHOLD) {
+                   // 檢查前一天是否還未達標，今天是第一天達標
+                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; // 簡化估算
+                   if (prevSlope60 <= TREND_THRESHOLD) {
+                       crossSignal = { type: 'gold', style: 'solid' };
+                   }
               }
           }
 
           return { 
               ...d, 
-              ma20: ind20.ma, 
-              ma60: ind60.ma, 
-              riverTop, 
-              riverBottom, 
-              crossSignal 
+              ma20, ma60, riverTop, riverBottom, crossSignal 
           };
       });
   }, [fullData, currentDay]);

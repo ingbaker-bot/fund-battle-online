@@ -391,65 +391,70 @@ const handleAIAnalysis = () => {
             }
         }
 
-// 4. 訊號判斷：盤整過濾加強版
+// ... (前略：計算 ma20, ma60)
+
+        // 3. 準備斜率計算用的參考點
+        // 修改：原本看 5 天 (refRealIdx)，現在改為看 10 天前，趨勢會更穩定
+        const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
+        const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
+
+        // ... (中間略)
+
+        // 4. 訊號判斷：盤整過濾加強版 V2
         let crossSignal = null;
         
-        if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+        if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
             const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
             const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-            // 計算斜率
+            // 計算月線斜率 (維持 1 天變化，抓急漲急跌)
             const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
-            const slope60 = refInd60.ma ? (ma60 - refInd60.ma) / refInd60.ma : 0;
 
-            // 計算乖離率 (Bias) - 用於輔助判斷
+            // ★★★ 關鍵修改：計算 10 天前的季線斜率 ★★★
+            // 公式：(今日季線 - 10天前季線) / 10天前季線
+            const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
+
+            // 計算乖離率 (Bias)
             const currentPrice = d.nav;
             const bias60 = (currentPrice - ma60) / ma60;
 
-            // ★ 修改 1: 提高趨勢確認門檻 (從 0.0005 提高到 0.001)
-            const STRICT_THRESHOLD = 0.001; // 0.1% 才算有趨勢
-            const WEAK_THRESHOLD = 0.0005;  // 0.05% 微幅波動
+            // ★★★ 設定盤整區濾網 (Dead Zone) ★★★
+            // 只有當 10 天累積漲幅超過 0.15% 才算多頭，否則視為盤整
+            const TREND_THRESHOLD = 0.0015; 
 
             if (isGoldCross) {
-                // 情境 A: 強勢多頭 (季線斜率 > 0.1%) -> 實心紅
-                if (slope60 > STRICT_THRESHOLD) {
+                // 情境 A: 真突破 (季線 10 天來穩定向上 > 0.15%)
+                if (slope60 > TREND_THRESHOLD) {
                     crossSignal = { type: 'gold', style: 'solid' };
                 }
-                // 情境 B: 緩升/盤整偏多 (0.05% < 斜率 < 0.1%)
-                // 只有當股價強勢站上季線 1.5% 以上，才視為有效突破，否則視為雜訊
-                else if (slope60 > WEAK_THRESHOLD && bias60 > 0.015) {
+                // 情境 B: 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
+                // 補償邏輯：如果季線沒動，除非股價衝很遠，否則不給紅三角
+                else if (slope60 > 0 && bias60 > 0.02) {
                     crossSignal = { type: 'gold', style: 'solid' };
                 }
-                // 情境 C: V轉急漲 (月線急拉 > 0.3%)
-                else if (slope20 > 0.003) {
+                // 情境 C: V轉急漲 (月線單日噴出 > 0.5%)
+                else if (slope20 > 0.005) {
                     crossSignal = { type: 'gold', style: 'solid' };
                 }
-                // 情境 D: 逆勢/盤整 (斜率太小或為負) -> 改為空心紅 (僅反彈)
+                // 其他 (盤整區微幅穿越) -> 視為雜訊，完全不給訊號，或只給空心
                 else {
-                    crossSignal = { type: 'gold', style: 'hollow' };
+                    // 選擇性：如果您想看空心就留著，不想看就註解掉下面這行
+                    crossSignal = { type: 'gold', style: 'hollow' }; 
                 }
             } 
             else if (isDeathCross) {
-                // 情境 A: 標準空頭 (季線向下)
-                if (slope60 < -STRICT_THRESHOLD) {
+                // 情境 A: 真跌破 (季線明顯向下)
+                if (slope60 < -TREND_THRESHOLD) {
                     crossSignal = { type: 'death', style: 'solid' };
                 } 
-                // 情境 B: 急跌修正 (月線急殺)
-                else if (slope20 < -0.003) {
+                // 情境 B: 急跌修正 (月線單日重挫 < -0.5%)
+                else if (slope20 < -0.005) {
                     crossSignal = { type: 'death', style: 'solid' };
                 }
                 // 情境 C: 多頭回檔 (季線還在向上)
                 else {
                     crossSignal = { type: 'death', style: 'hollow' };
                 }
-            }
-            
-            // ★ 修改 2: 補償訊號也同步提高門檻
-            if (!crossSignal && ma20 > ma60 && slope60 > STRICT_THRESHOLD) {
-                 const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma;
-                 if (prevSlope60 <= STRICT_THRESHOLD) {
-                     crossSignal = { type: 'gold', style: 'solid' };
-                 }
             }
         }
 

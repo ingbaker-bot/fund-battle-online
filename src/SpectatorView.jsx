@@ -494,7 +494,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
-  // ★★★ V11.3 核心升級：雙重邏輯 (順勢實心 + 逆勢空心) ★★★
+ // ★★★ V11.8 核心升級：盤整過濾加強版 (同步單機版邏輯) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -505,48 +505,86 @@ export default function SpectatorView() {
           const realIdx = start + idx;
           const ind20 = calculateIndicators(fullData, 20, realIdx);
           const ind60 = calculateIndicators(fullData, 60, realIdx);
+          const ma20 = ind20.ma; const ma60 = ind60.ma;
 
           const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // 5日斜率參考
           const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
           const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
           
           let riverTop = null; 
           let riverBottom = null;
-          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
+          if (ma60) { riverTop = ma60 * 1.1; riverBottom = ma60 * 0.9; }
 
-          // 訊號判斷結構：{ type: 'gold'|'death', style: 'solid'|'hollow' }
-          let crossSignal = null; 
+          // 訊號判斷邏輯 (Filter Logic)
+          let crossSignal = null;
           
-          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
-              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
-              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
+          if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+              const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
+              const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 季線趨勢 (Current > 5 days ago)
-              const isTrendUp = ind60.ma >= refInd60.ma;
-              const isTrendDown = ind60.ma < refInd60.ma;
+              // 計算斜率
+              const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
+              const slope60 = refInd60.ma ? (ma60 - refInd60.ma) / refInd60.ma : 0;
+
+              // 計算乖離率
+              const currentPrice = d.nav;
+              const bias60 = (currentPrice - ma60) / ma60;
+
+              // 門檻設定 (與單機版同步)
+              const STRICT_THRESHOLD = 0.001; // 0.1%
+              const WEAK_THRESHOLD = 0.0005;  // 0.05%
 
               if (isGoldCross) {
-                  if (isTrendUp) {
-                      // 順勢黃金交叉 -> 實心
+                  // A. 強勢多頭 (季線斜率 > 0.1%)
+                  if (slope60 > STRICT_THRESHOLD) {
                       crossSignal = { type: 'gold', style: 'solid' };
-                  } else {
-                      // 逆勢黃金交叉 (搶反彈/V轉) -> 空心
+                  }
+                  // B. 緩升/盤整偏多 (需站上季線 1.5% 確認)
+                  else if (slope60 > WEAK_THRESHOLD && bias60 > 0.015) {
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  }
+                  // C. V轉急漲 (月線急拉 > 0.3%)
+                  else if (slope20 > 0.003) {
+                      crossSignal = { type: 'gold', style: 'solid' };
+                  }
+                  // D. 逆勢/盤整 -> 空心紅 (僅反彈)
+                  else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  if (isTrendDown) {
-                      // 順勢死亡交叉 -> 實心
+                  // A. 標準空頭
+                  if (slope60 < -STRICT_THRESHOLD) {
                       crossSignal = { type: 'death', style: 'solid' };
-                  } else {
-                      // 逆勢死亡交叉 (漲多拉回/V轉向下) -> 空心
+                  }
+                  // B. 急跌修正
+                  else if (slope20 < -0.003) {
+                      crossSignal = { type: 'death', style: 'solid' };
+                  }
+                  // C. 多頭回檔 -> 空心綠
+                  else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
               }
+              
+              // 補償訊號 (延遲確認)
+              if (!crossSignal && ma20 > ma60 && slope60 > STRICT_THRESHOLD) {
+                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma;
+                   if (prevSlope60 <= STRICT_THRESHOLD) {
+                       crossSignal = { type: 'gold', style: 'solid' };
+                   }
+              }
           }
+
+          return { 
+              ...d, 
+              ma20, ma60, riverTop, riverBottom, crossSignal
+          };
+      });
+  }, [fullData, currentDay]);
+
 
           return { 
               ...d, 

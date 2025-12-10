@@ -176,24 +176,19 @@ export default function AppBattle() {
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
 
-useEffect(() => {
-      if (!roomId) return;
-      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), async (snapshot) => {
-          const reqs = [];
-          snapshot.forEach(doc => reqs.push(doc.data()));
-          setTradeRequests(reqs);
-          
-          if (reqs.length > 0) {
-              // 停止自動播放
-              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
-              setAutoPlaySpeed(null);
-              
-              // ★ 新增：每次有新請求，重置倒數 (這裡其實可以寫入一個 pauseExpiresAt 到資料庫會更準，但目前先維持既有架構，僅依靠 requests 變化來觸發重置)
-              setCountdown(15); 
-          }
-      });
-      return () => unsubscribe();
-  }, [roomId]);
+  useEffect(() => {
+    if (urlRoomId) { 
+        setRoomId(urlRoomId);
+        const savedRoom = localStorage.getItem('battle_roomId');
+        if (savedRoom && savedRoom !== urlRoomId) {
+            localStorage.clear();
+            setCash(1000000); setUnits(0); setAvgCost(0); setNickname(''); setResetCount(0); setIsTrading(false); setTransactions([]); // 重置交易
+            setStatus('login');
+        }
+    } else { 
+        setStatus('input_room'); 
+    }
+  }, [urlRoomId]);
 
   useEffect(() => {
       if (roomId) localStorage.setItem('battle_roomId', roomId);

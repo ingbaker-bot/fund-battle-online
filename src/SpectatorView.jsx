@@ -366,7 +366,6 @@ export default function SpectatorView() {
       autoPlayRef.current = setInterval(async () => {
         if (roomIdRef.current) {
            await updateDoc(doc(db, "battle_rooms", roomIdRef.current), { currentDay: increment(1) });
-           setCurrentDay(prev => prev + 1);
         }
       }, speed);
     }

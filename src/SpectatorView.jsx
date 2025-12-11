@@ -1,4 +1,4 @@
-// 2025v11.3 - 主持人端 (分級顯示：實心=順勢訊號，空心=逆勢轉折訊號)
+// 2025v12.0 - 主持人端 (修復冠軍數據同步與寫入 ID)
 // ★ 加入時間校正功能
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
@@ -423,7 +423,12 @@ export default function SpectatorView() {
                 if (latestPlayers.length > 0) {
                     const champion = latestPlayers[0];
                     console.log("🏆 冠軍產生:", champion.nickname, champion.roi);
-                    winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
+                    // ★ v12.0 修改：寫入玩家 ID，以便客戶端識別是否為自己
+                    winnerInfo = { 
+                        id: champion.id, 
+                        nickname: champion.nickname, 
+                        roi: champion.roi || 0 
+                    };
                 }
 
                 await updateDoc(doc(db, "battle_rooms", roomId), { 
@@ -627,7 +632,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v11.3 Dual Logic (Solid/Hollow) | NBS Team
+            v12.0 Dual Logic (Sync Fixed) | NBS Team
           </div>
         </div>
       </div>

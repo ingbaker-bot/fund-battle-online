@@ -1,4 +1,4 @@
-// 2025v11.9 - 玩家端 (盤整濾網 V2 + UI 修復 + Y軸刻度 + 頂部淨值)
+// 2025v12.0 - 玩家端 (修復冠軍顯示秒差)
 // ★ 加入時間校正功能
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -608,6 +608,14 @@ export default function AppBattle() {
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
+  // ★ 新增：計算冠軍與我自己的關係
+  // 如果冠軍是我自己，強制顯示本地 displayRoi，因為它比資料庫的 champion.roi 更即時、更準確
+  const finalChampionRoi = useMemo(() => {
+      if (!champion) return 0;
+      if (champion.id === userId) return displayRoi; // 我是冠軍，用我的即時數據
+      return champion.roi || 0; // 別人是冠軍，用伺服器數據
+  }, [champion, userId, displayRoi]);
+
   if (status === 'input_room') return (
       <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">
           <Zap size={64} className="text-emerald-500 mb-6"/>
@@ -912,9 +920,12 @@ export default function AppBattle() {
         	<Crown size={20} className="text-white mb-1" fill="currentColor"/>
         	<div className="text-lg text-white font-black mb-0 shadow-sm">本場冠軍</div>
         	<div className="text-sm font-bold truncate w-full text-center mb-1 drop-shadow-md">{champion.nickname}</div>
-        	<div className="text-lg font-mono font-black text-white drop-shadow-md">
-            	{champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(1)}%
-                    </div>
+        	
+            {/* ★ v12.0 修改：使用 finalChampionRoi 取代直接顯示 champion.roi */}
+            <div className="text-lg font-mono font-black text-white drop-shadow-md">
+            	{finalChampionRoi > 0 ? '+' : ''}{finalChampionRoi.toFixed(1)}%
+            </div>
+
                 </div>
             )}
         </div>

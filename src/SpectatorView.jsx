@@ -83,6 +83,69 @@ const renderCrossTriangle = (props) => {
     }
 };
 
+// --- 補上遺失的工具函式 (請貼在 import 下方，組件上方) ---
+
+const processRealData = (rawData) => {
+    if (!rawData || !Array.isArray(rawData)) return [];
+    return rawData.map((item, index) => ({ id: index, date: item.date, nav: parseFloat(item.nav) }));
+};
+
+const calculateIndicators = (data, days, currentIndex) => {
+  if (!data || currentIndex < days) return { ma: null, stdDev: null };
+  let sum = 0;
+  const values = [];
+  for (let i = 0; i < days; i++) { 
+      const val = data[currentIndex - i]?.nav;
+      if (val && !isNaN(val)) { sum += val; values.push(val); }
+  }
+  const ma = sum / days;
+  return { ma: parseFloat(ma.toFixed(2)) };
+};
+
+// 繪圖用的三角形
+const renderTriangle = (props) => {
+    const { cx, cy, fill } = props;
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+    return (
+        <polygon 
+            points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
+            fill={fill} 
+            stroke="white" 
+            strokeWidth={2}
+        />
+    );
+};
+
+// 交叉訊號用的三角形
+const renderCrossTriangle = (props) => {
+    const { cx, cy, direction, type } = props;
+    if (!Number.isFinite(cx) || !Number.isFinite(cy) || !direction) return null;
+
+    const isSolid = type === 'solid';
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; 
+    const fillColor = isSolid ? strokeColor : "#ffffff"; 
+    
+    if (direction === 'gold') {
+        return (
+            <polygon 
+                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
+                fill={fillColor} 
+                stroke={strokeColor}
+                strokeWidth={2}
+            />
+        );
+    } else {
+        return (
+            <polygon 
+                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
+                fill={fillColor} 
+                stroke={strokeColor} 
+                strokeWidth={2}
+            />
+        );
+    }
+};
+
 export default function SpectatorView() {
   const [hostUser, setHostUser] = useState(null);
   const [email, setEmail] = useState('');

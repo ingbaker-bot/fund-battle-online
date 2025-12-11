@@ -19,69 +19,7 @@ import {
 
 import { FUNDS_LIBRARY } from './config/funds';
 
-const processRealData = (rawData) => {
-    if (!rawData || !Array.isArray(rawData)) return [];
-    return rawData.map((item, index) => ({ id: index, date: item.date, nav: parseFloat(item.nav) }));
-};
 
-const calculateIndicators = (data, days, currentIndex) => {
-  if (!data || currentIndex < days) return { ma: null, stdDev: null };
-  let sum = 0;
-  const values = [];
-  for (let i = 0; i < days; i++) { 
-      const val = data[currentIndex - i]?.nav;
-      if (val && !isNaN(val)) { sum += val; values.push(val); }
-  }
-  const ma = sum / days;
-  return { ma: parseFloat(ma.toFixed(2)) };
-};
-
-// --- 視覺輔助繪圖函數 ---
-
-// 1. 扣抵值三角形 (藍色/深藍色)
-const renderTriangle = (props) => {
-    const { cx, cy, fill } = props;
-    return (
-        <polygon 
-            points={`${cx},${cy-6} ${cx-6},${cy+6} ${cx+6},${cy+6}`} 
-            fill={fill} 
-            stroke="white" 
-            strokeWidth={2}
-        />
-    );
-};
-
-// 2. 交叉訊號繪製器 (支援 實心/空心)
-// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
-const renderCrossTriangle = (props) => {
-    const { cx, cy, direction, type } = props;
-    
-    const isSolid = type === 'solid';
-    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
-    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
-    
-    if (direction === 'gold') {
-        // 黃金交叉：紅色向上
-        return (
-            <polygon 
-                points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
-                fill={fillColor} 
-                stroke={strokeColor}
-                strokeWidth={2}
-            />
-        );
-    } else {
-        // 死亡交叉：綠色向下
-        return (
-            <polygon 
-                points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
-                fill={fillColor}
-                stroke={strokeColor}
-                strokeWidth={2}
-            />
-        );
-    }
-};
 
 // --- 補上遺失的工具函式 (請貼在 import 下方，組件上方) ---
 

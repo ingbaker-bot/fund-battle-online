@@ -597,11 +597,14 @@ export default function AppBattle() {
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
+// ★ v12.4 修正：比賽結束時，無條件信任主持人(伺服器)的數據
+  // 這樣才能確保手機畫面跟大螢幕的冠軍成績一模一樣
   const finalChampionRoi = useMemo(() => {
       if (!champion) return 0;
-      if (champion.id === userId) return displayRoi; // 我是冠軍，用我的即時數據
-      return champion.roi || 0; // 別人是冠軍，用伺服器數據
-  }, [champion, userId, displayRoi]);
+      // 移除 "if (champion.id === userId)..." 的判斷
+      // 直接回傳伺服器紀錄的 roi，這才是官方最終成績
+      return champion.roi || 0; 
+  }, [champion]);
 
   if (status === 'input_room') return (
       <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">

@@ -1,5 +1,5 @@
-// 2025v12.0 - 玩家端 (修復冠軍顯示秒差)
-// ★ 加入時間校正功能
+// 2025v12.1 - 玩家端 (防作弊延遲同步版)
+// ★ 本地冠軍顯示優化：確保 "我是冠軍" 時顯示本地即時數據
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';

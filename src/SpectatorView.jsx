@@ -18,7 +18,8 @@ import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
 import AIAnalysisModal from '../components/AIAnalysisModal';
-import { useAIAnalyst } from '../hooks/useAIAnalyst';
+
+import { useAIAnalyst } from "../hooks/useAIAnalyst.js";
 
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];

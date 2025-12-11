@@ -1,5 +1,5 @@
-// 2025v12.1 - 主持人端 (防作弊延遲渲染版 + 冠軍同步修復)
-// ★ 核心升級：Host Render Delay (強制大螢幕比玩家慢 1.5 秒，杜絕看螢幕作弊)
+// 2025v12.2 - 主持人端 (移除延遲渲染，恢復即時臨場感)
+// ★ 調整：取消 Host Render Delay，追求現場大螢幕與操作同步的最高流暢度
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -8,8 +8,7 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet,
-  EyeOff // 新增圖示
+  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -91,9 +90,7 @@ export default function SpectatorView() {
   const [gameStatus, setGameStatus] = useState('waiting'); 
   const [players, setPlayers] = useState([]);
   
-  const [currentDay, setCurrentDay] = useState(400); // 資料庫的真實天數
-  const [visualDay, setVisualDay] = useState(400);   // ★ 主持人螢幕「顯示」的天數 (延遲用)
-  
+  const [currentDay, setCurrentDay] = useState(400); // v12.2: 直接使用真實天數渲染
   const [startDay, setStartDay] = useState(400); 
   const [timeOffset, setTimeOffset] = useState(0); 
 
@@ -113,27 +110,11 @@ export default function SpectatorView() {
   const [countdown, setCountdown] = useState(15); 
   const [copied, setCopied] = useState(false);
 
+  // 伺服器時間校正保留，這對於倒數計時仍有幫助
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
   const roomIdRef = useRef(null);
   const autoPlayRef = useRef(null);
-
-  // ★ 核心邏輯：Host Render Delay (防作弊延遲)
-  // 當資料庫的 currentDay 改變時，主持人不要馬上變，等 1.5 秒再變
-  // 這樣保證玩家手機 (通常延遲 < 0.8秒) 會先看到結果
-  useEffect(() => {
-    // 只有在「前進」時才延遲，如果是重置遊戲(變回400)，則立刻更新
-    if (currentDay > visualDay) {
-        const delayMs = 1500; // ★ 強制延遲 1.5 秒
-        const timer = setTimeout(() => {
-            setVisualDay(currentDay);
-        }, delayMs);
-        return () => clearTimeout(timer);
-    } else {
-        // 重置或倒退時，立刻同步
-        setVisualDay(currentDay);
-    }
-  }, [currentDay]);
 
   useEffect(() => {
     const syncTime = async () => {
@@ -144,6 +125,7 @@ export default function SpectatorView() {
                 const serverTime = new Date(serverDateStr).getTime();
                 const localTime = Date.now();
                 const offset = serverTime - localTime;
+                console.log(`[Host] 時間校正完成，偏差值: ${offset}ms`);
                 setServerTimeOffset(offset);
             }
         } catch (err) {
@@ -161,6 +143,7 @@ export default function SpectatorView() {
         try {
             const userDocRef = doc(db, "users", user.uid);
             const userSnap = await getDoc(userDocRef);
+
             if (userSnap.exists()) {
                 const role = userSnap.data().role;
                 if (['admin', 'host', 'vip'].includes(role)) {
@@ -276,10 +259,7 @@ export default function SpectatorView() {
       const roomData = docSnap.data();
       
       if (roomData.status) setGameStatus(roomData.status);
-      
-      // ★ 只更新 currentDay (真實數據)，visualDay 交給上方的 useEffect 延遲更新
       if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
-      
       if (roomData.startDay) setStartDay(roomData.startDay);
       if (roomData.indicators) setIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
@@ -360,7 +340,6 @@ export default function SpectatorView() {
 
     setGameEndTime(calculatedEndTime);
     setGameStatus('playing');
-    setVisualDay(randomStartDay); // 開始時重置視覺天數
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
         status: 'playing', 
@@ -377,8 +356,8 @@ export default function SpectatorView() {
     if (tradeRequests.length > 0) return; 
     if (!roomId) return;
     
-    // ★ 關鍵修正：只更新資料庫，不手動更新本地 state (Optimistic Update removed)
-    // 讓 onSnapshot 接收到更新後，觸發 visualDay 的延遲邏輯
+    // v12.2 恢復：本地先更新(Optimistic Update)，確保大螢幕零延遲，氣氛第一
+    setCurrentDay(prev => prev + 1);
     await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
   };
 
@@ -404,8 +383,9 @@ export default function SpectatorView() {
       setAutoPlaySpeed(speed);
       autoPlayRef.current = setInterval(async () => {
         if (roomIdRef.current) {
+           // v12.2 恢復：AutoPlay 也加入本地先更新
+           setCurrentDay(prev => prev + 1); 
            await updateDoc(doc(db, "battle_rooms", roomIdRef.current), { currentDay: increment(1) });
-           // 不要這裡手動 setCurrentDay，全部交給延遲機制
         }
       }, speed);
     }
@@ -453,7 +433,6 @@ export default function SpectatorView() {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');
     setCurrentDay(400); 
-    setVisualDay(400); // 重置時立刻同步
     setStartDay(400);
     setIndicators({ ma20: false, ma60: false, river: false, trend: false });
     setFeeRate(0.01);
@@ -502,15 +481,12 @@ export default function SpectatorView() {
       return `${newYear}-${month}-${day}`;
   };
 
-  // ★ 使用 visualDay 而非 currentDay 來計算圖表數據，確保大螢幕是延遲的
-  const chartRefDay = visualDay;
-
-  const deduction20 = (fullData && chartRefDay >= 20) ? fullData[chartRefDay - 20] : null;
-  const deduction60 = (fullData && chartRefDay >= 60) ? fullData[chartRefDay - 60] : null;
+  const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
+  const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
   const currentTrendInfo = useMemo(() => {
-      if (!fullData[chartRefDay] || !indicators.trend) return null;
-      const realIdx = chartRefDay;
+      if (!fullData[currentDay] || !indicators.trend) return null;
+      const realIdx = currentDay;
       const curNav = fullData[realIdx].nav;
       const ind20 = calculateIndicators(fullData, 20, realIdx);
       const ind60 = calculateIndicators(fullData, 60, realIdx);
@@ -519,13 +495,13 @@ export default function SpectatorView() {
       if (curNav > ma20 && ma20 > ma60) return { text: '多頭排列 🔥', color: 'text-red-500', bg: 'bg-red-50' };
       else if (curNav < ma20 && ma20 < ma60) return { text: '空頭排列 🧊', color: 'text-green-600', bg: 'bg-green-50' };
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
-  }, [fullData, chartRefDay, indicators.trend]);
+  }, [fullData, currentDay, indicators.trend]);
 
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
-      const start = Math.max(0, chartRefDay - 330); 
-      const end = chartRefDay + 1;
+      const start = Math.max(0, currentDay - 330); 
+      const end = currentDay + 1;
       
       return fullData.slice(start, end).map((d, idx) => {
           const realIdx = start + idx;
@@ -573,29 +549,26 @@ export default function SpectatorView() {
 
           return { ...d, ma20, ma60, riverTop, riverBottom, crossSignal, deduction20, deduction60 };
       });
-  }, [fullData, chartRefDay]);
+  }, [fullData, currentDay]);
 
   const { totalInvestedAmount, positionRatio } = useMemo(() => {
       let totalAssets = 0; let totalInvested = 0;
       players.forEach(p => {
           const pAssets = p.assets || 1000000; totalAssets += pAssets;
-          const pUnits = p.units || 0; const currentNav = fullData[chartRefDay]?.nav || 0;
+          const pUnits = p.units || 0; const currentNav = fullData[currentDay]?.nav || 0;
           let marketValue = pUnits * currentNav; if (marketValue > pAssets) marketValue = pAssets;
           totalInvested += marketValue;
       });
       const ratio = totalAssets > 0 ? (totalInvested / totalAssets) * 100 : 0;
       return { totalInvestedAmount: totalInvested, positionRatio: ratio };
-  }, [players, fullData, chartRefDay]);
+  }, [players, fullData, currentDay]);
 
   const topPlayers = players.slice(0, 10);
   const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
   const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
-  const currentNav = fullData[chartRefDay]?.nav || 0;
-  const currentDisplayDate = fullData[chartRefDay] ? getDisplayDate(fullData[chartRefDay].date) : "---";
+  const currentNav = fullData[currentDay]?.nav || 0;
+  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
   const hasRequests = tradeRequests && tradeRequests.length > 0;
-  
-  // 檢查是否正在延遲同步中
-  const isSyncing = currentDay > visualDay;
 
   if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
 
@@ -624,7 +597,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v12.1 Anti-Cheat Delay | NBS Team
+            v12.2 Live Mode (Instant Render) | NBS Team
           </div>
         </div>
       </div>
@@ -669,15 +642,6 @@ export default function SpectatorView() {
         <div className="flex-1 flex justify-center items-center px-4">
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
-                    {/* ★ 如果正在延遲同步中，顯示 Loading 遮罩，提示主持人正在等待玩家跟上 */}
-                    {isSyncing && (
-                         <div className="absolute inset-0 bg-white/80 z-20 flex items-center justify-center rounded-xl backdrop-blur-[1px]">
-                             <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs animate-pulse">
-                                 <EyeOff size={14} /> 防偷看延遲中...
-                             </div>
-                         </div>
-                    )}
-                    
                     {currentTrendInfo && (<div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}><span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span></div>)}
                     <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div><div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex items-baseline gap-2"><span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span><span className="text-3xl font-mono font-black text-slate-800 tracking-tight">{currentNav.toFixed(2)}</span></div>
                     <div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex flex-col items-end"><div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase"><Wallet size={10} /> 總資金</div><div className="flex items-baseline gap-2"><span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount / 10000)}萬</span><span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>({positionRatio.toFixed(0)}%)</span></div></div>
@@ -754,7 +718,7 @@ export default function SpectatorView() {
                  {hasRequests ? (<div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100"><div className="flex items-center gap-3 overflow-hidden"><div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div><div className="flex flex-col leading-none overflow-hidden"><div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div><div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div></div></div><button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button></div>) : (<div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner w-fit"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>市場監控中...</div>)}
               </div>
               <div className="absolute right-4 flex gap-2 items-center">
-                  <button onClick={handleNextDay} disabled={hasRequests || isSyncing} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests || isSyncing ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
+                  <button onClick={handleNextDay} disabled={hasRequests} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
                   <div className="h-8 w-px bg-slate-200 mx-1"></div>
                   <div className="flex gap-1">{[5, 4, 3, 2, 1].map(sec => (<button key={sec} onClick={() => toggleAutoPlay(sec * 1000)} disabled={hasRequests} className={`w-8 py-2 rounded font-bold text-xs flex justify-center transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===sec*1000 ? 'bg-emerald-500 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}>{sec}s</button>))} <button onClick={() => toggleAutoPlay(200)} disabled={hasRequests} className={`px-2 py-2 rounded font-bold text-xs flex gap-1 transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===200 ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}><Zap size={12}/> 極速</button></div>
                   <button onClick={handleEndGame} className="px-3 py-2 bg-white border border-red-200 text-red-500 rounded text-xs hover:bg-red-50 font-bold ml-2">End</button>

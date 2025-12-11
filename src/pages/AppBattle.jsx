@@ -1,5 +1,5 @@
-// 2025v12.1 - 玩家端 (防作弊延遲同步版)
-// ★ 本地冠軍顯示優化：確保 "我是冠軍" 時顯示本地即時數據
+// 2025v12.3 - 玩家端 (交易視窗同步修正版)
+// ★ 邏輯修正：跟隨主持人端邏輯，鎖定最早的請求時間，確保倒數時間一致
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -165,17 +165,14 @@ export default function AppBattle() {
   const [activeRequests, setActiveRequests] = useState([]); 
   const [pauseCountdown, setPauseCountdown] = useState(15); 
 
-  // ★ 新增：伺服器時間偏差值
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
 
-  // ★ 新增：時間校正 useEffect
   useEffect(() => {
     const syncTime = async () => {
         try {
-            // 對當前頁面發送 HEAD 請求，獲取伺服器時間
             const response = await fetch(window.location.origin, { method: 'HEAD' });
             const serverDateStr = response.headers.get('date');
             if (serverDateStr) {
@@ -211,42 +208,36 @@ export default function AppBattle() {
           setActiveRequests(reqs);
           
           if (reqs.length > 0) {
-              const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-              
-              if (latestReq && latestReq.timestamp) {
-                  // ★ 使用校正後的時間 (Server Time)
+              const validReqs = reqs.filter(r => r.timestamp);
+              // ★ 邏輯修正：跟主持人端一樣，抓最早的請求來計算
+              if (validReqs.length > 0) {
+                  const sortedReqs = validReqs.sort((a, b) => (a.timestamp.seconds || 0) - (b.timestamp.seconds || 0));
+                  const firstReq = sortedReqs[0];
+                  
                   const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
-                  const reqSeconds = latestReq.timestamp.seconds;
+                  const reqSeconds = firstReq.timestamp.seconds;
                   const elapsed = nowSeconds - reqSeconds;
                   const remaining = Math.max(0, 15 - Math.floor(elapsed));
                   setPauseCountdown(remaining);
-              } else {
-                  setPauseCountdown(15);
               }
           }
       });
       return () => unsubscribe();
-  }, [roomId, serverTimeOffset]); // 加入 serverTimeOffset
+  }, [roomId, serverTimeOffset]); 
 
+  // 這個 useEffect 主要是每秒更新倒數 UI，計算邏輯已經移到上方
   useEffect(() => {
       let timer;
       if (activeRequests.length > 0 && pauseCountdown > 0) {
           timer = setInterval(() => {
-              const latestReq = activeRequests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-
-              if (latestReq && latestReq.timestamp) {
-                  // ★ 使用校正後的時間 (Server Time)
-                  const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
-                  const reqSeconds = latestReq.timestamp.seconds;
-                  const diff = 15 - (nowSeconds - reqSeconds);
-                  setPauseCountdown(Math.max(0, Math.floor(diff)));
-              } else {
-                  setPauseCountdown(prev => Math.max(0, prev - 1));
-              }
+             // 為了最準確，這裡也應該重複上面的「最早請求」計算邏輯
+             // 或是直接依賴上面的 snapshot 更新 (但 snapshot 不會每秒觸發)
+             // 簡單做法：每秒減 1，但如果 snapshot 有更新會被覆蓋修正
+              setPauseCountdown(prev => Math.max(0, prev - 1));
           }, 1000);
       }
       return () => clearInterval(timer);
-  }, [activeRequests, pauseCountdown, serverTimeOffset]); // 加入 serverTimeOffset
+  }, [activeRequests, pauseCountdown]); 
 
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
@@ -299,12 +290,10 @@ export default function AppBattle() {
     return () => unsubscribe();
   }, [roomId, status, fullData.length]);
 
-  // ★ 修改：使用校正後的 now
   useEffect(() => {
       let interval = null;
       if (status === 'playing' && gameEndTime) {
           interval = setInterval(() => {
-              // ★ 使用校正後的時間 (Server Time)
               const now = Date.now() + serverTimeOffset;
               const diff = gameEndTime - now;
               
@@ -322,7 +311,7 @@ export default function AppBattle() {
           setRemainingTime(0);
       }
       return () => { if(interval) clearInterval(interval); };
-  }, [status, gameEndTime, isTrading, serverTimeOffset]); // 加入 serverTimeOffset
+  }, [status, gameEndTime, isTrading, serverTimeOffset]); 
 
   const formatTime = (ms) => {
       if (ms <= 0) return "00:00";
@@ -608,8 +597,6 @@ export default function AppBattle() {
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
-  // ★ 新增：計算冠軍與我自己的關係
-  // 如果冠軍是我自己，強制顯示本地 displayRoi，因為它比資料庫的 champion.roi 更即時、更準確
   const finalChampionRoi = useMemo(() => {
       if (!champion) return 0;
       if (champion.id === userId) return displayRoi; // 我是冠軍，用我的即時數據

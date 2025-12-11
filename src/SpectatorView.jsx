@@ -1,5 +1,5 @@
-// 2025v12.2 - 主持人端 (移除延遲渲染，恢復即時臨場感)
-// ★ 調整：取消 Host Render Delay，追求現場大螢幕與操作同步的最高流暢度
+// 2025v12.3 - 主持人端 (交易視窗固定版)
+// ★ 邏輯修正：交易請求倒數改為鎖定「第一位」發起者的時間，避免多人操作導致時間無限延長
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -8,7 +8,8 @@ import {
   Crown, Activity, Monitor, TrendingUp, MousePointer2, Zap, 
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
-  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
+  Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet,
+  EyeOff
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -90,7 +91,7 @@ export default function SpectatorView() {
   const [gameStatus, setGameStatus] = useState('waiting'); 
   const [players, setPlayers] = useState([]);
   
-  const [currentDay, setCurrentDay] = useState(400); // v12.2: 直接使用真實天數渲染
+  const [currentDay, setCurrentDay] = useState(400); 
   const [startDay, setStartDay] = useState(400); 
   const [timeOffset, setTimeOffset] = useState(0); 
 
@@ -110,7 +111,6 @@ export default function SpectatorView() {
   const [countdown, setCountdown] = useState(15); 
   const [copied, setCopied] = useState(false);
 
-  // 伺服器時間校正保留，這對於倒數計時仍有幫助
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
   const roomIdRef = useRef(null);
@@ -229,15 +229,33 @@ export default function SpectatorView() {
       return () => unsubscribe();
   }, [roomId]);
 
+  // ★ 核心修正 v12.3: 倒數計時邏輯
+  // 改為鎖定「最早」的請求時間，計算剩餘時間，而非重新倒數
   useEffect(() => {
       let timer;
-      if (tradeRequests.length > 0 && countdown > 0) {
-          timer = setInterval(() => { setCountdown((prev) => prev - 1); }, 1000);
-      } else if (tradeRequests.length === 0) {
+      if (tradeRequests.length > 0) {
+          timer = setInterval(() => {
+             // 1. 找出最早的請求 (First In)
+             // 注意：Firestore timestamp 可能為 null (寫入瞬間)，需過濾
+             const validReqs = tradeRequests.filter(r => r.timestamp);
+             if (validReqs.length > 0) {
+                 // 由小到大排序 (最早的在前面)
+                 const sortedReqs = validReqs.sort((a, b) => (a.timestamp.seconds || 0) - (b.timestamp.seconds || 0));
+                 const firstReq = sortedReqs[0];
+                 
+                 const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
+                 const reqSeconds = firstReq.timestamp.seconds;
+                 const elapsed = nowSeconds - reqSeconds;
+                 const remaining = Math.max(0, 15 - Math.floor(elapsed));
+                 
+                 setCountdown(remaining);
+             }
+          }, 500); // 使用較短的 interval 來頻繁校正
+      } else {
           setCountdown(15); 
       }
       return () => clearInterval(timer);
-  }, [tradeRequests.length, countdown]);
+  }, [tradeRequests, serverTimeOffset]);
 
   useEffect(() => {
       const loadData = async () => {
@@ -356,7 +374,7 @@ export default function SpectatorView() {
     if (tradeRequests.length > 0) return; 
     if (!roomId) return;
     
-    // v12.2 恢復：本地先更新(Optimistic Update)，確保大螢幕零延遲，氣氛第一
+    // v12.2 邏輯保留：本地先更新 (Optimistic Update) 以求流暢
     setCurrentDay(prev => prev + 1);
     await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
   };
@@ -383,7 +401,6 @@ export default function SpectatorView() {
       setAutoPlaySpeed(speed);
       autoPlayRef.current = setInterval(async () => {
         if (roomIdRef.current) {
-           // v12.2 恢復：AutoPlay 也加入本地先更新
            setCurrentDay(prev => prev + 1); 
            await updateDoc(doc(db, "battle_rooms", roomIdRef.current), { currentDay: increment(1) });
         }
@@ -597,7 +614,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v12.2 Live Mode (Instant Render) | NBS Team
+            v12.3 Fixed Window (Batch Trade) | NBS Team
           </div>
         </div>
       </div>

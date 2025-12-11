@@ -1,4 +1,4 @@
-// 2025v11.3 - 主持人端 (分級顯示：實心=順勢訊號，空心=逆勢轉折訊號)
+// 2025v11.9 - 主持人端 (盤整濾網 V2 + 同步修正 + 防偷跑)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -10,18 +10,16 @@ import {
   Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet
 } from 'lucide-react';
 
-import { db, auth } from './config/firebase'; 
+import { db, auth } from '../config/firebase'; 
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 import { 
   doc, setDoc, onSnapshot, updateDoc, collection, 
   serverTimestamp, increment, deleteDoc, getDocs, getDoc 
 } from 'firebase/firestore';
 
-import { FUNDS_LIBRARY } from './config/funds';
+import { FUNDS_LIBRARY } from '../config/funds';
 
-
-
-// --- 補上遺失的工具函式 (請貼在 import 下方，組件上方) ---
+// --- 工具函式定義區 (只定義一次，放在 Component 外面) ---
 
 const processRealData = (rawData) => {
     if (!rawData || !Array.isArray(rawData)) return [];
@@ -40,7 +38,7 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// 繪圖用的三角形
+// 繪圖用的三角形 (扣抵值)
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
@@ -54,7 +52,7 @@ const renderTriangle = (props) => {
     );
 };
 
-// 交叉訊號用的三角形
+// 交叉訊號用的三角形 (實心/空心)
 const renderCrossTriangle = (props) => {
     const { cx, cy, direction, type } = props;
     if (!Number.isFinite(cx) || !Number.isFinite(cy) || !direction) return null;
@@ -83,6 +81,8 @@ const renderCrossTriangle = (props) => {
         );
     }
 };
+
+// --- 主程式開始 ---
 
 export default function SpectatorView() {
   const [hostUser, setHostUser] = useState(null);
@@ -189,61 +189,19 @@ export default function SpectatorView() {
     }
   };
 
-// src/pages/SpectatorView.jsx
-
+  // 監聽房間狀態 (含防止偷跑機制)
   useEffect(() => {
     if (!roomId) return;
     
-    // ★ 修改 1: 加入 { includeMetadataChanges: true } 參數
-    // 這樣我們才能分辨這是「本地暫存」還是「伺服器確認」的資料
+    // ★ 加入 metadataChanges 以偵測本地寫入
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), { includeMetadataChanges: true }, async (docSnap) => {
       if (!docSnap.exists()) { localStorage.clear(); return; }
       
-      // ★ 修改 2: 關鍵判斷！
-      // 如果 hasPendingWrites 為 true，代表這是本地剛剛寫入但還沒上傳的資料 -> 忽略不更新畫面
-      // 這樣主持人就會跟玩家一樣，等到 hasPendingWrites 為 false (伺服器確認後) 才跳下一天
+      // ★ 關鍵：如果是本地寫入但還沒同步到伺服器，則忽略這次更新，防止主持人畫面偷跑
       if (docSnap.metadata.hasPendingWrites) {
           return; 
       }
 
-      const roomData = docSnap.data();
-      
-      // ... (下方原本的更新邏輯保持不變) ...
-      if (roomData.status) setGameStatus(roomData.status);
-      if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
-      // ...
-    });
-    return () => unsubscribe();
-  }, [roomId, fullData.length]);
-
-
-  useEffect(() => {
-      let timer;
-      if (tradeRequests.length > 0 && countdown > 0) {
-          timer = setInterval(() => { setCountdown((prev) => prev - 1); }, 1000);
-      } else if (tradeRequests.length === 0) {
-          setCountdown(15); 
-      }
-      return () => clearInterval(timer);
-  }, [tradeRequests.length, countdown]);
-
-  useEffect(() => {
-      const loadData = async () => {
-          const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
-          if (!targetFund) return;
-          setFundName(targetFund.name);
-          try {
-              const res = await fetch(targetFund.file);
-              setFullData(processRealData(await res.json()));
-          } catch (err) { console.error(err); }
-      };
-      loadData();
-  }, [selectedFundId]);
-
-  useEffect(() => {
-    if (!roomId) return;
-    const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
-      if (!docSnap.exists()) { localStorage.clear(); return; }
       const roomData = docSnap.data();
       
       if (roomData.status) setGameStatus(roomData.status);
@@ -272,6 +230,86 @@ export default function SpectatorView() {
     });
     return () => unsubscribe();
   }, [roomId, fullData.length]);
+
+  // 監聽交易請求 (含絕對時間校正)
+  useEffect(() => {
+      if (!roomId) return;
+      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
+          const reqs = [];
+          snapshot.forEach(doc => reqs.push(doc.data()));
+          setTradeRequests(reqs);
+          
+          if (reqs.length > 0) {
+              // 停止自動播放
+              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
+              setAutoPlaySpeed(null); 
+              
+              // ★ 時間校正邏輯 ★
+              // 找出最新的一個請求
+              const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+              
+              if (latestReq && latestReq.timestamp) {
+                  const nowSeconds = Date.now() / 1000;
+                  const reqSeconds = latestReq.timestamp.seconds;
+                  const elapsed = nowSeconds - reqSeconds;
+                  const remaining = Math.max(0, 15 - Math.floor(elapsed));
+                  
+                  setCountdown(remaining);
+              } else {
+                  setCountdown(15);
+              }
+          }
+      });
+      return () => unsubscribe();
+  }, [roomId]);
+
+  // 倒數計時器 (每秒校正)
+  useEffect(() => {
+      let timer;
+      if (tradeRequests.length > 0 && countdown > 0) {
+          timer = setInterval(() => {
+              const latestReq = tradeRequests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+              
+              if (latestReq && latestReq.timestamp) {
+                  const nowSeconds = Date.now() / 1000;
+                  const reqSeconds = latestReq.timestamp.seconds;
+                  const diff = 15 - (nowSeconds - reqSeconds);
+                  setCountdown(Math.max(0, Math.floor(diff)));
+              } else {
+                  setCountdown(prev => Math.max(0, prev - 1));
+              }
+          }, 1000);
+      } else if (tradeRequests.length === 0) {
+          setCountdown(15); 
+      }
+      return () => clearInterval(timer);
+  }, [tradeRequests, countdown]);
+
+  useEffect(() => {
+      const loadData = async () => {
+          const targetFund = FUNDS_LIBRARY.find(f => f.id === selectedFundId);
+          if (!targetFund) return;
+          setFundName(targetFund.name);
+          try {
+              const res = await fetch(targetFund.file);
+              setFullData(processRealData(await res.json()));
+          } catch (err) { console.error(err); }
+      };
+      loadData();
+  }, [selectedFundId]);
+
+  // 監聽玩家與更新排名
+  useEffect(() => {
+      if (!roomId) return;
+      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
+          const p = [];
+          snapshot.forEach(doc => p.push({ id: doc.id, ...doc.data() }));
+          // 依照 ROI 排序
+          p.sort((a, b) => (b.roi || 0) - (a.roi || 0));
+          setPlayers(p);
+      });
+      return () => unsubscribe();
+  }, [roomId]);
 
   useEffect(() => {
       let interval = null;
@@ -343,8 +381,9 @@ export default function SpectatorView() {
   const handleNextDay = async () => {
     if (tradeRequests.length > 0) return; 
     if (!roomId) return;
+    // 只通知資料庫，不更新本地 state，防止偷跑
     await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
-    };
+  };
 
   const toggleIndicator = async (key) => {
       const newIndicators = { ...indicators, [key]: !indicators[key] };
@@ -374,60 +413,37 @@ export default function SpectatorView() {
     }
   };
 
-// 修改後的結算函式：加入緩衝時間，解決冠軍數據不同步問題
   const handleEndGame = async () => {
-    // 1. 第一步：立刻停止現場的自動播放與倒數，凍結畫面
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
-    setGameEndTime(null); // 清除倒數計時，避免重複觸發
+    setGameEndTime(null);
 
     console.log("⏳ 比賽結束，等待數據同步中 (緩衝 2 秒)...");
 
-    // 2. 第二步：給予 2 秒的「數據同步緩衝期」
-    // 這段時間是為了讓所有玩家端最新的 ROI 能夠寫入 Firebase
     setTimeout(async () => {
         let winnerInfo = null;
-
         if (roomId) {
             try {
-                console.log("✅ 開始抓取最終排名...");
-                // 主動從資料庫抓取最新玩家名單
                 const playersRef = collection(db, "battle_rooms", roomId, "players");
                 const snapshot = await getDocs(playersRef);
-                
                 const latestPlayers = [];
-                snapshot.forEach((doc) => {
-                    latestPlayers.push({ id: doc.id, ...doc.data() });
-                });
-
-                // 重新排序 (由高到低)
-                // 這裡加入 || -999 防止沒有 roi 欄位時排序錯誤
+                snapshot.forEach((doc) => { latestPlayers.push({ id: doc.id, ...doc.data() }); });
                 latestPlayers.sort((a, b) => (b.roi || -999) - (a.roi || -999));
 
-                // 如果有玩家，取出第一名
                 if (latestPlayers.length > 0) {
                     const champion = latestPlayers[0];
-                    console.log("🏆 冠軍產生:", champion.nickname, champion.roi);
                     winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
                 }
 
-                // 3. 第三步：寫入結算狀態與冠軍資訊
                 await updateDoc(doc(db, "battle_rooms", roomId), { 
                     status: 'ended', 
                     finalWinner: winnerInfo 
                 });
-
-            } catch (error) {
-                console.error("結算時發生錯誤:", error);
-            }
+            } catch (error) { console.error("結算時發生錯誤:", error); }
         }
-
-        // 最後才設定本地狀態，顯示結算畫面
         setGameStatus('ended');
-        
-    }, 2000); // ★ 這裡設定延遲 2000 毫秒 (2秒)，確保數據絕對同步
+    }, 2000); 
   };
-
 
   const handleResetRoom = async () => {
     if (!roomId || !window.confirm("確定重置？")) return;
@@ -464,7 +480,8 @@ export default function SpectatorView() {
   };
 
   const handleCopyUrl = () => {
-      if (!joinUrl) return;
+      if (!roomId) return;
+      const joinUrl = `${window.location.origin}/battle?room=${roomId}`;
       navigator.clipboard.writeText(joinUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000); 
@@ -496,8 +513,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
-
-// ★★★ V11.9 核心升級：盤整過濾加強版 (SpectatorView 同步修正) ★★★
+  // ★★★ V11.9 核心升級：盤整過濾加強版 (SpectatorView 同步) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -514,11 +530,11 @@ export default function SpectatorView() {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // ★ 關鍵修正 1: 改用 10 天前的索引 (同步 AppBattle)
+          // ★ 關鍵修正 1: 計算 10 天前的索引
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
 
-          // 扣抵值點位
+          // 扣抵值
           const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
           const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
           
@@ -543,7 +559,7 @@ export default function SpectatorView() {
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
-              // ★ 關鍵修正 3: 設定盤整濾網門檻 (同步 AppBattle: 0.15%)
+              // ★ 關鍵修正 3: 設定盤整濾網門檻 (0.15%)
               const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
@@ -609,8 +625,6 @@ export default function SpectatorView() {
   const topPlayers = players.slice(0, 10);
   const bottomPlayers = players.length > 13 ? players.slice(-3).reverse() : []; 
   const joinUrl = roomId ? `${window.location.origin}/battle?room=${roomId}` : '';
-  const currentNav = fullData[currentDay]?.nav || 0;
-  const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "---";
   const hasRequests = tradeRequests && tradeRequests.length > 0;
 
   if (isAuthChecking) return <div className="h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-bold"><Activity className="animate-spin mr-2"/> 系統驗證中...</div>;
@@ -632,16 +646,12 @@ export default function SpectatorView() {
               <input type="password" value={password} onChange={e=>setPassword(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500 focus:bg-white transition-all" required placeholder="••••••••"/>
             </div>
             {loginError && <div className="p-3 bg-red-50 text-red-500 text-xs rounded-lg text-center font-bold border border-red-100">{loginError}</div>}
-            
             {permissionError && <div className="p-3 bg-amber-50 text-amber-600 text-xs rounded-lg text-center font-bold border border-amber-200 flex flex-col gap-1"><ShieldCheck size={20} className="mx-auto"/>{permissionError}</div>}
-
             <button type="submit" className="w-full py-3.5 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-all shadow-lg flex items-center justify-center gap-2">
                 <LogIn size={18}/> 登入系統
             </button>
           </form>
-          <div className="mt-6 text-center text-[10px] text-slate-400">
-            v11.3 Dual Logic (Solid/Hollow) | NBS Team
-          </div>
+          <div className="mt-6 text-center text-[10px] text-slate-400">v11.9 Sync & Anti-Lag | NBS Team</div>
         </div>
       </div>
     );
@@ -705,52 +715,44 @@ export default function SpectatorView() {
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
-    <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
-        {/* 1. 網格與軸線 */}
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
-        <XAxis dataKey="date" hide />
-   <YAxis 
-    domain={['auto', 'auto']} 
-    orientation="right" 
-    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
-    width={45} // ★ 給予足夠寬度顯示數字
-    tickFormatter={(v) => Math.round(v)} // 取整數，保持整潔
-    interval="preserveStartEnd"
-/>
-        
-        {/* 2. 扣抵值標註 */}
-        {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
-        {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
-
-        {/* 3. 均線 */}
-        {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
-        {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
-        {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
-        {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
-        <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
-
-        {/* 4. 訊號 - 修正：根據 crossSignal 的物件屬性繪製 */}
-        {indicators.trend && chartData.map((entry, index) => {
-            if (entry.crossSignal) {
-                return (
-                    <ReferenceDot
-                        key={`cross-${index}`}
-                        x={entry.date}
-                        y={entry.ma60} 
-                        shape={(props) => renderCrossTriangle({ 
-                            ...props, 
-                            direction: entry.crossSignal.type, 
-                            type: entry.crossSignal.style 
-                        })}
-                        isAnimationActive={false}
-                    />
-                );
-            }
-            return null;
-        })}
-
-    </ComposedChart>
-</ResponsiveContainer>
+                            <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
+                                <XAxis dataKey="date" hide />
+                                <YAxis 
+                                    domain={['auto', 'auto']} 
+                                    orientation="right" 
+                                    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
+                                    width={45} 
+                                    tickFormatter={(v) => Math.round(v)} 
+                                    interval="preserveStartEnd"
+                                />
+                                {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" isAnimationActive={false} />)}
+                                {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" isAnimationActive={false} />)}
+                                {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                                {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
+                                {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+                                {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
+                                <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
+                                {indicators.trend && chartData.map((entry, index) => {
+                                    if (entry.crossSignal) {
+                                        return (
+                                            <ReferenceDot
+                                                key={`cross-${index}`}
+                                                x={entry.date}
+                                                y={entry.ma60} 
+                                                shape={(props) => renderCrossTriangle({ 
+                                                    ...props, 
+                                                    direction: entry.crossSignal.type, 
+                                                    type: entry.crossSignal.style 
+                                                })}
+                                                isAnimationActive={false}
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })}
+                            </ComposedChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
                 <div className="w-1/3 h-full bg-slate-50 flex flex-col border-l border-slate-200"><div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0"><h2 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Trophy size={20} className="text-amber-500"/> 菁英榜 TOP 10</h2></div><div className="flex-1 overflow-hidden relative flex flex-col"><div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">{topPlayers.map((p, idx) => (<div key={p.id} className={`flex justify-between items-center p-2.5 rounded-lg border transition-all duration-300 ${idx===0?'bg-amber-50 border-amber-200':idx===1?'bg-slate-200 border-slate-300':idx===2?'bg-orange-50 border-orange-200':'bg-white border-slate-200'}`}><div className="flex items-center gap-2"><div className={`w-6 h-6 flex items-center justify-center rounded-lg font-bold text-xs ${idx===0?'bg-amber-400 text-white':idx===1?'bg-slate-400 text-white':idx===2?'bg-orange-600 text-white':'bg-slate-100 text-slate-500'}`}>{idx + 1}</div><div className="flex flex-col"><span className="text-slate-800 font-bold text-sm truncate max-w-[100px]">{p.nickname}</span>{idx===0 && <span className="text-[9px] text-amber-500 flex items-center gap-1"><Crown size={8}/> 領先</span>}</div></div><div className={`font-mono font-bold text-base ${(p.roi || 0)>=0?'text-red-500':'text-green-500'}`}>{(p.roi || 0)>0?'+':''}{(p.roi || 0).toFixed(1)}%</div></div>))}</div>{bottomPlayers.length > 0 && (<div className="bg-slate-100 border-t border-slate-300 p-2 shrink-0"><div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider"><TrendingDown size={12}/> 逆風追趕中</div><div className="space-y-1">{bottomPlayers.map((p, idx) => (<div key={p.id} className="flex justify-between items-center p-1.5 bg-white/50 rounded border border-slate-200 text-xs opacity-70"><div className="flex items-center gap-2"><span className="text-slate-400 w-5 text-center">{players.length - idx}</span><span className="text-slate-700 font-bold truncate max-w-[80px]">{p.nickname}</span></div><span className="font-mono text-green-600 font-bold">{(p.roi || 0).toFixed(1)}%</span></div>))}</div></div>)}</div></div>

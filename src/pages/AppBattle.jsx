@@ -1,4 +1,5 @@
 // 2025v11.9 - 玩家端 (盤整濾網 V2 + UI 修復 + Y軸刻度 + 頂部淨值)
+// ★ 加入時間校正功能
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -15,7 +16,6 @@ import { FUNDS_LIBRARY } from '../config/funds';
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
-// 引入 AI 模組
 import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
@@ -36,7 +36,6 @@ const calculateIndicators = (data, days, currentIndex) => {
   return { ma: parseFloat(ma.toFixed(2)) };
 };
 
-// 自定義三角形繪製函數
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     return (
@@ -49,16 +48,14 @@ const renderTriangle = (props) => {
     );
 };
 
-// 交叉訊號繪圖器
 const renderCrossTriangle = (props) => {
     const { cx, cy, direction, type } = props;
     
     const isSolid = type === 'solid';
-    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
-    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; 
+    const fillColor = isSolid ? strokeColor : "#ffffff"; 
     
     if (direction === 'gold') {
-        // 黃金交叉：紅色向上
         return (
             <polygon 
                 points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
@@ -68,7 +65,6 @@ const renderCrossTriangle = (props) => {
             />
         );
     } else {
-        // 死亡交叉：綠色向下
         return (
             <polygon 
                 points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
@@ -86,10 +82,8 @@ export default function AppBattle() {
   
   const urlRoomId = searchParams.get('room');
 
-  // --- AI 分析模組 Hook ---
   const { analyzeGame, isAnalyzing, showModal, closeModal, analysisResult, error: aiError } = useAIAnalyst();
 
-  // --- 戰報圖片生成邏輯 ---
   const resultCardRef = useRef(null);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -164,36 +158,39 @@ export default function AppBattle() {
   const [champion, setChampion] = useState(null);
   const [tradeType, setTradeType] = useState(null);
 
-  // 倒數計時狀態
   const [gameEndTime, setGameEndTime] = useState(null);
   const [remainingTime, setRemainingTime] = useState(0);
   const [isTimeUp, setIsTimeUp] = useState(false);
 
-  // 共享交易暫停狀態
   const [activeRequests, setActiveRequests] = useState([]); 
   const [pauseCountdown, setPauseCountdown] = useState(15); 
+
+  // ★ 新增：伺服器時間偏差值
+  const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
 
-useEffect(() => {
-      if (!roomId) return;
-      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), async (snapshot) => {
-          const reqs = [];
-          snapshot.forEach(doc => reqs.push(doc.data()));
-          setTradeRequests(reqs);
-          
-          if (reqs.length > 0) {
-              // 停止自動播放
-              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
-              setAutoPlaySpeed(null);
-              
-              // ★ 新增：每次有新請求，重置倒數 (這裡其實可以寫入一個 pauseExpiresAt 到資料庫會更準，但目前先維持既有架構，僅依靠 requests 變化來觸發重置)
-              setCountdown(15); 
-          }
-      });
-      return () => unsubscribe();
-  }, [roomId]);
+  // ★ 新增：時間校正 useEffect
+  useEffect(() => {
+    const syncTime = async () => {
+        try {
+            // 對當前頁面發送 HEAD 請求，獲取伺服器時間
+            const response = await fetch(window.location.origin, { method: 'HEAD' });
+            const serverDateStr = response.headers.get('date');
+            if (serverDateStr) {
+                const serverTime = new Date(serverDateStr).getTime();
+                const localTime = Date.now();
+                const offset = serverTime - localTime;
+                console.log(`[Player] 時間校正完成，偏差值: ${offset}ms`);
+                setServerTimeOffset(offset);
+            }
+        } catch (err) {
+            console.log("時間校正失敗，將使用本機時間", err);
+        }
+    };
+    syncTime();
+  }, []);
 
   useEffect(() => {
       if (roomId) localStorage.setItem('battle_roomId', roomId);
@@ -206,7 +203,6 @@ useEffect(() => {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-// AppBattle.jsx - 修正後的請求監聽 (含時間校正)
   useEffect(() => {
       if (!roomId) return;
       const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
@@ -215,15 +211,14 @@ useEffect(() => {
           setActiveRequests(reqs);
           
           if (reqs.length > 0) {
-              // ★ 時間校正邏輯 (與主持人端同步) ★
               const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
               
               if (latestReq && latestReq.timestamp) {
-                  const nowSeconds = Date.now() / 1000;
+                  // ★ 使用校正後的時間 (Server Time)
+                  const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
                   const reqSeconds = latestReq.timestamp.seconds;
                   const elapsed = nowSeconds - reqSeconds;
                   const remaining = Math.max(0, 15 - Math.floor(elapsed));
-                  
                   setPauseCountdown(remaining);
               } else {
                   setPauseCountdown(15);
@@ -231,22 +226,18 @@ useEffect(() => {
           }
       });
       return () => unsubscribe();
-  }, [roomId]);
+  }, [roomId, serverTimeOffset]); // 加入 serverTimeOffset
 
-// src/pages/AppBattle.jsx
-
-  // ★ 修改計時器 useEffect
   useEffect(() => {
       let timer;
       if (activeRequests.length > 0 && pauseCountdown > 0) {
           timer = setInterval(() => {
-              // 找出最新的請求
               const latestReq = activeRequests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
 
               if (latestReq && latestReq.timestamp) {
-                  const nowSeconds = Date.now() / 1000;
+                  // ★ 使用校正後的時間 (Server Time)
+                  const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
                   const reqSeconds = latestReq.timestamp.seconds;
-                  // ★ 絕對時間校正
                   const diff = 15 - (nowSeconds - reqSeconds);
                   setPauseCountdown(Math.max(0, Math.floor(diff)));
               } else {
@@ -255,9 +246,8 @@ useEffect(() => {
           }, 1000);
       }
       return () => clearInterval(timer);
-  }, [activeRequests, pauseCountdown]);
+  }, [activeRequests, pauseCountdown, serverTimeOffset]); // 加入 serverTimeOffset
 
-  // 監聽房間資訊 (主邏輯)
   useEffect(() => {
     if (!roomId || status === 'input_room') return;
     const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), async (docSnap) => {
@@ -309,12 +299,13 @@ useEffect(() => {
     return () => unsubscribe();
   }, [roomId, status, fullData.length]);
 
-  // 倒數計時邏輯
+  // ★ 修改：使用校正後的 now
   useEffect(() => {
       let interval = null;
       if (status === 'playing' && gameEndTime) {
           interval = setInterval(() => {
-              const now = Date.now();
+              // ★ 使用校正後的時間 (Server Time)
+              const now = Date.now() + serverTimeOffset;
               const diff = gameEndTime - now;
               
               if (diff <= 0) {
@@ -331,7 +322,7 @@ useEffect(() => {
           setRemainingTime(0);
       }
       return () => { if(interval) clearInterval(interval); };
-  }, [status, gameEndTime, isTrading]);
+  }, [status, gameEndTime, isTrading, serverTimeOffset]); // 加入 serverTimeOffset
 
   const formatTime = (ms) => {
       if (ms <= 0) return "00:00";
@@ -399,27 +390,23 @@ useEffect(() => {
 
   const handleBankruptcyReset = () => {
       if (window.confirm("確定申請紓困？\n\n您的資產將重置為 $1,000,000\n但總成績將扣除 50%！")) {
-          setCash(1000000); setUnits(0); setAvgCost(0); setResetCount(prev => prev + 1); setTransactions([]); // 破產重置交易紀錄
+          setCash(1000000); setUnits(0); setAvgCost(0); setResetCount(prev => prev + 1); setTransactions([]); 
       }
   };
   
-  // 觸發 AI 分析的函式 (修正版)
   const handleAIAnalysis = () => {
-      // 1. 顯式宣告
       const currentHistory = fullData;
 
-      // 2. 防呆檢查
       if (!currentHistory || currentHistory.length === 0) {
           alert("尚未載入歷史數據，AI 無法分析技術指標。");
           return;
       }
 
-      // 3. 呼叫 AI 分析
       analyzeGame({
           fundName: fundName,
           roi: displayRoi,
           transactions: transactions,
-          historyData: currentHistory, // 確保傳遞資料
+          historyData: currentHistory, 
           nickname: nickname || '玩家'
       });
   };
@@ -455,7 +442,7 @@ useEffect(() => {
       const amount = parseFloat(inputAmount.replace(/,/g, ''));
       if (!amount || amount <= 0) { isProcessingRef.current = false; return; }
 
-      let transactionRecord = null; // 準備交易紀錄物件
+      let transactionRecord = null; 
 
       if (type === 'buy') {
           if (amount > Math.floor(cash)) { alert(`現金不足 (可用: $${Math.floor(cash).toLocaleString()})`); isProcessingRef.current = false; return; }
@@ -471,7 +458,6 @@ useEffect(() => {
               return newCash;
           });
 
-          // 準備買入紀錄
           transactionRecord = {
               day: currentDay,
               type: 'BUY',
@@ -507,7 +493,6 @@ useEffect(() => {
               setCash(prev => { newCash = prev + amount; return newCash; }); 
           }
 
-          // 準備賣出紀錄
           transactionRecord = {
               day: currentDay,
               type: 'SELL',
@@ -547,7 +532,6 @@ useEffect(() => {
       return `${year}-${month}-${day}`;
   };
 
-// ★★★ V11.9 核心升級：盤整過濾加強版 (主持人端同步) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -564,11 +548,9 @@ useEffect(() => {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算斜率)
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
 
-          // 繪製扣抵值用的參考點 (維持 60 天前)
           const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
           const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
           
@@ -576,53 +558,39 @@ useEffect(() => {
           let riverBottom = null;
           if (ma60) { riverTop = ma60 * 1.1; riverBottom = ma60 * 0.9; }
 
-          // --- 訊號判斷邏輯 (Filter Logic) ---
           let crossSignal = null;
           
           if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 1. 計算月線斜率 (維持 1 天變化，抓急漲急跌)
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
-
-              // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
               const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
-
-              // 3. 計算乖離率
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
-              // ★ 關鍵修正 3: 設定盤整濾網門檻
-              const TREND_THRESHOLD = 0.0015; // 0.15%
+              const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
-                  // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
                   if (slope60 > TREND_THRESHOLD) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // B. 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
                   else if (slope60 > 0 && bias60 > 0.02) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // C. V轉急漲 (月線單日噴出 > 0.5%)
                   else if (slope20 > 0.005) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // D. 雜訊 (不顯示，或顯示空心)
                   else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  // A. 真跌破
                   if (slope60 < -TREND_THRESHOLD) {
                       crossSignal = { type: 'death', style: 'solid' };
                   }
-                  // B. 急跌修正
                   else if (slope20 < -0.005) {
                       crossSignal = { type: 'death', style: 'solid' };
                   }
-                  // C. 多頭回檔
                   else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
@@ -639,8 +607,6 @@ useEffect(() => {
   const currentDisplayDate = fullData[currentDay] ? getDisplayDate(fullData[currentDay].date) : "";
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
-
-  // --- UI Render ---
 
   if (status === 'input_room') return (
       <div className="h-[100dvh] bg-slate-50 flex flex-col items-center justify-center p-6 text-slate-800">
@@ -694,7 +660,6 @@ useEffect(() => {
               </div>
           )}
           
-          {/* Header */}
           <div className="sticky top-0 z-20 shadow-sm">
               <div className="bg-slate-100 border-b border-slate-200 px-3 py-1 flex justify-between items-center text-lg font-black text-slate-700 h-12">
                  <div className="flex items-center gap-2 w-1/3">
@@ -716,9 +681,7 @@ useEffect(() => {
                  </div>
               </div>
               
-              {/* 下半部：資訊列 (4欄位) */}
               <div className="bg-white px-2 py-1 grid grid-cols-4 gap-1 items-center border-b border-slate-200">
-                  {/* 1. 淨值 */}
                   <div className="flex flex-col items-center border-r border-slate-100">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">目前淨值</div>
                      <div className="text-lg font-mono font-black leading-none h-5 flex items-center text-slate-800">
@@ -726,7 +689,6 @@ useEffect(() => {
                      </div>
                   </div>
 
-                  {/* 2. 趨勢 */}
                   <div className="flex flex-col items-center border-r border-slate-100">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">趨勢</div>
                      <div className={`text-lg font-black leading-none h-5 flex items-center ${trendSignal.color}`}>
@@ -734,7 +696,6 @@ useEffect(() => {
                      </div>
                   </div>
 
-                  {/* 3. 報酬率 */}
                   <div className="flex flex-col items-center border-r border-slate-100">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">報酬率</div>
                      <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -742,7 +703,6 @@ useEffect(() => {
                      </div>
                   </div>
 
-                  {/* 4. 總資產 */}
                   <div className="flex flex-col items-center">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
                      <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -752,7 +712,6 @@ useEffect(() => {
               </div>
           </div>
 
-          {/* 市場暫停通知條 */}
           {activeRequests.length > 0 && !isTrading && (
               <div className="bg-yellow-400 text-slate-900 px-4 py-2 flex items-center justify-between shadow-md animate-in slide-in-from-top duration-300 relative z-30">
                   <div className="flex items-center gap-2 overflow-hidden">
@@ -791,7 +750,6 @@ useEffect(() => {
                     )}                    
 
                     <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0,0,0,0.1)" />
-                    {/* Y軸設定 */}
                     <YAxis 
                         domain={['auto', 'auto']} 
                         orientation="right" 
@@ -838,7 +796,6 @@ useEffect(() => {
 
               {!isTrading ? (
                   <div className="px-4 pb-1">
-                      {/* 按鈕邏輯 */}
                       <button 
                           onClick={handleRequestTrade} 
                           disabled={isTimeUp} 
@@ -1024,7 +981,6 @@ useEffect(() => {
             </div>
         )}
 
-        {/* 掛載 AI 分析 Modal */}
         <AIAnalysisModal 
             isOpen={showModal}
             onClose={closeModal}

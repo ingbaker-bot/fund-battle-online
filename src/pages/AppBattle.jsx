@@ -206,18 +206,28 @@ useEffect(() => {
       localStorage.setItem('battle_resetCount', resetCount);
   }, [cash, units, avgCost, roomId, userId, nickname, phoneNumber, resetCount]);
 
-  // 監聽請求與倒數
+// AppBattle.jsx - 修正後的請求監聽 (含時間校正)
   useEffect(() => {
       if (!roomId) return;
-      // 監聽 requests 子集合，以顯示市場暫停狀態
       const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
           const reqs = [];
           snapshot.forEach(doc => reqs.push(doc.data()));
           setActiveRequests(reqs);
           
-          // 如果有請求，重置倒數 (這裡假設固定15秒，與主持人端同步)
           if (reqs.length > 0) {
-              setPauseCountdown(15); 
+              // ★ 時間校正邏輯 (與主持人端同步) ★
+              const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+              
+              if (latestReq && latestReq.timestamp) {
+                  const nowSeconds = Date.now() / 1000;
+                  const reqSeconds = latestReq.timestamp.seconds;
+                  const elapsed = nowSeconds - reqSeconds;
+                  const remaining = Math.max(0, 15 - Math.floor(elapsed));
+                  
+                  setPauseCountdown(remaining);
+              } else {
+                  setPauseCountdown(15);
+              }
           }
       });
       return () => unsubscribe();

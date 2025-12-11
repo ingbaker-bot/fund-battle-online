@@ -188,26 +188,35 @@ export default function SpectatorView() {
     }
   };
 
-  useEffect(() => {
-    if (!roomId) return;
-    const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "players"), (snapshot) => {
-      const livePlayers = [];
-      snapshot.forEach((doc) => livePlayers.push({ id: doc.id, ...doc.data() }));
-      livePlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
-      setPlayers(livePlayers);
-    });
-    return () => unsubscribe();
-  }, [roomId]);
-
+// SpectatorView.jsx - 修正後的請求監聽 (含時間校正)
   useEffect(() => {
       if (!roomId) return;
       const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
           const reqs = [];
           snapshot.forEach(doc => reqs.push(doc.data()));
-          setTradeRequests(reqs);
+          setTradeRequests(reqs); // 存入請求數據
+          
           if (reqs.length > 0) {
+              // 停止自動播放
               if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
               setAutoPlaySpeed(null); 
+              
+              // ★ 時間校正邏輯 ★
+              // 找出最新的一個請求
+              const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+              
+              if (latestReq && latestReq.timestamp) {
+                  const nowSeconds = Date.now() / 1000;
+                  const reqSeconds = latestReq.timestamp.seconds; // Firestore Timestamp
+                  const elapsed = nowSeconds - reqSeconds; // 已經過了幾秒
+                  const remaining = Math.max(0, 15 - Math.floor(elapsed)); // 計算剩餘時間
+                  
+                  // 設定倒數 (如果已經過期，就設為 0)
+                  setCountdown(remaining);
+              } else {
+                  // 如果剛寫入還沒有 timestamp (Latency)，先給 15
+                  setCountdown(15);
+              }
           }
       });
       return () => unsubscribe();
@@ -340,8 +349,7 @@ export default function SpectatorView() {
     if (tradeRequests.length > 0) return; 
     if (!roomId) return;
     await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
-    setCurrentDay(prev => prev + 1);
-  };
+    };
 
   const toggleIndicator = async (key) => {
       const newIndicators = { ...indicators, [key]: !indicators[key] };

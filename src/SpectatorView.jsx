@@ -188,39 +188,33 @@ export default function SpectatorView() {
     }
   };
 
-// SpectatorView.jsx - 修正後的請求監聽 (含時間校正)
+// src/pages/SpectatorView.jsx
+
   useEffect(() => {
-      if (!roomId) return;
-      const unsubscribe = onSnapshot(collection(db, "battle_rooms", roomId, "requests"), (snapshot) => {
-          const reqs = [];
-          snapshot.forEach(doc => reqs.push(doc.data()));
-          setTradeRequests(reqs); // 存入請求數據
-          
-          if (reqs.length > 0) {
-              // 停止自動播放
-              if (autoPlayRef.current) { clearInterval(autoPlayRef.current); autoPlayRef.current = null; }
-              setAutoPlaySpeed(null); 
-              
-              // ★ 時間校正邏輯 ★
-              // 找出最新的一個請求
-              const latestReq = reqs.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
-              
-              if (latestReq && latestReq.timestamp) {
-                  const nowSeconds = Date.now() / 1000;
-                  const reqSeconds = latestReq.timestamp.seconds; // Firestore Timestamp
-                  const elapsed = nowSeconds - reqSeconds; // 已經過了幾秒
-                  const remaining = Math.max(0, 15 - Math.floor(elapsed)); // 計算剩餘時間
-                  
-                  // 設定倒數 (如果已經過期，就設為 0)
-                  setCountdown(remaining);
-              } else {
-                  // 如果剛寫入還沒有 timestamp (Latency)，先給 15
-                  setCountdown(15);
-              }
-          }
-      });
-      return () => unsubscribe();
-  }, [roomId]);
+    if (!roomId) return;
+    
+    // ★ 修改 1: 加入 { includeMetadataChanges: true } 參數
+    // 這樣我們才能分辨這是「本地暫存」還是「伺服器確認」的資料
+    const unsubscribe = onSnapshot(doc(db, "battle_rooms", roomId), { includeMetadataChanges: true }, async (docSnap) => {
+      if (!docSnap.exists()) { localStorage.clear(); return; }
+      
+      // ★ 修改 2: 關鍵判斷！
+      // 如果 hasPendingWrites 為 true，代表這是本地剛剛寫入但還沒上傳的資料 -> 忽略不更新畫面
+      // 這樣主持人就會跟玩家一樣，等到 hasPendingWrites 為 false (伺服器確認後) 才跳下一天
+      if (docSnap.metadata.hasPendingWrites) {
+          return; 
+      }
+
+      const roomData = docSnap.data();
+      
+      // ... (下方原本的更新邏輯保持不變) ...
+      if (roomData.status) setGameStatus(roomData.status);
+      if (roomData.currentDay !== undefined) setCurrentDay(roomData.currentDay);
+      // ...
+    });
+    return () => unsubscribe();
+  }, [roomId, fullData.length]);
+
 
   useEffect(() => {
       let timer;

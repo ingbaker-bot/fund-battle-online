@@ -233,15 +233,29 @@ useEffect(() => {
       return () => unsubscribe();
   }, [roomId]);
 
+// src/pages/AppBattle.jsx
+
+  // ★ 修改計時器 useEffect
   useEffect(() => {
       let timer;
       if (activeRequests.length > 0 && pauseCountdown > 0) {
           timer = setInterval(() => {
-              setPauseCountdown((prev) => Math.max(0, prev - 1));
+              // 找出最新的請求
+              const latestReq = activeRequests.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))[0];
+
+              if (latestReq && latestReq.timestamp) {
+                  const nowSeconds = Date.now() / 1000;
+                  const reqSeconds = latestReq.timestamp.seconds;
+                  // ★ 絕對時間校正
+                  const diff = 15 - (nowSeconds - reqSeconds);
+                  setPauseCountdown(Math.max(0, Math.floor(diff)));
+              } else {
+                  setPauseCountdown(prev => Math.max(0, prev - 1));
+              }
           }, 1000);
       }
       return () => clearInterval(timer);
-  }, [activeRequests.length, pauseCountdown]);
+  }, [activeRequests, pauseCountdown]);
 
   // 監聽房間資訊 (主邏輯)
   useEffect(() => {

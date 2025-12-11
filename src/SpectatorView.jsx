@@ -494,7 +494,7 @@ export default function SpectatorView() {
   }, [fullData, currentDay, indicators.trend]);
 
 
-// ★★★ V11.9 核心升級：盤整過濾加強版 (主持人端同步) ★★★
+// ★★★ V11.9 核心升級：盤整過濾加強版 (SpectatorView 同步修正) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -511,11 +511,11 @@ export default function SpectatorView() {
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          // ★ 關鍵修正 1: 計算 10 天前的索引 (用於計算斜率)
+          // ★ 關鍵修正 1: 改用 10 天前的索引 (同步 AppBattle)
           const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
           const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
 
-          // 繪製扣抵值用的參考點 (維持 60 天前)
+          // 扣抵值點位
           const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
           const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
           
@@ -530,7 +530,7 @@ export default function SpectatorView() {
               const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
               const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
 
-              // 1. 計算月線斜率 (維持 1 天變化，抓急漲急跌)
+              // 1. 計算月線斜率
               const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
 
               // 2. ★ 關鍵修正 2: 計算 10 天前的季線斜率
@@ -540,23 +540,23 @@ export default function SpectatorView() {
               const currentPrice = d.nav;
               const bias60 = (currentPrice - ma60) / ma60;
 
-              // ★ 關鍵修正 3: 設定盤整濾網門檻
-              const TREND_THRESHOLD = 0.0015; // 0.15%
+              // ★ 關鍵修正 3: 設定盤整濾網門檻 (同步 AppBattle: 0.15%)
+              const TREND_THRESHOLD = 0.0015; 
 
               if (isGoldCross) {
-                  // A. 真突破 (季線 10 天來穩定向上 > 0.15%)
+                  // A. 真突破
                   if (slope60 > TREND_THRESHOLD) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // B. 盤整區突破 (季線平平，但股價強勢站上季線 2% 以上)
+                  // B. 盤整區突破 (乖離濾網)
                   else if (slope60 > 0 && bias60 > 0.02) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // C. V轉急漲 (月線單日噴出 > 0.5%)
+                  // C. V轉急漲
                   else if (slope20 > 0.005) {
                       crossSignal = { type: 'gold', style: 'solid' };
                   }
-                  // D. 雜訊 (不顯示，或顯示空心)
+                  // D. 雜訊 (空心)
                   else {
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
@@ -573,6 +573,14 @@ export default function SpectatorView() {
                   else {
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
+              }
+              
+              // 補償訊號 (延遲確認)
+              if (!crossSignal && ma20 > ma60 && slope60 > TREND_THRESHOLD) {
+                   const prevSlope60 = (prevInd60.ma - refInd60.ma) / refInd60.ma; 
+                   if (prevSlope60 <= TREND_THRESHOLD) {
+                       crossSignal = { type: 'gold', style: 'solid' };
+                   }
               }
           }
 

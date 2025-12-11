@@ -1,5 +1,4 @@
 // 2025v11.3 - 主持人端 (分級顯示：實心=順勢訊號，空心=逆勢轉折訊號)
-// ★ 加入時間校正功能
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -38,6 +37,8 @@ const calculateIndicators = (data, days, currentIndex) => {
 };
 
 // --- 視覺輔助繪圖函數 ---
+
+// 1. 扣抵值三角形 (藍色/深藍色)
 const renderTriangle = (props) => {
     const { cx, cy, fill } = props;
     return (
@@ -50,14 +51,17 @@ const renderTriangle = (props) => {
     );
 };
 
+// 2. 交叉訊號繪製器 (支援 實心/空心)
+// type: 'solid' (順勢/強訊號) | 'hollow' (逆勢/轉折訊號)
 const renderCrossTriangle = (props) => {
     const { cx, cy, direction, type } = props;
     
     const isSolid = type === 'solid';
-    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; 
-    const fillColor = isSolid ? strokeColor : "#ffffff"; 
+    const strokeColor = direction === 'gold' ? "#ef4444" : "#16a34a"; // 紅 或 綠
+    const fillColor = isSolid ? strokeColor : "#ffffff"; // 實心填色 或 空心填白
     
     if (direction === 'gold') {
+        // 黃金交叉：紅色向上
         return (
             <polygon 
                 points={`${cx},${cy - 4} ${cx - 6},${cy + 8} ${cx + 6},${cy + 8}`} 
@@ -67,6 +71,7 @@ const renderCrossTriangle = (props) => {
             />
         );
     } else {
+        // 死亡交叉：綠色向下
         return (
             <polygon 
                 points={`${cx},${cy + 4} ${cx - 6},${cy - 8} ${cx + 6},${cy - 8}`} 
@@ -110,33 +115,8 @@ export default function SpectatorView() {
   const [countdown, setCountdown] = useState(15); 
   const [copied, setCopied] = useState(false);
 
-  // ★ 新增：伺服器時間偏差值
-  const [serverTimeOffset, setServerTimeOffset] = useState(0);
-
   const roomIdRef = useRef(null);
   const autoPlayRef = useRef(null);
-
-  // ★ 新增：時間校正 useEffect
-  useEffect(() => {
-    const syncTime = async () => {
-        try {
-            // 對當前頁面發送 HEAD 請求，獲取伺服器時間 (Date Header)
-            const response = await fetch(window.location.origin, { method: 'HEAD' });
-            const serverDateStr = response.headers.get('date');
-            if (serverDateStr) {
-                const serverTime = new Date(serverDateStr).getTime();
-                const localTime = Date.now();
-                // 計算偏差值：伺服器時間 - 本機時間
-                const offset = serverTime - localTime;
-                console.log(`[Host] 時間校正完成，偏差值: ${offset}ms`);
-                setServerTimeOffset(offset);
-            }
-        } catch (err) {
-            console.log("時間校正失敗，將使用本機時間", err);
-        }
-    };
-    syncTime();
-  }, []);
 
   // 權限檢查
   useEffect(() => {
@@ -289,13 +269,11 @@ export default function SpectatorView() {
     return () => unsubscribe();
   }, [roomId, fullData.length]);
 
-  // ★ 修改：使用校正後的 now
   useEffect(() => {
       let interval = null;
       const tick = () => {
           if (gameStatus === 'playing' && gameEndTime) {
-              // ★ 使用校正後的時間 (Server Time)
-              const now = Date.now() + serverTimeOffset;
+              const now = Date.now();
               const diff = gameEndTime - now;
               if (diff <= 0) {
                   setRemainingTime(0);
@@ -312,7 +290,7 @@ export default function SpectatorView() {
           interval = setInterval(tick, 1000);
       }
       return () => { if(interval) clearInterval(interval); };
-  }, [gameStatus, gameEndTime, serverTimeOffset]); // 加入 serverTimeOffset 依賴
+  }, [gameStatus, gameEndTime]);
 
   const formatTime = (ms) => {
       if (ms <= 0) return "00:00";
@@ -334,7 +312,6 @@ export default function SpectatorView() {
     signOut(auth);
   };
 
-  // ★ 修改：設定結束時間時，加上 offset
   const handleStartGame = async () => {
     if (!roomId || fullData.length === 0) return;
     const minBuffer = 100;
@@ -343,9 +320,7 @@ export default function SpectatorView() {
     const randomOffset = Math.floor(Math.random() * 50) + 10;
 
     const duration = Number(gameDuration) || 60;
-    
-    // ★ 關鍵：寫入資料庫的時間必須是「標準伺服器時間」，所以這裡也要加上 Host 的 offset
-    const calculatedEndTime = (Date.now() + serverTimeOffset) + (duration * 60 * 1000);
+    const calculatedEndTime = Date.now() + (duration * 60 * 1000);
 
     setGameEndTime(calculatedEndTime);
     setGameStatus('playing');
@@ -397,51 +372,47 @@ export default function SpectatorView() {
     }
   };
 
+// 修改後的結算函式：主動抓取最新數據，確保冠軍準確
   const handleEndGame = async () => {
+    // 1. 停止自動播放
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
-    setGameEndTime(null); 
 
-    console.log("⏳ 比賽結束，等待數據同步中 (緩衝 2 秒)...");
+    let winnerInfo = null;
 
-    setTimeout(async () => {
-        let winnerInfo = null;
+    if (roomId) {
+        try {
+            // ★★★ 關鍵修正：不依賴畫面上的 players 狀態，而是直接從資料庫抓最新數據 ★★★
+            const playersRef = collection(db, "battle_rooms", roomId, "players");
+            const snapshot = await getDocs(playersRef);
+            
+            const latestPlayers = [];
+            snapshot.forEach((doc) => {
+                latestPlayers.push({ id: doc.id, ...doc.data() });
+            });
 
-        if (roomId) {
-            try {
-                console.log("✅ 開始抓取最終排名...");
-                const playersRef = collection(db, "battle_rooms", roomId, "players");
-                const snapshot = await getDocs(playersRef);
-                
-                const latestPlayers = [];
-                snapshot.forEach((doc) => {
-                    latestPlayers.push({ id: doc.id, ...doc.data() });
-                });
+            // 重新排序 (由高到低)
+            latestPlayers.sort((a, b) => (b.roi || 0) - (a.roi || 0));
 
-                latestPlayers.sort((a, b) => (b.roi || -999) - (a.roi || -999));
-
-                if (latestPlayers.length > 0) {
-                    const champion = latestPlayers[0];
-                    console.log("🏆 冠軍產生:", champion.nickname, champion.roi);
-                    winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
-                }
-
-                await updateDoc(doc(db, "battle_rooms", roomId), { 
-                    status: 'ended', 
-                    finalWinner: winnerInfo 
-                });
-
-            } catch (error) {
-                console.error("結算時發生錯誤:", error);
+            // 如果有玩家，取出第一名
+            if (latestPlayers.length > 0) {
+                const champion = latestPlayers[0];
+                winnerInfo = { nickname: champion.nickname, roi: champion.roi || 0 };
             }
+
+            // 2. 寫入結算狀態與冠軍資訊
+            await updateDoc(doc(db, "battle_rooms", roomId), { 
+                status: 'ended', 
+                finalWinner: winnerInfo 
+            });
+
+        } catch (error) {
+            console.error("結算時發生錯誤:", error);
         }
+    }
 
-        setGameStatus('ended');
-        
-    }, 2000); 
+    setGameStatus('ended');
   };
-
-
   const handleResetRoom = async () => {
     if (!roomId || !window.confirm("確定重置？")) return;
     setGameStatus('waiting');
@@ -509,6 +480,7 @@ export default function SpectatorView() {
       return { text: '盤整觀望 ⚖️', color: 'text-slate-500', bg: 'bg-slate-100' };
   }, [fullData, currentDay, indicators.trend]);
 
+  // ★★★ V11.3 核心升級：雙重邏輯 (順勢實心 + 逆勢空心) ★★★
   const chartData = useMemo(() => {
       if (!fullData || fullData.length === 0) return [];
 
@@ -519,56 +491,44 @@ export default function SpectatorView() {
           const realIdx = start + idx;
           const ind20 = calculateIndicators(fullData, 20, realIdx);
           const ind60 = calculateIndicators(fullData, 60, realIdx);
-          const ma20 = ind20.ma; const ma60 = ind60.ma;
 
           const prevRealIdx = realIdx > 0 ? realIdx - 1 : 0;
           const prevInd20 = calculateIndicators(fullData, 20, prevRealIdx);
           const prevInd60 = calculateIndicators(fullData, 60, prevRealIdx);
 
-          const prev10Idx = realIdx > 10 ? realIdx - 10 : 0;
-          const ind60_prev10 = calculateIndicators(fullData, 60, prev10Idx);
-
-          const deduction20 = (fullData && realIdx >= 20) ? fullData[realIdx - 20] : null;
-          const deduction60 = (fullData && realIdx >= 60) ? fullData[realIdx - 60] : null;
+          // 5日斜率參考
+          const refRealIdx = realIdx > 5 ? realIdx - 5 : 0;
+          const refInd60 = calculateIndicators(fullData, 60, refRealIdx);
           
           let riverTop = null; 
           let riverBottom = null;
-          if (ma60) { riverTop = ma60 * 1.1; riverBottom = ma60 * 0.9; }
+          if (ind60.ma) { riverTop = ind60.ma * 1.1; riverBottom = ind60.ma * 0.9; }
 
-          let crossSignal = null;
+          // 訊號判斷結構：{ type: 'gold'|'death', style: 'solid'|'hollow' }
+          let crossSignal = null; 
           
-          if (ma20 && ma60 && prevInd20.ma && prevInd60.ma && ind60_prev10.ma && realIdx > 10) {
-              const isGoldCross = prevInd20.ma <= prevInd60.ma && ma20 > ma60;
-              const isDeathCross = prevInd20.ma >= prevInd60.ma && ma20 < ma60;
+          if (ind20.ma && ind60.ma && prevInd20.ma && prevInd60.ma && refInd60.ma && realIdx > 5) {
+              const isGoldCross = prevInd20.ma <= prevInd60.ma && ind20.ma > ind60.ma;
+              const isDeathCross = prevInd20.ma >= prevInd60.ma && ind20.ma < ind60.ma;
 
-              const slope20 = prevInd20.ma ? (ma20 - prevInd20.ma) / prevInd20.ma : 0;
-              const slope60 = ind60_prev10.ma ? (ma60 - ind60_prev10.ma) / ind60_prev10.ma : 0;
-              const currentPrice = d.nav;
-              const bias60 = (currentPrice - ma60) / ma60;
-
-              const TREND_THRESHOLD = 0.0015; 
+              // 季線趨勢 (Current > 5 days ago)
+              const isTrendUp = ind60.ma >= refInd60.ma;
+              const isTrendDown = ind60.ma < refInd60.ma;
 
               if (isGoldCross) {
-                  if (slope60 > TREND_THRESHOLD) {
+                  if (isTrendUp) {
+                      // 順勢黃金交叉 -> 實心
                       crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  else if (slope60 > 0 && bias60 > 0.02) {
-                      crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  else if (slope20 > 0.005) {
-                      crossSignal = { type: 'gold', style: 'solid' };
-                  }
-                  else {
+                  } else {
+                      // 逆勢黃金交叉 (搶反彈/V轉) -> 空心
                       crossSignal = { type: 'gold', style: 'hollow' };
                   }
               } else if (isDeathCross) {
-                  if (slope60 < -TREND_THRESHOLD) {
+                  if (isTrendDown) {
+                      // 順勢死亡交叉 -> 實心
                       crossSignal = { type: 'death', style: 'solid' };
-                  }
-                  else if (slope20 < -0.005) {
-                      crossSignal = { type: 'death', style: 'solid' };
-                  }
-                  else {
+                  } else {
+                      // 逆勢死亡交叉 (漲多拉回/V轉向下) -> 空心
                       crossSignal = { type: 'death', style: 'hollow' };
                   }
               }
@@ -576,7 +536,11 @@ export default function SpectatorView() {
 
           return { 
               ...d, 
-              ma20, ma60, riverTop, riverBottom, crossSignal, deduction20, deduction60
+              ma20: ind20.ma, 
+              ma60: ind60.ma, 
+              riverTop, 
+              riverBottom,
+              crossSignal
           };
       });
   }, [fullData, currentDay]);
@@ -673,7 +637,7 @@ export default function SpectatorView() {
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
                     {currentTrendInfo && (<div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}><span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span></div>)}
-                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div><div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex items-baseline gap-2"><span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span><span className="text-3xl font-mono font-black text-slate-800 tracking-tight">{currentNav.toFixed(2)}</span></div>
+                    <div className="flex items-center gap-2"><span className="text-slate-500 font-bold text-sm hidden md:block">{fundName}</span></div><div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex items-baseline gap-2"><span className="text-xs text-amber-500 font-bold tracking-widest uppercase hidden sm:block">{currentDisplayDate}</span><span className="text-3xl font-mono font-black text-slate-800 tracking-tight">${currentNav.toFixed(2)}</span></div>
                     <div className="w-px h-6 bg-slate-200 hidden md:block"></div><div className="flex flex-col items-end"><div className="flex items-center gap-1 text-[10px] text-slate-400 font-bold uppercase"><Wallet size={10} /> 總資金</div><div className="flex items-baseline gap-2"><span className="text-lg font-mono font-black text-slate-700 leading-none">${Math.round(totalInvestedAmount / 10000)}萬</span><span className={`text-[10px] font-bold ${positionRatio >= 80 ? 'text-red-500' : 'text-slate-400'}`}>({positionRatio.toFixed(0)}%)</span></div></div>
                 </div>
             )}
@@ -693,26 +657,23 @@ export default function SpectatorView() {
                     <div className="p-4 flex-1 relative">
                         <ResponsiveContainer width="100%" height="100%">
     <ComposedChart data={chartData} margin={{ top: 10, right: 0, bottom: 0, left: 0 }}>
+        {/* 1. 網格與軸線 */}
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} opacity={0.8} />
         <XAxis dataKey="date" hide />
-   <YAxis 
-    domain={['auto', 'auto']} 
-    orientation="right" 
-    tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} 
-    width={45} 
-    tickFormatter={(v) => Math.round(v)} 
-    interval="preserveStartEnd"
-/>
+        <YAxis domain={['auto', 'auto']} orientation="right" mirror={true} tick={{fill:'#64748b', fontWeight:'bold', fontSize: 12, dy: -10, dx: -5}} width={0} />
         
+        {/* 2. 扣抵值標註 */}
         {indicators.trend && indicators.ma20 && deduction20 && (<ReferenceDot x={deduction20.date} y={deduction20.nav} shape={renderTriangle} fill="#38bdf8" />)}
         {indicators.trend && indicators.ma60 && deduction60 && (<ReferenceDot x={deduction60.date} y={deduction60.nav} shape={renderTriangle} fill="#1d4ed8" />)}
 
+        {/* 3. 均線 */}
         {indicators.river && <Line type="monotone" dataKey="riverTop" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
         {indicators.river && <Line type="monotone" dataKey="riverBottom" stroke="#3b82f6" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.3} />}
         {indicators.ma20 && <Line type="monotone" dataKey="ma20" stroke="#38bdf8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
         {indicators.ma60 && <Line type="monotone" dataKey="ma60" stroke="#1d4ed8" strokeWidth={2} dot={false} isAnimationActive={false} opacity={0.9} />}
         <Line type="monotone" dataKey="nav" stroke="#000000" strokeWidth={2.5} dot={false} isAnimationActive={false} shadow="0 0 10px rgba(0, 0, 0, 0.1)" />
 
+        {/* 4. 訊號 - 修正：根據 crossSignal 的物件屬性繪製 */}
         {indicators.trend && chartData.map((entry, index) => {
             if (entry.crossSignal) {
                 return (

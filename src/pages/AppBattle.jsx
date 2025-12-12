@@ -177,7 +177,8 @@ export default function AppBattle() {
   const isProcessingRef = useRef(false);
 
   // ✅ 生成加入連結
-  const joinUrl = window.location.origin + '/battle?room=' + roomId;
+// ✅ 生成加入連結 (指定連結到 RANKED 頁面)
+  const joinUrl = 'https://fund-battle-online.vercel.app/RANKED?room=' + roomId;
 
   useEffect(() => {
     const syncTime = async () => {
@@ -936,12 +937,13 @@ export default function AppBattle() {
                             <Trophy size={24} className="text-blue-500" />
                             <span className="font-bold text-blue-600 text-lg">FUND 手遊戰報</span>
                         </div>
-                        {/* 模擬基金獵人 LOGO 位置，請替換為實際圖片 */}
-                        <div className="bg-white px-3 py-1 rounded-lg shadow-sm border border-blue-100">
-                            <span className="text-xs font-bold text-blue-400">基金獵人 LOGO</span>
-                        </div>
+{/* ✅ 已修改為讀取 public 資料夾內的 logo.jpg */}
+                        <img 
+                            src="/logo.jpg" 
+                            alt="基金獵人 LOGO" 
+                            className="h-12 w-auto object-contain bg-white rounded-lg shadow-sm border border-blue-100 p-1" 
+                        />
                     </div>
-
                     <div className="text-center mb-6 relative z-10">
                         <h1 className="text-3xl font-black text-slate-900 mb-1">{fundName}</h1>
                         <span className="inline-block bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1 rounded-full">多人對戰</span>

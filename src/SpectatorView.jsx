@@ -1,5 +1,8 @@
-// 2025v12.3 - 主持人端 (交易視窗固定版)
-// ★ 邏輯修正：交易請求倒數改為鎖定「第一位」發起者的時間，避免多人操作導致時間無限延長
+// 2025v13.0 - 主持人端 (吹哨強制結算版)
+// ★ 新增功能：
+// 1. [Max Players] 設定房間人數上限。
+// 2. [Whistleblower Protocol] 結束時先發送 'calculating' 訊號與 'finalNav'，
+//    等待 3 秒讓所有玩家強制對齊數據後，再抓取最終排名，確保 100% 同步。
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react'; 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, ComposedChart, ReferenceDot } from 'recharts';
@@ -9,7 +12,7 @@ import {
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
   Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet,
-  EyeOff
+  EyeOff, Calculator // 新增計算機圖示
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -97,6 +100,7 @@ export default function SpectatorView() {
 
   const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
+  const [maxPlayers, setMaxPlayers] = useState(50); // ★ 新增：人數上限設定
   
   const [gameDuration, setGameDuration] = useState(60);
   const [gameEndTime, setGameEndTime] = useState(null);
@@ -190,6 +194,7 @@ export default function SpectatorView() {
         currentDay: 400,
         startDay: 400,
         fundId: selectedFundId,
+        maxPlayers: Number(maxPlayers), // ★ 寫入最大人數
         timeOffset: randomTimeOffset,
         indicators: { ma20: false, ma60: false, river: false, trend: false }, 
         feeRate: 0.01,
@@ -229,28 +234,21 @@ export default function SpectatorView() {
       return () => unsubscribe();
   }, [roomId]);
 
-  // ★ 核心修正 v12.3: 倒數計時邏輯
-  // 改為鎖定「最早」的請求時間，計算剩餘時間，而非重新倒數
   useEffect(() => {
       let timer;
       if (tradeRequests.length > 0) {
           timer = setInterval(() => {
-             // 1. 找出最早的請求 (First In)
-             // 注意：Firestore timestamp 可能為 null (寫入瞬間)，需過濾
              const validReqs = tradeRequests.filter(r => r.timestamp);
              if (validReqs.length > 0) {
-                 // 由小到大排序 (最早的在前面)
                  const sortedReqs = validReqs.sort((a, b) => (a.timestamp.seconds || 0) - (b.timestamp.seconds || 0));
                  const firstReq = sortedReqs[0];
-                 
                  const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
                  const reqSeconds = firstReq.timestamp.seconds;
                  const elapsed = nowSeconds - reqSeconds;
                  const remaining = Math.max(0, 15 - Math.floor(elapsed));
-                 
                  setCountdown(remaining);
              }
-          }, 500); // 使用較短的 interval 來頻繁校正
+          }, 500); 
       } else {
           setCountdown(15); 
       }
@@ -282,6 +280,7 @@ export default function SpectatorView() {
       if (roomData.indicators) setIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
       if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
+      if (roomData.maxPlayers) setMaxPlayers(roomData.maxPlayers); // 讀取 maxPlayers
       
       if (roomData.gameEndTime) {
           const t = roomData.gameEndTime;
@@ -374,7 +373,6 @@ export default function SpectatorView() {
     if (tradeRequests.length > 0) return; 
     if (!roomId) return;
     
-    // v12.2 邏輯保留：本地先更新 (Optimistic Update) 以求流暢
     setCurrentDay(prev => prev + 1);
     await updateDoc(doc(db, "battle_rooms", roomId), { currentDay: increment(1) });
   };
@@ -408,42 +406,74 @@ export default function SpectatorView() {
     }
   };
 
+  // ★ 核心升級 v13.0：強制同步結算邏輯
   const handleEndGame = async () => {
+    // 1. 停止所有自動播放
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setGameEndTime(null); 
 
-    console.log("⏳ 比賽結束，等待數據同步中 (緩衝 2 秒)...");
+    if (roomId) {
+        try {
+            // 2. [吹哨階段] 廣播 calculating 狀態，鎖定當前淨值與天數
+            // 這會強制所有玩家端停止動作，並使用 finalNav 計算最終資產
+            console.log("📣 裁判吹哨：停止交易，開始統一結算...");
+            const officialNav = fullData[currentDay]?.nav || 0;
+            
+            await updateDoc(doc(db, "battle_rooms", roomId), { 
+                status: 'calculating', 
+                finalDay: currentDay,
+                finalNav: officialNav 
+            });
+            
+            setGameStatus('calculating'); // 主持人端進入等待 UI
 
-    setTimeout(async () => {
-        let winnerInfo = null;
-        if (roomId) {
-            try {
-                console.log("✅ 開始抓取最終排名...");
+            // 3. [緩衝階段] 給予 3 秒鐘讓所有玩家上傳計算後的成績
+            // 這 3 秒是為了確保網路延遲的玩家也能跟上
+            console.log("⏳ 等待玩家數據同步 (3秒)...");
+            
+            setTimeout(async () => {
+                console.log("✅ 緩衝結束，開始抓取最終排名...");
+                
+                // 4. [收卷階段] 重新從資料庫抓取最新的玩家數據 (此時應該都已經是算好的)
                 const playersRef = collection(db, "battle_rooms", roomId, "players");
                 const snapshot = await getDocs(playersRef);
+                
                 const latestPlayers = [];
                 snapshot.forEach((doc) => {
                     latestPlayers.push({ id: doc.id, ...doc.data() });
                 });
+
+                // 排序找出冠軍
                 latestPlayers.sort((a, b) => (b.roi || -999) - (a.roi || -999));
 
+                let winnerInfo = null;
                 if (latestPlayers.length > 0) {
                     const champion = latestPlayers[0];
+                    console.log("🏆 冠軍產生:", champion.nickname, champion.roi);
                     winnerInfo = { 
                         id: champion.id, 
                         nickname: champion.nickname, 
                         roi: champion.roi || 0 
                     };
                 }
+
+                // 5. [公布階段] 將狀態改為 ended，所有人同時看到結果
                 await updateDoc(doc(db, "battle_rooms", roomId), { 
                     status: 'ended', 
                     finalWinner: winnerInfo 
                 });
-            } catch (error) { console.error("結算錯誤:", error); }
+                
+                setGameStatus('ended');
+
+            }, 3000); // ★ 3秒緩衝時間，未來可調成 2.5 或 2 秒
+
+        } catch (error) {
+            console.error("結算時發生錯誤:", error);
+            // 出錯時的保險機制：直接結束
+            setGameStatus('ended');
         }
-        setGameStatus('ended');
-    }, 2000); 
+    }
   };
 
   const handleResetRoom = async () => {
@@ -465,7 +495,9 @@ export default function SpectatorView() {
         indicators: { ma20: false, ma60: false, river: false, trend: false },
         feeRate: 0.01,
         finalWinner: null,
-        gameEndTime: null
+        gameEndTime: null,
+        finalNav: null, // 清除結算數據
+        finalDay: null
     });
     
     const snapshot = await getDocs(collection(db, "battle_rooms", roomId, "players"));
@@ -614,7 +646,7 @@ export default function SpectatorView() {
             </button>
           </form>
           <div className="mt-6 text-center text-[10px] text-slate-400">
-            v12.3 Fixed Window (Batch Trade) | NBS Team
+            v13.0 Whistleblower Protocol | NBS Team
           </div>
         </div>
       </div>
@@ -637,11 +669,16 @@ export default function SpectatorView() {
                       <p className="text-slate-500">點擊下方按鈕建立一個全新的戰局房間</p>
                   </div>
                   <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 w-full max-w-md">
-                      <div className="mb-6">
+                      <div className="mb-4">
                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">預設基金</label>
                           <select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 font-bold">
                                {FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}
                           </select>
+                      </div>
+                      {/* ★ 新增：最大人數輸入框 */}
+                      <div className="mb-6">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">最大參與人數</label>
+                          <input type="number" value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-slate-800 font-bold text-center" min="1" max="500" placeholder="50"/>
                       </div>
                       <button onClick={handleCreateRoom} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 group">
                           <Zap size={24} className="group-hover:scale-110 transition-transform"/> 建立新戰局
@@ -657,6 +694,15 @@ export default function SpectatorView() {
       <header className="bg-white border-b border-slate-200 p-3 flex justify-between items-center shadow-sm z-20 shrink-0 h-16">
         <div className="flex items-center gap-3 shrink-0"><img src="/logo.jpg" alt="Logo" className="h-10 object-contain rounded-sm" /><div className="flex flex-col justify-center"><span className="font-black text-base text-slate-800 leading-none mb-0.5">Fund手遊</span><span className="text-[10px] text-slate-500 font-bold tracking-wide leading-none">基金競技場 - 賽事主控台</span></div></div>
         <div className="flex-1 flex justify-center items-center px-4">
+            
+            {/* ★ 顯示結算中的遮罩 */}
+            {gameStatus === 'calculating' && (
+                 <div className="flex items-center gap-2 bg-yellow-400 text-slate-900 px-6 py-2 rounded-full shadow-lg animate-pulse ring-4 ring-yellow-200">
+                     <Calculator size={18} className="animate-spin-slow"/>
+                     <span className="font-black tracking-wider">數據結算中...同步所有玩家...</span>
+                 </div>
+            )}
+
             {(gameStatus === 'playing' || gameStatus === 'ended') && (
                 <div className="flex items-center gap-6 bg-slate-50 px-6 py-1 rounded-xl border border-slate-100 shadow-inner relative">
                     {currentTrendInfo && (<div className={`absolute -top-4 left-1/2 transform -translate-x-1/2 ${currentTrendInfo.bg} px-3 py-0.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-1 z-10`}><span className={`text-[10px] font-bold ${currentTrendInfo.color}`}>{currentTrendInfo.text}</span></div>)}
@@ -672,9 +718,16 @@ export default function SpectatorView() {
       </header>
 
       <main className="flex-1 flex overflow-hidden relative">
-        {gameStatus === 'waiting' && (<div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 relative z-10"><div className="flex gap-16 items-center"><div className="text-left"><h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2><p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p><button onClick={handleCopyUrl} className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative" title="點擊複製連結"><span className="font-mono text-emerald-600 font-bold">{joinUrl}</span><span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>{copied ? <Check size={24} /> : <Copy size={24} />}</span><span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>已複製連結！</span></button><div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg"><div className="mb-4"><label className="text-xs text-slate-400 block mb-2">本場戰役目標</label><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 outline-none">{FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}</select></div><div className="mb-6"><label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2"><Clock size={18} className="text-slate-400"/><input type="number" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full bg-transparent outline-none text-slate-800 font-bold" min="1"/></div></div><button onClick={handleStartGame} disabled={players.length === 0} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-lg transition-all shadow-md flex items-center justify-center gap-2"><Play fill="currentColor"/> 開始比賽 ({players.length}人)</button></div></div><div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">{roomId && <QRCodeSVG value={joinUrl} size={350} />}</div></div></div>)}
+        {gameStatus === 'waiting' && (<div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 relative z-10"><div className="flex gap-16 items-center"><div className="text-left"><h2 className="text-5xl font-bold text-slate-800 mb-4">加入戰局</h2><p className="text-slate-500 text-xl mb-8">拿出手機掃描，輸入暱稱即可參賽</p><button onClick={handleCopyUrl} className="group bg-white hover:bg-emerald-50 px-6 py-4 rounded-xl border border-slate-200 hover:border-emerald-200 text-2xl inline-flex items-center gap-3 mb-8 shadow-sm transition-all active:scale-95 cursor-pointer relative" title="點擊複製連結"><span className="font-mono text-emerald-600 font-bold">{joinUrl}</span><span className={`p-2 rounded-lg transition-colors ${copied ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400 group-hover:bg-white'}`}>{copied ? <Check size={24} /> : <Copy size={24} />}</span><span className={`absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg transition-opacity duration-300 ${copied ? 'opacity-100' : 'opacity-0'}`}>已複製連結！</span></button><div className="bg-white p-4 rounded-xl border border-slate-200 w-80 shadow-lg"><div className="mb-4"><label className="text-xs text-slate-400 block mb-2">本場戰役目標</label><select value={selectedFundId} onChange={(e) => setSelectedFundId(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded p-2 text-slate-800 outline-none">{FUNDS_LIBRARY.map(f => (<option key={f.id} value={f.id}>{f.name}</option>))}</select></div><div className="mb-6"><label className="text-xs text-slate-400 block mb-2">對戰時間 (分鐘)</label><div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded p-2"><Clock size={18} className="text-slate-400"/><input type="number" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full bg-transparent outline-none text-slate-800 font-bold" min="1"/></div></div><button onClick={handleStartGame} disabled={players.length === 0} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold rounded-lg text-lg transition-all shadow-md flex items-center justify-center gap-2"><Play fill="currentColor"/> 開始比賽 ({players.length}人)</button></div></div><div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">{roomId && <QRCodeSVG value={joinUrl} size={350} />}
+        {/* ★ 新增：目前人數/上限顯示 */}
+        <div className="mt-4 text-center">
+            <span className="bg-slate-100 px-4 py-2 rounded-full text-slate-500 font-bold text-sm border border-slate-200">
+                目前 {players.length} / 上限 {maxPlayers} 人
+            </span>
+        </div>
+        </div></div></div>)}
 
-        {(gameStatus === 'playing' || gameStatus === 'ended') && (
+        {(gameStatus === 'playing' || gameStatus === 'ended' || gameStatus === 'calculating') && (
             <>
                 <div className="w-2/3 h-full bg-white border-r border-slate-200 flex flex-col relative">
                     <div className="p-4 flex-1 relative">
@@ -735,10 +788,10 @@ export default function SpectatorView() {
                  {hasRequests ? (<div className="bg-yellow-400 text-slate-900 px-4 py-2 rounded-lg shadow-2xl flex items-center justify-between gap-4 w-full animate-in slide-in-from-bottom-2 duration-300 ring-4 ring-yellow-100"><div className="flex items-center gap-3 overflow-hidden"><div className="bg-white/30 p-1.5 rounded-full shrink-0"><Clock size={18} className="animate-spin-slow"/></div><div className="flex flex-col leading-none overflow-hidden"><div className="font-black text-sm flex items-center gap-2">市場暫停中 <span className="bg-black/10 px-1.5 rounded text-xs font-mono">{countdown}s</span></div><div className="text-[10px] font-bold opacity-80 truncate">{tradeRequests.map(r => r.nickname).join(', ')}</div></div></div><button onClick={handleForceClearRequests} className="bg-slate-900 text-white px-3 py-1.5 rounded-md font-bold text-xs hover:bg-slate-700 shadow-sm whitespace-nowrap flex items-center gap-1 shrink-0"><FastForward size={12} fill="currentColor"/> 繼續</button></div>) : (<div className="flex items-center gap-2 text-slate-600 text-sm font-bold border border-slate-200 bg-slate-100 px-6 py-2 rounded-full shadow-inner w-fit"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.6)]"></div>市場監控中...</div>)}
               </div>
               <div className="absolute right-4 flex gap-2 items-center">
-                  <button onClick={handleNextDay} disabled={hasRequests} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
+                  <button onClick={handleNextDay} disabled={hasRequests || gameStatus === 'calculating'} className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-sm transition-all border ${hasRequests || gameStatus === 'calculating' ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-slate-800 text-white border-slate-800 hover:bg-slate-700 active:scale-95'}`}>{hasRequests ? <Lock size={16}/> : <MousePointer2 size={16} />} 下一天</button>
                   <div className="h-8 w-px bg-slate-200 mx-1"></div>
-                  <div className="flex gap-1">{[5, 4, 3, 2, 1].map(sec => (<button key={sec} onClick={() => toggleAutoPlay(sec * 1000)} disabled={hasRequests} className={`w-8 py-2 rounded font-bold text-xs flex justify-center transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===sec*1000 ? 'bg-emerald-500 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}>{sec}s</button>))} <button onClick={() => toggleAutoPlay(200)} disabled={hasRequests} className={`px-2 py-2 rounded font-bold text-xs flex gap-1 transition-all ${hasRequests ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===200 ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}><Zap size={12}/> 極速</button></div>
-                  <button onClick={handleEndGame} className="px-3 py-2 bg-white border border-red-200 text-red-500 rounded text-xs hover:bg-red-50 font-bold ml-2">End</button>
+                  <div className="flex gap-1">{[5, 4, 3, 2, 1].map(sec => (<button key={sec} onClick={() => toggleAutoPlay(sec * 1000)} disabled={hasRequests || gameStatus === 'calculating'} className={`w-8 py-2 rounded font-bold text-xs flex justify-center transition-all ${hasRequests || gameStatus === 'calculating' ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===sec*1000 ? 'bg-emerald-500 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}>{sec}s</button>))} <button onClick={() => toggleAutoPlay(200)} disabled={hasRequests || gameStatus === 'calculating'} className={`px-2 py-2 rounded font-bold text-xs flex gap-1 transition-all ${hasRequests || gameStatus === 'calculating' ? 'bg-slate-50 text-slate-300 border border-slate-100 cursor-not-allowed' : (autoPlaySpeed===200 ? 'bg-purple-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50')}`}><Zap size={12}/> 極速</button></div>
+                  <button onClick={handleEndGame} disabled={gameStatus === 'calculating'} className={`px-3 py-2 bg-white border border-red-200 text-red-500 rounded text-xs hover:bg-red-50 font-bold ml-2 ${gameStatus === 'calculating' ? 'opacity-50 cursor-wait' : ''}`}>End</button>
               </div>
           </footer>
       )}
@@ -764,6 +817,7 @@ export default function SpectatorView() {
                   <h2 className="text-2xl font-bold text-slate-800 mb-4">掃描加入戰局</h2>
                   <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-inner inline-block"><QRCodeSVG value={joinUrl} size={300} /></div>
                   <div className="mt-6 text-xl font-mono font-bold text-slate-600 bg-slate-100 px-4 py-2 rounded-lg">Room ID: {roomId}</div>
+                  <div className="mt-2 text-sm text-slate-400 font-bold">上限 {maxPlayers} 人</div>
               </div>
           </div>
       )}

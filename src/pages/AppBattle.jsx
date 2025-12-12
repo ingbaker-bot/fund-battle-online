@@ -949,7 +949,7 @@ export default function AppBattle() {
 
                     <div className="text-center mb-8 relative z-10">
                         <div className="text-sm text-slate-500 font-bold mb-1">總報酬率 (ROI)</div>
-                        <div className={`text-6xl font-black font-mono flex items-center justify-center gap-2 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                        <div className={`text-3xl font-black font-mono flex items-center justify-center gap-2 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
                             {displayRoi >= 0 ? <TrendingUp size={48} /> : <TrendingDown size={48} />}
                             {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
                         </div>
@@ -958,7 +958,7 @@ export default function AppBattle() {
                     <div className="w-full grid grid-cols-2 gap-4 mb-8 relative z-10">
                         <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
                             <div className="text-xs text-slate-400 font-bold mb-2">最終資產</div>
-                            <div className="text-2xl font-black font-mono text-blue-600">
+                            <div className="text-xl font-black font-mono text-blue-600">
                                 ${Math.round(cash + (units * currentNav)).toLocaleString()}
                             </div>
                         </div>

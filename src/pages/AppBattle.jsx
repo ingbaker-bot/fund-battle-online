@@ -1,6 +1,6 @@
-// 2025v12.4 - 玩家端 (冠軍數據同步 + 資金誤差修正版)
-// 1. 修正冠軍顯示：比賽結束時，強制使用主持人(伺服器)的最終 ROI，解決 +14% vs +11% 的誤差。
-// 2. 修正資金顯示：將 Math.floor 改為 Math.round，解決 989,999 的 1 元誤差問題。
+// 2025v12.6 - 玩家端 (總資產精度修正 + 冠軍數據強制同步版)
+// 1. [Fix] 總資產顯示改為 Math.round，解決 989,999 差 1 元的浮點數問題。
+// 2. [Fix] 比賽結束時，無條件信任主持人(伺服器)的 Champion ROI，解決玩家端因網路延遲導致的數據不一致。
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -17,6 +17,7 @@ import { FUNDS_LIBRARY } from '../config/funds';
 import html2canvas from 'html2canvas';
 import ResultCard from '../components/ResultCard'; 
 
+// ★ 請務必確認以下兩個檔案存在，否則結算時會黑屏
 import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
 
@@ -211,7 +212,6 @@ export default function AppBattle() {
           if (reqs.length > 0) {
               const validReqs = reqs.filter(r => r.timestamp);
               if (validReqs.length > 0) {
-                  // 鎖定「最早」的請求時間，確保倒數一致
                   const sortedReqs = validReqs.sort((a, b) => (a.timestamp.seconds || 0) - (b.timestamp.seconds || 0));
                   const firstReq = sortedReqs[0];
                   
@@ -594,12 +594,11 @@ export default function AppBattle() {
   const deduction20 = (fullData && currentDay >= 20) ? fullData[currentDay - 20] : null;
   const deduction60 = (fullData && currentDay >= 60) ? fullData[currentDay - 60] : null;
 
-  // ★ v12.4 核心修正：
-  // 比賽結束時，移除「如果是自己就顯示本地數據」的邏輯。
-  // 因為主持人的 finalWinner 數據是第 100 天 (例如+14%)，而玩家本地可能還在第 99 天 (+11%)。
-  // 我們必須信任主持人寫入資料庫的 champion.roi，這才是官方最終結果。
+  // ★ v12.6 修正：比賽結束時，無條件信任主持人(伺服器)的數據
+  // 這解決了「大螢幕顯示 +14.26%，但手機顯示 +11.1%」的嚴重不同步問題
   const finalChampionRoi = useMemo(() => {
       if (!champion) return 0;
+      // 強制使用伺服器寫入的最終 ROI (權威數據)，忽略本地計算
       return champion.roi || 0; 
   }, [champion]);
 
@@ -700,7 +699,7 @@ export default function AppBattle() {
 
                   <div className="flex flex-col items-center">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
-                     {/* ★ v12.4 修正：Math.floor -> Math.round 解決 1 元誤差 */}
+                     {/* ★ v12.6 修正：Math.floor -> Math.round 解決 1 元誤差 */}
                      <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                          {Math.round(totalAssets).toLocaleString()}
                      </div>

@@ -949,12 +949,36 @@ export default function AppBattle() {
                         <span className="inline-block bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1 rounded-full">多人對戰</span>
                     </div>
 
-                    <div className="text-center mb-8 relative z-10">
-                        <div className="text-sm text-slate-500 font-bold mb-1">總報酬率 (ROI)</div>
-                        <div className={`text-3xl font-black font-mono flex items-center justify-center gap-2 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
-                            {displayRoi >= 0 ? <TrendingUp size={48} /> : <TrendingDown size={48} />}
-                            {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
+                    {/* ✅ 修改後：左右並列顯示 (左：自己 / 右：冠軍) */}
+                    <div className="w-full flex gap-3 mb-6 relative z-10 px-2">
+                        {/* 左側：玩家自己 */}
+                        <div className="flex-1 bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-blue-100 flex flex-col justify-center items-center shadow-sm">
+                            <div className="text-xs text-slate-500 font-bold mb-1">您的總報酬</div>
+                            <div className={`text-3xl font-black font-mono flex items-center gap-1 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                {displayRoi >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+                                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
+                            </div>
                         </div>
+
+                        {/* 右側：本場冠軍 (整合您提供的樣式) */}
+                        {champion ? (
+                            <div className="flex-1 bg-gradient-to-br from-yellow-400 to-orange-500 p-3 rounded-xl border border-amber-300 shadow-sm flex flex-col justify-center items-center relative overflow-hidden text-white">
+                                <Crown size={40} className="absolute -right-2 -top-2 text-white/30"/>
+                                <div className="flex items-center gap-1 mb-1">
+                                    <Crown size={14} className="text-white" fill="currentColor"/>
+                                    <span className="text-xs font-bold shadow-sm">本場冠軍</span>
+                                </div>
+                                <div className="text-sm font-bold truncate w-full text-center mb-0 px-1">{champion.nickname}</div>
+                                <div className="text-2xl font-mono font-black text-white drop-shadow-md mt-0.5">
+                                    {champion.roi > 0 ? '+' : ''}{champion.roi.toFixed(1)}%
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 bg-slate-100 rounded-xl p-3 border border-slate-200 flex flex-col justify-center items-center text-slate-400">
+                                <Loader2 className="animate-spin mb-1" size={20}/>
+                                <span className="text-xs font-bold">計算冠軍中...</span>
+                            </div>
+                        )}
                     </div>
 
                     <div className="w-full grid grid-cols-2 gap-4 mb-8 relative z-10">

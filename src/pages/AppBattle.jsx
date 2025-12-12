@@ -901,7 +901,7 @@ export default function AppBattle() {
                             
                             <button 
                                 onClick={() => executeTrade('sell')} 
-                                disabled={tradeType === 'buy'} 
+                                disabled={tradeType === 'buy'
                                 className={`py-2 rounded-lg font-bold text-base shadow-md flex items-center justify-center gap-1 ${tradeType === 'buy' ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 active:bg-emerald-600 text-white active:scale-95'}`}
                             >
                                 <TrendingDown size={16} />
@@ -917,5 +917,4 @@ export default function AppBattle() {
           </div>
       </div>
   );
-}
 }

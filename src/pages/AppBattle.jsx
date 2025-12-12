@@ -1,12 +1,13 @@
-// 2025v13.2 - 玩家端 (結算畫面大改版-亮色主題)
+// 2025v13.3 - 玩家端 (結算成績卡樣式還原版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
 import { 
   TrendingUp, TrendingDown, Trophy, Loader2, Zap, Database, Smartphone, 
   AlertTriangle, RefreshCw, Hand, X, Calendar, Crown, Share2, Timer, 
-  LogOut, Lock, RotateCcw, Sparkles, Calculator 
+  LogOut, Lock, RotateCcw, Sparkles, Calculator, User
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react'; // ✅ 新增引入 QRCodeSVG
 
 import { db } from '../config/firebase'; 
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit, getDoc, getDocs } from 'firebase/firestore';
@@ -95,7 +96,7 @@ export default function AppBattle() {
           // 等待一下確保畫面渲染完成
           await new Promise(r => setTimeout(r, 300));
           const canvas = await html2canvas(resultCardRef.current, { 
-              backgroundColor: '#f8fafc', // 強制設定背景色為亮灰色，避免透明
+              backgroundColor: null, // ✅ 改為 null，讓 CSS 的漸層背景生效
               scale: 3, 
               useCORS: true, 
               logging: false, 
@@ -174,6 +175,9 @@ export default function AppBattle() {
 
   const lastReportTime = useRef(0);
   const isProcessingRef = useRef(false);
+
+  // ✅ 生成加入連結
+  const joinUrl = window.location.origin + '/battle?room=' + roomId;
 
   useEffect(() => {
     const syncTime = async () => {
@@ -913,7 +917,7 @@ export default function AppBattle() {
       </div>
   );
 
-  // ✅ 全新設計的亮色系結算畫面
+  // ✅ 結算畫面：已還原為舊版樣式
   if (status === 'ended') {
       const startDate = fullData.length > startDay ? getRealDate(fullData[startDay].date) : '---';
       const endDate = fullData.length > currentDay ? getRealDate(fullData[currentDay].date) : '---';
@@ -924,40 +928,67 @@ export default function AppBattle() {
               <div className="z-10 w-full max-w-md flex flex-col items-center">
                   <h2 className="text-3xl font-black mb-6 tracking-wider text-slate-800">比賽結束</h2>
                   
-                  {/* 將要被截圖的區域 */}
-                  <div ref={resultCardRef} className="w-full flex flex-col items-center bg-slate-50 p-2">
-                    <div className="bg-white rounded-full px-6 py-2 shadow-sm border border-slate-100 mb-6 flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-400">基金揭曉</span>
-                        <span className="text-lg font-black text-emerald-600">{fundName}</span>
+                  {/* 將要被截圖的區域 - 已還原為舊版樣式 */}
+                  <div ref={resultCardRef} className="w-full flex flex-col items-center bg-gradient-to-b from-blue-50 to-blue-100 p-6 rounded-3xl shadow-xl border border-blue-200 mb-6 relative overflow-hidden">
+                    
+                    <div className="flex justify-between items-center w-full mb-4 relative z-10">
+                        <div className="flex items-center gap-2">
+                            <Trophy size={24} className="text-blue-500" />
+                            <span className="font-bold text-blue-600 text-lg">FUND 手遊戰報</span>
+                        </div>
+                        {/* 模擬基金獵人 LOGO 位置，請替換為實際圖片 */}
+                        <div className="bg-white px-3 py-1 rounded-lg shadow-sm border border-blue-100">
+                            <span className="text-xs font-bold text-blue-400">基金獵人 LOGO</span>
+                        </div>
                     </div>
 
-                    <div className="w-full grid grid-cols-2 gap-4 mb-6">
-                        {/* 玩家成績卡 */}
-                        <div className="bg-white rounded-2xl p-5 shadow-lg border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
-                            <div className="text-xs text-slate-400 font-bold mb-2">您的最終成績</div>
-                            <div className={`text-4xl font-black font-mono ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
+                    <div className="text-center mb-6 relative z-10">
+                        <h1 className="text-3xl font-black text-slate-900 mb-1">{fundName}</h1>
+                        <span className="inline-block bg-blue-100 text-blue-600 text-xs font-bold px-3 py-1 rounded-full">多人對戰</span>
+                    </div>
+
+                    <div className="text-center mb-8 relative z-10">
+                        <div className="text-sm text-slate-500 font-bold mb-1">總報酬率 (ROI)</div>
+                        <div className={`text-6xl font-black font-mono flex items-center justify-center gap-2 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                            {displayRoi >= 0 ? <TrendingUp size={48} /> : <TrendingDown size={48} />}
+                            {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
+                        </div>
+                    </div>
+
+                    <div className="w-full grid grid-cols-2 gap-4 mb-8 relative z-10">
+                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
+                            <div className="text-xs text-slate-400 font-bold mb-2">最終資產</div>
+                            <div className="text-2xl font-black font-mono text-blue-600">
+                                ${Math.round(cash + (units * currentNav)).toLocaleString()}
                             </div>
-                            <div className="text-xs text-slate-400 font-bold mt-2">{nickname}</div>
                         </div>
                         
-                        {/* 冠軍成績卡 (金黃色) */}
-                        <div className="bg-gradient-to-br from-amber-300 to-orange-400 rounded-2xl p-5 shadow-lg text-white flex flex-col items-center justify-center relative overflow-hidden">
-                             <div className="absolute top-0 right-0 p-2 opacity-20"><Crown size={40}/></div>
-                            <div className="text-xs text-amber-50 font-bold mb-2 flex items-center gap-1"><Crown size={14}/> 本場冠軍</div>
-                            <div className="text-4xl font-black font-mono">
-                                {finalChampionRoi > 0 ? '+' : ''}{finalChampionRoi.toFixed(1)}%
-                            </div>
-                            <div className="text-xs text-amber-50 font-bold mt-2 truncate max-w-[120px]">
-                                {champion ? champion.nickname : '計算中...'}
-                            </div>
+                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
+                             <div className="text-xs text-slate-400 font-bold mb-2 flex items-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
+                            <div className="text-sm font-mono font-bold text-slate-700">{startDate}</div>
+                            <div className="text-sm font-mono font-bold text-slate-700">{endDate}</div>
                         </div>
                     </div>
 
-                    <div className="w-full bg-slate-100 rounded-xl p-3 text-center mb-8 border border-slate-200">
-                        <div className="text-xs text-slate-400 font-bold mb-1 flex items-center justify-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
-                        <div className="text-sm font-mono font-bold text-slate-600">{startDate} ~ {endDate}</div>
+                    <div className="w-full flex justify-between items-end relative z-10">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-blue-100 p-2 rounded-full text-blue-500"><User size={20} /></div>
+                            <div className="flex flex-col">
+                                <span className="text-xs text-slate-400 font-bold uppercase">PLAYER</span>
+                                <span className="text-xl font-black text-slate-800">{nickname}</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">SCAN TO PLAY</span>
+                            <div className="bg-white p-2 rounded-lg shadow-sm border border-blue-100">
+                                <QRCodeSVG value={joinUrl} size={80} />
+                            </div>
+                        </div>
                     </div>
+                    
+                    {/* 背景裝飾 */}
+                    <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-blue-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+                    <div className="absolute -top-10 -right-10 w-40 h-40 bg-cyan-200 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
                   </div>
 
                   {/* 功能按鈕區 */}

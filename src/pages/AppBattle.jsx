@@ -704,7 +704,8 @@ export default function AppBattle() {
                   <div className="flex flex-col items-center">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
                      <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                         {Math.floor(totalAssets).toLocaleString()}
+{/* 改用 round 四捨五入，修正浮點數誤差 */}
+       {Math.round(totalAssets).toLocaleString()}
                      </div>
                   </div>
               </div>

@@ -1,4 +1,4 @@
-// 2025v13.0 - 主持人端 (吹哨強制結算版)
+// 2025v13.0 - 主持人端 (吹哨強制結算版) [Syntax Fixed]
 // ★ 新增功能：
 // 1. [Max Players] 設定房間人數上限。
 // 2. [Whistleblower Protocol] 結束時先發送 'calculating' 訊號與 'finalNav'，
@@ -12,7 +12,7 @@ import {
   DollarSign, QrCode, X, TrendingDown, Calendar, Hand, Clock, 
   Lock, AlertTriangle, Radio, LogIn, LogOut, ShieldCheck,
   Copy, Check, Percent, TrendingUp as TrendIcon, Timer, Wallet,
-  EyeOff, Calculator // 新增計算機圖示
+  EyeOff, Calculator 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase'; 
@@ -100,7 +100,7 @@ export default function SpectatorView() {
 
   const [selectedFundId, setSelectedFundId] = useState(FUNDS_LIBRARY[0]?.id || 'fund_A');
   const [autoPlaySpeed, setAutoPlaySpeed] = useState(null);
-  const [maxPlayers, setMaxPlayers] = useState(50); // ★ 新增：人數上限設定
+  const [maxPlayers, setMaxPlayers] = useState(50); 
   
   const [gameDuration, setGameDuration] = useState(60);
   const [gameEndTime, setGameEndTime] = useState(null);
@@ -194,7 +194,7 @@ export default function SpectatorView() {
         currentDay: 400,
         startDay: 400,
         fundId: selectedFundId,
-        maxPlayers: Number(maxPlayers), // ★ 寫入最大人數
+        maxPlayers: Number(maxPlayers), 
         timeOffset: randomTimeOffset,
         indicators: { ma20: false, ma60: false, river: false, trend: false }, 
         feeRate: 0.01,
@@ -280,7 +280,7 @@ export default function SpectatorView() {
       if (roomData.indicators) setIndicators(roomData.indicators);
       if (roomData.timeOffset) setTimeOffset(roomData.timeOffset);
       if (roomData.feeRate !== undefined) setFeeRate(roomData.feeRate);
-      if (roomData.maxPlayers) setMaxPlayers(roomData.maxPlayers); // 讀取 maxPlayers
+      if (roomData.maxPlayers) setMaxPlayers(roomData.maxPlayers); 
       
       if (roomData.gameEndTime) {
           const t = roomData.gameEndTime;
@@ -406,17 +406,13 @@ export default function SpectatorView() {
     }
   };
 
-  // ★ 核心升級 v13.0：強制同步結算邏輯
   const handleEndGame = async () => {
-    // 1. 停止所有自動播放
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
     setGameEndTime(null); 
 
     if (roomId) {
         try {
-            // 2. [吹哨階段] 廣播 calculating 狀態，鎖定當前淨值與天數
-            // 這會強制所有玩家端停止動作，並使用 finalNav 計算最終資產
             console.log("📣 裁判吹哨：停止交易，開始統一結算...");
             const officialNav = fullData[currentDay]?.nav || 0;
             
@@ -426,16 +422,13 @@ export default function SpectatorView() {
                 finalNav: officialNav 
             });
             
-            setGameStatus('calculating'); // 主持人端進入等待 UI
+            setGameStatus('calculating'); 
 
-            // 3. [緩衝階段] 給予 3 秒鐘讓所有玩家上傳計算後的成績
-            // 這 3 秒是為了確保網路延遲的玩家也能跟上
             console.log("⏳ 等待玩家數據同步 (3秒)...");
             
             setTimeout(async () => {
                 console.log("✅ 緩衝結束，開始抓取最終排名...");
                 
-                // 4. [收卷階段] 重新從資料庫抓取最新的玩家數據 (此時應該都已經是算好的)
                 const playersRef = collection(db, "battle_rooms", roomId, "players");
                 const snapshot = await getDocs(playersRef);
                 
@@ -444,7 +437,6 @@ export default function SpectatorView() {
                     latestPlayers.push({ id: doc.id, ...doc.data() });
                 });
 
-                // 排序找出冠軍
                 latestPlayers.sort((a, b) => (b.roi || -999) - (a.roi || -999));
 
                 let winnerInfo = null;
@@ -458,7 +450,6 @@ export default function SpectatorView() {
                     };
                 }
 
-                // 5. [公布階段] 將狀態改為 ended，所有人同時看到結果
                 await updateDoc(doc(db, "battle_rooms", roomId), { 
                     status: 'ended', 
                     finalWinner: winnerInfo 
@@ -466,11 +457,10 @@ export default function SpectatorView() {
                 
                 setGameStatus('ended');
 
-            }, 3000); // ★ 3秒緩衝時間，未來可調成 2.5 或 2 秒
+            }, 3000); 
 
         } catch (error) {
             console.error("結算時發生錯誤:", error);
-            // 出錯時的保險機制：直接結束
             setGameStatus('ended');
         }
     }
@@ -496,7 +486,7 @@ export default function SpectatorView() {
         feeRate: 0.01,
         finalWinner: null,
         gameEndTime: null,
-        finalNav: null, // 清除結算數據
+        finalNav: null, 
         finalDay: null
     });
     
@@ -823,4 +813,5 @@ export default function SpectatorView() {
       )}
     </div>
   );
+}
 }

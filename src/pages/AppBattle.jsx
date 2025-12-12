@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
-import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit, getDoc } from 'firebase/firestore';
+// 記得加上 getDocs
+import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit, getDoc, getDocs } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
 
 import html2canvas from 'html2canvas';

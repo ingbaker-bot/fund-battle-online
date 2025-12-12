@@ -1,4 +1,4 @@
-// 2025v13.1 - 玩家端 (最終修復版)
+// 2025v13.2 - 玩家端 (結算畫面大改版-亮色主題)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -9,13 +9,10 @@ import {
 } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
-// ✅ 修復點 1: 確保這裡有 getDocs
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit, getDoc, getDocs } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
 
 import html2canvas from 'html2canvas';
-// 若您的 ResultCard 路徑不同請自行調整，通常是 components/ResultCard
-// import ResultCard from '../components/ResultCard'; 
 
 import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
@@ -95,8 +92,15 @@ export default function AppBattle() {
       if (!resultCardRef.current) { alert("系統錯誤：找不到戰報元件"); return; }
       setIsGenerating(true);
       try {
-          await new Promise(r => setTimeout(r, 100));
-          const canvas = await html2canvas(resultCardRef.current, { backgroundColor: null, scale: 3, useCORS: true, logging: false, ignoreElements: (el) => el.tagName === 'IMG' && !el.complete });
+          // 等待一下確保畫面渲染完成
+          await new Promise(r => setTimeout(r, 300));
+          const canvas = await html2canvas(resultCardRef.current, { 
+              backgroundColor: '#f8fafc', // 強制設定背景色為亮灰色，避免透明
+              scale: 3, 
+              useCORS: true, 
+              logging: false, 
+              ignoreElements: (el) => el.tagName === 'IMG' && !el.complete 
+          });
           canvas.toBlob((blob) => {
               if (!blob) { alert("生成圖片失敗"); setIsGenerating(false); return; }
               const url = URL.createObjectURL(blob);
@@ -141,7 +145,7 @@ export default function AppBattle() {
   const [startDay, setStartDay] = useState(0); 
   const [timeOffset, setTimeOffset] = useState(0);
   const [fundName, setFundName] = useState('');
-  const [showIndicators, setShowIndicators] = useState({ ma20: false, ma60: false, river: false });
+  const [showIndicators, setShowIndicators] = useState({ ma20: false, ma60: false, river: false, trend: false });
   
   const [cash, setCash] = useState(() => getSavedState('battle_cash', 1000000));
   const [units, setUnits] = useState(() => getSavedState('battle_units', 0));
@@ -388,7 +392,6 @@ export default function AppBattle() {
         
         if (roomSnap.exists()) {
             const max = roomSnap.data().maxPlayers || 50;
-            // 這裡使用了 getDocs，開頭必須 import
             const playersSnap = await getDocs(collection(db, "battle_rooms", roomId, "players"));
             
             if (playersSnap.size >= max) {
@@ -539,6 +542,14 @@ export default function AppBattle() {
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
+  };
+
+  const getRealDate = (dateStr) => {
+      if (!dateStr) return '---';
+      const dateObj = new Date(dateStr);
+      if (isNaN(dateObj.getTime())) return dateStr;
+      const year = dateObj.getFullYear(); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
   };
 
   const chartData = useMemo(() => {
@@ -883,7 +894,6 @@ export default function AppBattle() {
                                 <span className="text-[10px] opacity-80 font-normal pt-0.5">(費{Math.round(feeRate*100)}%)</span>
                             </button>
                             
-                            {/* ✅ 修復點 2: 修正了這裡的 disabled 語法 */}
                             <button 
                                 onClick={() => executeTrade('sell')} 
                                 disabled={tradeType === 'buy'}
@@ -903,91 +913,83 @@ export default function AppBattle() {
       </div>
   );
 
-  // ✅ 修復點 3: 這裡不再是註解，而是真正的結算畫面程式碼
+  // ✅ 全新設計的亮色系結算畫面
   if (status === 'ended') {
+      const startDate = fullData.length > startDay ? getRealDate(fullData[startDay].date) : '---';
+      const endDate = fullData.length > currentDay ? getRealDate(fullData[currentDay].date) : '---';
+
       return (
-          <div className="h-[100dvh] bg-slate-900 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20 pointer-events-none">
-                  <div className="absolute top-10 left-10 w-32 h-32 bg-purple-500 rounded-full blur-3xl mix-blend-screen animate-blob"></div>
-                  <div className="absolute bottom-10 right-10 w-32 h-32 bg-emerald-500 rounded-full blur-3xl mix-blend-screen animate-blob animation-delay-2000"></div>
-              </div>
-
+          <div className="min-h-[100dvh] bg-slate-50 text-slate-800 flex flex-col items-center p-6 relative overflow-hidden font-sans">
+              
               <div className="z-10 w-full max-w-md flex flex-col items-center">
-                  <Trophy size={64} className="text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] animate-bounce" />
+                  <h2 className="text-3xl font-black mb-6 tracking-wider text-slate-800">比賽結束</h2>
                   
-                  <h2 className="text-3xl font-black mb-2 tracking-wider">戰局結束</h2>
-                  <p className="text-slate-400 text-sm mb-8 font-bold">感謝您的參與，以下是您的戰績</p>
+                  {/* 將要被截圖的區域 */}
+                  <div ref={resultCardRef} className="w-full flex flex-col items-center bg-slate-50 p-2">
+                    <div className="bg-white rounded-full px-6 py-2 shadow-sm border border-slate-100 mb-6 flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-400">基金揭曉</span>
+                        <span className="text-lg font-black text-emerald-600">{fundName}</span>
+                    </div>
 
-                  <div ref={resultCardRef} className="w-full bg-white text-slate-900 rounded-3xl p-6 shadow-2xl border-4 border-slate-800 relative overflow-hidden mb-8">
-                      <div className="flex justify-between items-start mb-4">
-                          <div>
-                              <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Player</div>
-                              <div className="text-2xl font-black text-slate-800">{nickname}</div>
-                          </div>
-                          <div className="bg-slate-100 px-3 py-1 rounded-lg">
-                              <div className="text-[10px] text-slate-400 font-bold uppercase">Fund</div>
-                              <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{fundName}</div>
-                          </div>
-                      </div>
+                    <div className="w-full grid grid-cols-2 gap-4 mb-6">
+                        {/* 玩家成績卡 */}
+                        <div className="bg-white rounded-2xl p-5 shadow-lg border border-slate-100 flex flex-col items-center justify-center relative overflow-hidden">
+                            <div className="text-xs text-slate-400 font-bold mb-2">您的最終成績</div>
+                            <div className={`text-4xl font-black font-mono ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-slate-400 font-bold mt-2">{nickname}</div>
+                        </div>
+                        
+                        {/* 冠軍成績卡 (金黃色) */}
+                        <div className="bg-gradient-to-br from-amber-300 to-orange-400 rounded-2xl p-5 shadow-lg text-white flex flex-col items-center justify-center relative overflow-hidden">
+                             <div className="absolute top-0 right-0 p-2 opacity-20"><Crown size={40}/></div>
+                            <div className="text-xs text-amber-50 font-bold mb-2 flex items-center gap-1"><Crown size={14}/> 本場冠軍</div>
+                            <div className="text-4xl font-black font-mono">
+                                {finalChampionRoi > 0 ? '+' : ''}{finalChampionRoi.toFixed(1)}%
+                            </div>
+                            <div className="text-xs text-amber-50 font-bold mt-2 truncate max-w-[120px]">
+                                {champion ? champion.nickname : '計算中...'}
+                            </div>
+                        </div>
+                    </div>
 
-                      <div className="flex items-center justify-between bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100">
-                          <div className="flex flex-col">
-                              <span className="text-xs text-slate-400 font-bold">最終資產</span>
-                              <span className="text-xl font-mono font-black text-slate-700">${Math.round(cash + (units * currentNav)).toLocaleString()}</span>
-                          </div>
-                          <div className="h-8 w-px bg-slate-200"></div>
-                          <div className="flex flex-col items-end">
-                              <span className="text-xs text-slate-400 font-bold">ROI</span>
-                              <span className={`text-3xl font-mono font-black ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
-                                  {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
-                              </span>
-                          </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                              <div className="text-[10px] text-slate-400 font-bold mb-1">交易次數</div>
-                              <div className="text-lg font-black text-slate-700">{transactions.length} <span className="text-xs font-normal text-slate-400">次</span></div>
-                          </div>
-                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                              <div className="text-[10px] text-slate-400 font-bold mb-1">紓困次數</div>
-                              <div className="text-lg font-black text-slate-700">{resetCount} <span className="text-xs font-normal text-slate-400">次</span></div>
-                          </div>
-                      </div>
-                      
-                      <div className="absolute -bottom-4 -right-4 text-9xl font-black text-slate-100 opacity-50 z-0 pointer-events-none select-none">
-                          {displayRoi >= 0 ? 'WIN' : 'LOSS'}
-                      </div>
+                    <div className="w-full bg-slate-100 rounded-xl p-3 text-center mb-8 border border-slate-200">
+                        <div className="text-xs text-slate-400 font-bold mb-1 flex items-center justify-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
+                        <div className="text-sm font-mono font-bold text-slate-600">{startDate} ~ {endDate}</div>
+                    </div>
                   </div>
 
-                  <div className="w-full grid grid-cols-2 gap-3 mb-4">
+                  {/* 功能按鈕區 */}
+                  <div className="w-full space-y-3 mb-6">
                        <button 
                           onClick={handleAIAnalysis} 
                           disabled={isAnalyzing}
-                          className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 transition-all active:scale-95"
+                          className="w-full py-3.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-xl font-bold shadow-md shadow-purple-200 flex items-center justify-center gap-2 transition-all active:scale-95"
                        >
-                          {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18} className="text-yellow-300"/>}
-                          AI 戰局分析
+                          {isAnalyzing ? <Loader2 className="animate-spin" size={20}/> : <Sparkles size={20} className="text-yellow-200"/>}
+                          召喚 AI 導師復盤
                        </button>
 
                        <button 
                           onClick={() => handleDownloadReport(fundName)} 
                           disabled={isGenerating}
-                          className="py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                          className="w-full py-3.5 bg-gradient-to-r from-emerald-400 to-teal-500 text-white rounded-xl font-bold shadow-md shadow-emerald-200 flex items-center justify-center gap-2 transition-all active:scale-95"
                        >
-                          {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Share2 size={18}/>}
-                          下載戰報
+                          {isGenerating ? <Loader2 className="animate-spin" size={20}/> : <Share2 size={20}/>}
+                          下載對戰成績卡
                        </button>
                   </div>
 
                   <button 
                       onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} 
-                      className="w-full py-3 bg-transparent border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                      className="text-slate-400 hover:text-slate-600 text-sm font-bold transition-colors flex items-center gap-1 pb-8"
                   >
-                      <LogOut size={18}/> 離開房間
+                      <LogOut size={16}/> 離開房間
                   </button>
               </div>
 
+              {/* 彈出視窗組件 */}
               {showModal && (
                   <AIAnalysisModal 
                       isOpen={showModal} 
@@ -998,11 +1000,11 @@ export default function AppBattle() {
               )}
 
               {showImageModal && generatedImage && (
-                  <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                  <div className="fixed inset-0 z-[100] bg-slate-900/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
                       <div className="relative max-w-sm w-full">
                           <button onClick={() => setShowImageModal(false)} className="absolute -top-12 right-0 text-white p-2 bg-white/10 rounded-full hover:bg-white/20"><X size={24}/></button>
-                          <img src={generatedImage} alt="Battle Report" className="w-full rounded-2xl shadow-2xl border border-slate-700" />
-                          <p className="text-center text-slate-400 text-xs mt-4">長按圖片即可儲存或是分享</p>
+                          <img src={generatedImage} alt="Battle Report" className="w-full rounded-2xl shadow-2xl" />
+                          <p className="text-center text-slate-300 text-xs mt-4 font-bold">長按圖片即可儲存或是分享</p>
                       </div>
                   </div>
               )}

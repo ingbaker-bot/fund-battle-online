@@ -965,8 +965,8 @@ export default function AppBattle() {
                         
                         <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
                              <div className="text-xs text-slate-400 font-bold mb-2 flex items-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
-                            <div className="text-sm font-mono font-bold text-slate-700">{startDate}</div>
-                            <div className="text-sm font-mono font-bold text-slate-700">{endDate}</div>
+                            <div className="text-xs font-mono font-bold text-slate-700">{startDate}</div>
+                            <div className="text-xs font-mono font-bold text-slate-700">{endDate}</div>
                         </div>
                     </div>
 

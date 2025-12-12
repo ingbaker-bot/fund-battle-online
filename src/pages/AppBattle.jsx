@@ -956,7 +956,7 @@ export default function AppBattle() {
                             <div className="text-xs text-slate-500 font-bold mb-1">您的總報酬</div>
                             <div className={`text-3xl font-black font-mono flex items-center gap-1 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
                                 {displayRoi >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-                                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
+                                {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
                             </div>
                         </div>
 

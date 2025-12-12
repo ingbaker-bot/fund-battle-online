@@ -1,7 +1,4 @@
-// 2025v13.0 - 玩家端 (吹哨強制結算版)
-// ★ 新增功能：
-// 1. [Max Players Check] 加入時檢查是否額滿。
-// 2. [Whistleblower Listener] 當狀態變為 calculating 時，強制使用伺服器 finalNav 重算並上傳成績。
+// 2025v13.1 - 玩家端 (最終修復版)
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, XAxis, ResponsiveContainer, ComposedChart, CartesianGrid, ReferenceDot } from 'recharts';
@@ -12,12 +9,13 @@ import {
 } from 'lucide-react';
 
 import { db } from '../config/firebase'; 
-// 記得加上 getDocs
+// ✅ 修復點 1: 確保這裡有 getDocs
 import { doc, setDoc, deleteDoc, onSnapshot, updateDoc, serverTimestamp, collection, query, orderBy, limit, getDoc, getDocs } from 'firebase/firestore';
 import { FUNDS_LIBRARY } from '../config/funds';
 
 import html2canvas from 'html2canvas';
-import ResultCard from '../components/ResultCard'; 
+// 若您的 ResultCard 路徑不同請自行調整，通常是 components/ResultCard
+// import ResultCard from '../components/ResultCard'; 
 
 import AIAnalysisModal from '../components/AIAnalysisModal';
 import { useAIAnalyst } from '../hooks/useAIAnalyst';
@@ -249,21 +247,15 @@ export default function AppBattle() {
       }
       const roomData = docSnap.data();
       
-      // ★ 核心狀態監聽邏輯
       if (roomData.status === 'ended') {
           setStatus('ended');
       } else if (roomData.status === 'calculating') {
-          // ★ 強制結算訊號：當收到 calculating 時，立刻執行
-          // 1. 讀取主持人寫入的 finalNav (官方淨值)
           if (roomData.finalNav && roomData.finalNav > 0) {
               const officialNav = roomData.finalNav;
-              
-              // 2. 重新計算最終資產 (不論本地跑多少天，都以這個淨值為準)
               const finalAssets = cash + (units * officialNav);
               const finalRoi = ((finalAssets - initialCapital) / initialCapital) * 100;
               const adjustedRoi = finalRoi - (resetCount * 50);
 
-              // 3. 強制上傳這個「官方認證」的成績
               updateDoc(doc(db, "battle_rooms", roomId, "players", userId), {
                   roi: adjustedRoi, 
                   assets: finalAssets, 
@@ -272,7 +264,7 @@ export default function AppBattle() {
                   console.log("✅ 強制結算數據已上傳:", adjustedRoi);
               });
           }
-          setStatus('playing'); // 畫面暫時維持 playing 等待跳轉
+          setStatus('playing'); 
       } else if (roomData.status === 'playing') {
           if (status !== 'login' && status !== 'input_room') {
               setStatus('playing');
@@ -308,7 +300,7 @@ export default function AppBattle() {
       if (roomData.finalWinner) setChampion(roomData.finalWinner);
     });
     return () => unsubscribe();
-  }, [roomId, status, fullData.length, cash, units, resetCount]); // 加入 cash, units 依賴確保結算正確
+  }, [roomId, status, fullData.length, cash, units, resetCount]);
 
   useEffect(() => {
       let interval = null;
@@ -391,12 +383,12 @@ export default function AppBattle() {
       
       setIsJoining(true);
       try {
-        // ★ v13.0 新增：檢查人數上限
         const roomRef = doc(db, "battle_rooms", roomId);
         const roomSnap = await getDoc(roomRef);
         
         if (roomSnap.exists()) {
             const max = roomSnap.data().maxPlayers || 50;
+            // 這裡使用了 getDocs，開頭必須 import
             const playersSnap = await getDocs(collection(db, "battle_rooms", roomId, "players"));
             
             if (playersSnap.size >= max) {
@@ -547,14 +539,6 @@ export default function AppBattle() {
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${newYear}-${month}-${day}`;
-  };
-
-  const getRealDate = (dateStr) => {
-      if (!dateStr) return '---';
-      const dateObj = new Date(dateStr);
-      if (isNaN(dateObj.getTime())) return dateStr;
-      const year = dateObj.getFullYear(); const month = String(dateObj.getMonth() + 1).padStart(2, '0'); const day = String(dateObj.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
   };
 
   const chartData = useMemo(() => {
@@ -735,7 +719,6 @@ export default function AppBattle() {
 
                   <div className="flex flex-col items-center">
                      <div className="text-[10px] text-slate-400 font-bold mb-0.5">總資產</div>
-                     {/* ★ v12.7 修正：Math.floor -> Math.round 解決 1 元誤差 */}
                      <div className={`text-lg font-mono font-black leading-none flex items-center h-5 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                          {Math.round(totalAssets).toLocaleString()}
                      </div>
@@ -900,6 +883,7 @@ export default function AppBattle() {
                                 <span className="text-[10px] opacity-80 font-normal pt-0.5">(費{Math.round(feeRate*100)}%)</span>
                             </button>
                             
+                            {/* ✅ 修復點 2: 修正了這裡的 disabled 語法 */}
                             <button 
                                 onClick={() => executeTrade('sell')} 
                                 disabled={tradeType === 'buy'}
@@ -918,4 +902,111 @@ export default function AppBattle() {
           </div>
       </div>
   );
+
+  // ✅ 修復點 3: 這裡不再是註解，而是真正的結算畫面程式碼
+  if (status === 'ended') {
+      return (
+          <div className="h-[100dvh] bg-slate-900 text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20 pointer-events-none">
+                  <div className="absolute top-10 left-10 w-32 h-32 bg-purple-500 rounded-full blur-3xl mix-blend-screen animate-blob"></div>
+                  <div className="absolute bottom-10 right-10 w-32 h-32 bg-emerald-500 rounded-full blur-3xl mix-blend-screen animate-blob animation-delay-2000"></div>
+              </div>
+
+              <div className="z-10 w-full max-w-md flex flex-col items-center">
+                  <Trophy size={64} className="text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.5)] animate-bounce" />
+                  
+                  <h2 className="text-3xl font-black mb-2 tracking-wider">戰局結束</h2>
+                  <p className="text-slate-400 text-sm mb-8 font-bold">感謝您的參與，以下是您的戰績</p>
+
+                  <div ref={resultCardRef} className="w-full bg-white text-slate-900 rounded-3xl p-6 shadow-2xl border-4 border-slate-800 relative overflow-hidden mb-8">
+                      <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Player</div>
+                              <div className="text-2xl font-black text-slate-800">{nickname}</div>
+                          </div>
+                          <div className="bg-slate-100 px-3 py-1 rounded-lg">
+                              <div className="text-[10px] text-slate-400 font-bold uppercase">Fund</div>
+                              <div className="text-xs font-bold text-slate-700 truncate max-w-[100px]">{fundName}</div>
+                          </div>
+                      </div>
+
+                      <div className="flex items-center justify-between bg-slate-50 rounded-2xl p-4 mb-4 border border-slate-100">
+                          <div className="flex flex-col">
+                              <span className="text-xs text-slate-400 font-bold">最終資產</span>
+                              <span className="text-xl font-mono font-black text-slate-700">${Math.round(cash + (units * currentNav)).toLocaleString()}</span>
+                          </div>
+                          <div className="h-8 w-px bg-slate-200"></div>
+                          <div className="flex flex-col items-end">
+                              <span className="text-xs text-slate-400 font-bold">ROI</span>
+                              <span className={`text-3xl font-mono font-black ${displayRoi >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                  {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(2)}%
+                              </span>
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                              <div className="text-[10px] text-slate-400 font-bold mb-1">交易次數</div>
+                              <div className="text-lg font-black text-slate-700">{transactions.length} <span className="text-xs font-normal text-slate-400">次</span></div>
+                          </div>
+                          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                              <div className="text-[10px] text-slate-400 font-bold mb-1">紓困次數</div>
+                              <div className="text-lg font-black text-slate-700">{resetCount} <span className="text-xs font-normal text-slate-400">次</span></div>
+                          </div>
+                      </div>
+                      
+                      <div className="absolute -bottom-4 -right-4 text-9xl font-black text-slate-100 opacity-50 z-0 pointer-events-none select-none">
+                          {displayRoi >= 0 ? 'WIN' : 'LOSS'}
+                      </div>
+                  </div>
+
+                  <div className="w-full grid grid-cols-2 gap-3 mb-4">
+                       <button 
+                          onClick={handleAIAnalysis} 
+                          disabled={isAnalyzing}
+                          className="py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 flex items-center justify-center gap-2 transition-all active:scale-95"
+                       >
+                          {isAnalyzing ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18} className="text-yellow-300"/>}
+                          AI 戰局分析
+                       </button>
+
+                       <button 
+                          onClick={() => handleDownloadReport(fundName)} 
+                          disabled={isGenerating}
+                          className="py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                       >
+                          {isGenerating ? <Loader2 className="animate-spin" size={18}/> : <Share2 size={18}/>}
+                          下載戰報
+                       </button>
+                  </div>
+
+                  <button 
+                      onClick={() => { localStorage.clear(); setStatus('input_room'); setRoomId(''); }} 
+                      className="w-full py-3 bg-transparent border border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                      <LogOut size={18}/> 離開房間
+                  </button>
+              </div>
+
+              {showModal && (
+                  <AIAnalysisModal 
+                      isOpen={showModal} 
+                      onClose={closeModal} 
+                      analysisResult={analysisResult} 
+                      error={aiError} 
+                  />
+              )}
+
+              {showImageModal && generatedImage && (
+                  <div className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+                      <div className="relative max-w-sm w-full">
+                          <button onClick={() => setShowImageModal(false)} className="absolute -top-12 right-0 text-white p-2 bg-white/10 rounded-full hover:bg-white/20"><X size={24}/></button>
+                          <img src={generatedImage} alt="Battle Report" className="w-full rounded-2xl shadow-2xl border border-slate-700" />
+                          <p className="text-center text-slate-400 text-xs mt-4">長按圖片即可儲存或是分享</p>
+                      </div>
+                  </div>
+              )}
+          </div>
+      );
+  }
 }

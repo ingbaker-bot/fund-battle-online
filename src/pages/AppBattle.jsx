@@ -935,7 +935,7 @@ export default function AppBattle() {
                     <div className="flex justify-between items-center w-full mb-4 relative z-10">
                         <div className="flex items-center gap-2">
                             <Trophy size={24} className="text-blue-500" />
-                            <span className="font-bold text-blue-600 text-lg">FUND 手遊戰報</span>
+                            <span className="font-bold text-blue-600 text-lg">Fund手遊 戰報</span>
                         </div>
 {/* ✅ 已修改為讀取 public 資料夾內的 logo.jpg */}
                         <img 
@@ -1005,7 +1005,7 @@ export default function AppBattle() {
                             </div>
                         </div>
                         <div className="flex flex-col items-end">
-                            <span className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">SCAN TO PLAY</span>
+                            <span className="text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-wider">SCAN TO Fund手遊 單機版</span>
                             <div className="bg-white p-2 rounded-lg shadow-sm border border-blue-100">
                                 <QRCodeSVG value={joinUrl} size={80} />
                             </div>

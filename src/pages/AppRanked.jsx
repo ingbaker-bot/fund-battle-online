@@ -714,18 +714,18 @@ if (gameStatus === 'setup') {
                 </div>
                 {rspConfig.enabled && (
                     <div className="flex gap-2 animate-in fade-in slide-in-from-top-1">
-                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono"/></div>
-                        <div className="flex-1"><label className="text-[10px] text-slate-400 mb-0.5 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-sm text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div>
+                        <div className="flex-1"><label className="text-[12px] text-slate-400 mb-0.5 block">扣款金額</label><input type="number" value={rspConfig.amount} onChange={(e) => setRspConfig({...rspConfig, amount: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-x1 text-center text-slate-800 outline-none font-mono"/></div>
+                        <div className="flex-1"><label className="text-[12px] text-slate-400 mb-0.5 block">每月扣款日</label><select value={rspConfig.day} onChange={(e) => setRspConfig({...rspConfig, day: Number(e.target.value)})} className="w-full bg-white border border-slate-300 rounded-lg p-1.5 text-x1 text-center text-slate-800 outline-none font-mono">{[6, 16, 26].map(d => <option key={d} value={d}>{d} 號</option>)}</select></div>
                     </div>
                 )}
             </div>
 
 {/* Row 3: 挑戰項目 */}
-            <label className="block text-[12px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
+            <label className="block text-[14px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
             <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button 
                     onClick={() => setDataSourceType('random')} 
-                    className={`flex-1 py-2.5 rounded-lg text-x1 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2.5 rounded-lg text-x2 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
                         dataSourceType === 'random' 
                         ? 'bg-violet-500 text-white shadow-md shadow-violet-200 ring-1 ring-violet-400' 
                         : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'
@@ -736,7 +736,7 @@ if (gameStatus === 'setup') {
                 
                 <button 
                     onClick={() => setDataSourceType('real')} 
-                    className={`flex-1 py-2.5 rounded-lg text-x1 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2.5 rounded-lg text-x2 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
                         dataSourceType === 'real' 
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-200 ring-1 ring-blue-500' 
                         : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'

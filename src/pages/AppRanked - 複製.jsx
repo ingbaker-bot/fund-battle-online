@@ -683,7 +683,7 @@ if (gameStatus === 'setup') {
             {/* Row 1: 初始資金 + 停損：mb-4 改為 mb-3 */}
             <div className="flex gap-2 mb-3">
                 <div className="w-2/3 flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shadow-sm">
-                    <span className="text-x1 font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-2">初始資金</span>
                     <input 
                         type="text" 
                         value={formatNumber(initialCapital)} 
@@ -693,7 +693,7 @@ if (gameStatus === 'setup') {
                 </div>
                 
                 <div className="w-1/3 bg-slate-50 border border-slate-300 rounded-xl px-1 py-2 flex flex-col items-center justify-center shadow-sm">
-                    <span className="text-[12px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">停損 (%)</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">停損 (%)</span>
                     <input 
                         type="number" 
                         value={customStopLossInput} 
@@ -725,7 +725,7 @@ if (gameStatus === 'setup') {
             <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button 
                     onClick={() => setDataSourceType('random')} 
-                    className={`flex-1 py-2.5 rounded-lg text-x1 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
                         dataSourceType === 'random' 
                         ? 'bg-violet-500 text-white shadow-md shadow-violet-200 ring-1 ring-violet-400' 
                         : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'
@@ -736,7 +736,7 @@ if (gameStatus === 'setup') {
                 
                 <button 
                     onClick={() => setDataSourceType('real')} 
-                    className={`flex-1 py-2.5 rounded-lg text-x1 font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
                         dataSourceType === 'real' 
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-200 ring-1 ring-blue-500' 
                         : 'text-slate-500 hover:bg-white hover:shadow-sm hover:text-slate-700'

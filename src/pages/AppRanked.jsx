@@ -632,7 +632,7 @@ if (gameStatus === 'setup') {
             <div className="mb-4 flex items-center gap-2">
                 <button 
                     onClick={() => navigate('/competition')} 
-                    className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3 rounded-xl border border-amber-200 transition-all group text-sm shadow-sm"
+                    className="w-2/3 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-600 font-bold py-3 rounded-xl border border-amber-200 transition-all group text-x1 shadow-sm"
                 >
                     <Sword size={18} className="group-hover:rotate-12 transition-transform"/> 
                     S1 賽季競技場
@@ -706,10 +706,10 @@ if (gameStatus === 'setup') {
             {/* Row 2: 定期定額 (RSP)：mb-4 改為 mb-3 */}
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 shadow-sm">
                 <div className="flex items-center justify-between mb-2 text-indigo-600">
-                    <div className="flex items-center gap-2"><CalendarClock size={16} /><span className="text-xs font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
+                    <div className="flex items-center gap-2"><CalendarClock size={16} /><span className="text-x1 font-bold uppercase tracking-wider">定期定額 (RSP)</span></div>
                     <div className="flex items-center">
                         <input type="checkbox" checked={rspConfig.enabled} onChange={(e) => setRspConfig({...rspConfig, enabled: e.target.checked})} className="w-3.5 h-3.5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 mr-2" />
-                        <span className={`text-xs font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
+                        <span className={`text-x1 font-bold ${rspConfig.enabled ? 'text-indigo-600' : 'text-slate-400'}`}>{rspConfig.enabled ? '開啟中' : '關閉中'}</span>
                     </div>
                 </div>
                 {rspConfig.enabled && (
@@ -721,7 +721,7 @@ if (gameStatus === 'setup') {
             </div>
 
 {/* Row 3: 挑戰項目 */}
-            <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
+            <label className="block text-[12px] font-bold text-slate-400 mb-1 uppercase tracking-wider">選擇挑戰項目</label>
             <div className="flex gap-2 mb-3 bg-slate-100 p-1 rounded-xl border border-slate-200">
                 <button 
                     onClick={() => setDataSourceType('random')} 
@@ -767,11 +767,11 @@ if (gameStatus === 'setup') {
             )}            
             {/* Row 4: 河流圖參數：mb-6 改為 mb-4 */}
             <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-4 shadow-sm">
-                <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[10px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
+                <div className="flex items-center justify-between mb-1.5 text-blue-600"><div className="flex items-center gap-2"><Waves size={14} /><span className="text-[12px] font-bold uppercase tracking-wider">河流圖參數 (季線)</span></div></div>
                 <div className="flex gap-2">
                     <div className="flex w-1/2 gap-1">
-                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
-                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-1.5 text-[10px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
+                        <button onClick={() => setRiverMode('fixed')} className={`flex-1 py-1.5 text-[12px] font-bold rounded transition-colors ${riverMode === 'fixed' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>固定%</button>
+                        <button onClick={() => setRiverMode('dynamic')} className={`flex-1 py-1.5 text-[12px] font-bold rounded transition-colors ${riverMode === 'dynamic' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-400 border border-slate-200'}`}>動態SD</button>
                     </div>
                     <div className="flex items-center w-1/2 bg-white border border-slate-300 rounded px-2">
                         {riverMode === 'fixed' ? (<><input type="number" value={riverWidthInput} onChange={(e) => setRiverWidthInput(Number(e.target.value))} className="flex-1 bg-transparent text-center text-slate-800 outline-none font-mono font-bold text-sm"/><span className="text-xs text-slate-400 ml-1">%</span></>) : (<><span className="text-xs text-slate-400 mr-1">K</span><input type="number" step="0.1" min="1" max="5" value={riverSDMultiplier} onChange={(e) => setRiverSDMultiplier(Number(e.target.value))} className="flex-1 bg-transparent text-center text-emerald-600 font-bold outline-none font-mono text-sm"/></>)}
@@ -784,10 +784,10 @@ if (gameStatus === 'setup') {
                 <div className="flex-1 bg-slate-50 border border-slate-300 rounded-xl p-1.5 flex flex-col items-center justify-center gap-0.5 overflow-hidden shadow-sm">
                     <div className="flex items-center gap-1 text-emerald-600">
                         <UserCheck size={12} />
-                        <span className="text-[10px] font-bold">玩家</span>
+                        <span className="text-[12px] font-bold">玩家</span>
                     </div>
                     <div className="flex flex-col items-center w-full">
-                        <span className="text-[10px] text-slate-600 font-mono truncate w-full text-center px-1">
+                        <span className="text-[14px] text-slate-600 font-mono truncate w-full text-center px-1">
                             {user.email.split('@')[0]}
                         </span>
                         {myNickname && <span className="text-[10px] text-amber-500 font-bold truncate w-full text-center leading-none">({myNickname})</span>}
@@ -799,7 +799,7 @@ if (gameStatus === 'setup') {
                 </button>
             </div>
             
-            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[12px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 NBS-奈AI團隊</span></div>
+            <div className="mt-2 text-center"><span className="bg-slate-100 text-slate-400 text-[14px] px-2 py-1 rounded-full border border-slate-200 font-mono">2025v11.7 NBS-奈AI團隊</span></div>
         </div>
       </div>
     );

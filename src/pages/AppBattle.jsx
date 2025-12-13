@@ -77,6 +77,10 @@ const renderCrossTriangle = (props) => {
 
 export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
+
+// ★★★ 與主持人端保持一致的秒數設定 ★★★
+  const REQUEST_TIMEOUT_SECONDS = 20;
+
   const navigate = useNavigate();
   
   const urlRoomId = searchParams.get('room');
@@ -169,7 +173,7 @@ export default function AppBattle() {
   const [isTimeUp, setIsTimeUp] = useState(false);
 
   const [activeRequests, setActiveRequests] = useState([]); 
-  const [pauseCountdown, setPauseCountdown] = useState(15); 
+  const [pauseCountdown, setPauseCountdown] = useState(REQUEST_TIMEOUT_SECONDS); 
 
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
 
@@ -226,7 +230,7 @@ export default function AppBattle() {
                   const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
                   const reqSeconds = firstReq.timestamp.seconds;
                   const elapsed = nowSeconds - reqSeconds;
-                  const remaining = Math.max(0, 15 - Math.floor(elapsed));
+                  const remaining = Math.max(0, REQUEST_TIMEOUT_SECONDS - Math.floor(elapsed));
                   setPauseCountdown(remaining);
               }
           }

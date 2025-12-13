@@ -83,6 +83,8 @@ const renderCrossTriangle = (props) => {
 };
 
 export default function SpectatorView() {
+  const REQUEST_TIMEOUT_SECONDS = 20; // 若要改成 20 秒，只要改這裡
+
   const [hostUser, setHostUser] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -112,7 +114,7 @@ export default function SpectatorView() {
   const [feeRate, setFeeRate] = useState(0.01);
   const [showQrModal, setShowQrModal] = useState(false);
   const [tradeRequests, setTradeRequests] = useState([]);
-  const [countdown, setCountdown] = useState(15); 
+  const [countdown, setCountdown] = useState(REQUEST_TIMEOUT_SECONDS); 
   const [copied, setCopied] = useState(false);
 
   const [serverTimeOffset, setServerTimeOffset] = useState(0);
@@ -250,7 +252,7 @@ export default function SpectatorView() {
              }
           }, 500); 
       } else {
-          setCountdown(15); 
+          setCountdown(REQUEST_TIMEOUT_SECONDS); 
       }
       return () => clearInterval(timer);
   }, [tradeRequests, serverTimeOffset]);
@@ -475,7 +477,7 @@ export default function SpectatorView() {
     setFeeRate(0.01);
     if (autoPlayRef.current) clearInterval(autoPlayRef.current);
     setAutoPlaySpeed(null);
-    setTradeRequests([]); setCountdown(15); 
+    setTradeRequests([]); setCountdown(REQUEST_TIMEOUT_SECONDS); 
     setGameEndTime(null); 
 
     await updateDoc(doc(db, "battle_rooms", roomId), { 
@@ -500,7 +502,7 @@ export default function SpectatorView() {
       if (!roomId) return;
       const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
       reqSnap.forEach(async (d) => await deleteDoc(d.ref));
-      setTradeRequests([]); setCountdown(15);
+      setTradeRequests([]); setCountdown(REQUEST_TIMEOUT_SECONDS);
   };
 
   const handleCopyUrl = () => {

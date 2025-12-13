@@ -83,7 +83,7 @@ const renderCrossTriangle = (props) => {
 };
 
 export default function SpectatorView() {
-  const REQUEST_TIMEOUT_SECONDS = 20; // 若要改成 20 秒，只要改這裡
+  const REQUEST_TIMEOUT_SECONDS = 15; // 若要改成 20 秒，只要改這裡
 
   const [hostUser, setHostUser] = useState(null);
   const [email, setEmail] = useState('');
@@ -496,6 +496,9 @@ export default function SpectatorView() {
     snapshot.forEach(async (d) => await deleteDoc(doc(db, "battle_rooms", roomId, "players", d.id)));
     const reqSnap = await getDocs(collection(db, "battle_rooms", roomId, "requests"));
     reqSnap.forEach(async (d) => await deleteDoc(d.ref));
+// ★★★ 在這裡加入這兩行 ★★★
+    setRoomId(null);
+    roomIdRef.current = null;
   };
 
   const handleForceClearRequests = async () => {

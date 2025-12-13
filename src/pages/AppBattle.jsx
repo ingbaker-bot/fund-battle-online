@@ -79,7 +79,7 @@ export default function AppBattle() {
   const [searchParams, setSearchParams] = useSearchParams();
 
 // ★★★ 與主持人端保持一致的秒數設定 ★★★
-  const REQUEST_TIMEOUT_SECONDS = 20;
+  const REQUEST_TIMEOUT_SECONDS = 15;
 
   const navigate = useNavigate();
   

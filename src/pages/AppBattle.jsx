@@ -953,7 +953,7 @@ export default function AppBattle() {
                     <div className="w-full flex gap-3 mb-6 relative z-10 px-2">
                         {/* 左側：玩家自己 */}
                         <div className="flex-1 bg-white/60 backdrop-blur-sm rounded-xl p-3 border border-blue-100 flex flex-col justify-center items-center shadow-sm">
-                            <div className="text-xs text-slate-500 font-bold mb-1">您的總報酬</div>
+                            <div className="text-2x1 text-slate-500 font-bold mb-1">您的總報酬</div>
                             <div className={`text-3xl font-black font-mono flex items-center gap-1 ${displayRoi >= 0 ? 'text-red-500' : 'text-green-500'}`}>
                                 {displayRoi >= 0 ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
                                 {displayRoi > 0 ? '+' : ''}{displayRoi.toFixed(1)}%
@@ -966,7 +966,7 @@ export default function AppBattle() {
                                 <Crown size={40} className="absolute -right-2 -top-2 text-white/30"/>
                                 <div className="flex items-center gap-1 mb-1">
                                     <Crown size={14} className="text-white" fill="currentColor"/>
-                                    <span className="text-xs font-bold shadow-sm">本場冠軍</span>
+                                    <span className="text-2x1 font-bold shadow-sm">本場冠軍</span>
                                 </div>
                                 <div className="text-sm font-bold truncate w-full text-center mb-0 px-1">{champion.nickname}</div>
                                 <div className="text-2xl font-mono font-black text-white drop-shadow-md mt-0.5">
@@ -983,14 +983,14 @@ export default function AppBattle() {
 
                     <div className="w-full grid grid-cols-2 gap-4 mb-8 relative z-10">
                         <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
-                            <div className="text-xs text-slate-400 font-bold mb-2">最終資產</div>
+                            <div className="text-2x1 text-slate-400 font-bold mb-2">最終資產</div>
                             <div className="text-2xl font-black font-mono text-blue-600">
                                 ${Math.round(cash + (units * currentNav)).toLocaleString()}
                             </div>
                         </div>
                         
                         <div className="bg-white rounded-2xl p-4 shadow-sm border border-blue-50 flex flex-col items-center justify-center">
-                             <div className="text-xs text-slate-400 font-bold mb-2 flex items-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
+                             <div className="text-2x1 text-slate-400 font-bold mb-2 flex items-center gap-1"><Calendar size={12}/> 真實歷史區間</div>
                             <div className="text-x1 font-mono font-bold text-slate-700">{startDate}</div>
                             <div className="text-x1 font-mono font-bold text-slate-700">{endDate}</div>
                         </div>

@@ -247,7 +247,7 @@ export default function SpectatorView() {
                  const nowSeconds = (Date.now() + serverTimeOffset) / 1000;
                  const reqSeconds = firstReq.timestamp.seconds;
                  const elapsed = nowSeconds - reqSeconds;
-                 const remaining = Math.max(0, 15 - Math.floor(elapsed));
+                 const remaining = Math.max(0, REQUEST_TIMEOUT_SECONDS - Math.floor(elapsed));
                  setCountdown(remaining);
              }
           }, 500); 

@@ -942,7 +942,7 @@ if (gameStatus === 'setup') {
                         {isAnalyzing ? 'AI 正在讀取數據...' : '召喚 AI 導師復盤'}
                     </button>
                     <button onClick={executeReset} className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all mt-2"><RotateCcw size={20} /> 重新開始挑戰</button>
-                    <div className="mt-6 text-center text-[10px] text-slate-400">Environment: {detectedEnv} | 2025v11.6 單機版</div>
+                    <div className="mt-6 text-center text-[10px] text-slate-400">Fund手遊 單機版  NBS-奈AI團隊</div>
                 </div>
             </div>
         )}
